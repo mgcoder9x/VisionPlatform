@@ -1,7 +1,12 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-07)
-**Cập nhật lúc:** 2026-07-07T14:40:00+07:00.
+**Cập nhật lúc:** 2026-07-07T15:10:00+07:00.
+**[✅ BASELINE TỰ-VERIFY THẬT máy `toann` (#241) — sẵn sàng PHA code backpressure]**
+- **Rebuild `.venv`** (cũ trỏ máy `k.nguyen.manh.toan`, hỏng) bằng scoop **py3.13.12** + `.[dev,onnx,cv2,web]` (KHÔNG torch). **CHẠY THẬT: `pytest -q` = 436 passed/1 skipped (45.92s, EXIT 0) · lint `importlinter.api` = 5 kept/0 broken** (104 files/326 deps). Version khớp #232/#234.
+- → Có **gốc so sánh "không hồi quy"** tại máy này trước khi code. Journal K-052: phần baseline 🟢 đóng; phần thiếu `.git` 🔴 vẫn mở. Log #241.
+- **Bước kế (chờ user duyệt):** PHA **code TDD wave 1** — `kernel/backpressure_metrics.py::BackpressureMetrics` (frozen DTO 6 field + property `conserved`, chỉ import dataclasses; test frozen/conserved) → chạy full pytest+lint giữ 436/1·5/0, rồi wave 2.
+---
 **[🧾 ĐỒNG BỘ `ai-decision-journal/` cho backpressure + sự cố .git + môi trường (#240)]**
 - **KHÔNG tạo thư mục trùng** (user xin "tạo thư mục 4 việc — có rồi thì cập nhật"): `ai-decision-journal/` đã có đúng 4 file → cập nhật (README §0 cấm nhân đôi). Thêm **D-048** (Mô hình A) · **C-018** (đổi R2.2 + tách R1) · **T-018** (A vs B) · **T-019** (tái dùng BoundedQueue) · **K-050** (.git máy `k.nguyen.manh.toan` bị xoá, đã cứu) · **K-051** (đếm frames_submitted lúc gửi) · **K-052** (máy `toann` không có .git). INDEX: mốc mới + tổng **137 entry** (D48·C18·T19·K52).
 - ⚠️ **Trung thực baseline:** 436/1 · lint 5/0 là số theo LOG #234 (máy `k.nguyen.manh.toan`); trên máy `toann` hiện tại **[CHƯA tự-kiểm]** (repo không có `.git`, chưa chạy pytest — K-052).

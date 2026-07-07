@@ -4853,3 +4853,24 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Trung thực: baseline 436/1 là số theo LOG #234 (máy `k.nguyen.manh.toan`); trên máy `toann` hiện tại CHƯA tự chạy pytest (repo máy này không có `.git`; chưa chắc `.venv` chạy được) → mọi "436/1" trong phiên này là kế thừa, [chưa kiểm] tại đây.
 
 **Đã verify:** đọc log #234–#239 (nội dung thật) + đọc README/format 4 file journal trước khi ghi; ID max thật D-047/C-017/T-017/K-049 (Select-String) → cấp D-048/C-018/T-018-019/K-050-052 không trùng; append + cập nhật INDEX thành công. · **Chưa verify:** baseline pytest trên máy `toann` (chưa chạy — K-052); hành vi runtime backpressure (chưa code — D-048/K-051).
+
+
+### Entry #241 — 2026-07-07 — Rebuild `.venv` máy `toann` (scoop py3.13.12) + TỰ-VERIFY baseline THẬT 436/1 · lint 5/0 (đóng phần baseline K-052) — Kiro-Opus
+
+**Bối cảnh:** User "duyệt theo khuyến nghị từng bước chắc chắn". Khuyến nghị đã chốt lượt trước: thiết lập mốc baseline THẬT trên máy `toann` TRƯỚC khi code (vì mọi tuyên bố "additive, giữ 436/1" vô nghĩa nếu chưa từng đo 436/1 tại đây). Thực thi.
+
+**1. Quyết định AI tự ra:**
+- `.venv` cũ trỏ `C:\Users\k.nguyen.manh.toan\...Python311` (không tồn tại máy `toann`) → rebuild bằng scoop **py3.13.12** (Python duy nhất máy này; `py` launcher chưa cấu hình). Rename `.venv`→`.venv_old_del` (tức thì) rồi `python -m venv .venv` (tránh block như #234).
+- Cài `.[dev,onnx,cv2,web]` — KHÔNG cài `pt`/torch (khớp #234: baseline không cần torch; nhẹ).
+
+**2. Chỗ phải đổi:** không đổi code/spec; chỉ môi trường (venv là artifact gitignore).
+
+**3. Trade-off:** rebuild venv (tốn mạng/thời gian, đổi version py3.11→3.13) vs cố dùng venv máy cũ (bất khả — path không tồn tại) → rebuild là lựa chọn DUY NHẤT đúng gốc (K-013 pattern lặp, đã thành công ở endgame #228/#232).
+
+**4. Điều bạn nên biết:**
+- Baseline **436/1 · lint 5/0** GIỜ đã tự-kiểm trên máy `toann` → có gốc so sánh "không hồi quy" khi code backpressure. Cập nhật journal K-052 (phần baseline 🟢 đóng; phần thiếu `.git` 🔴 vẫn mở).
+- Version máy toann: py3.13.12 · numpy 2.5.1 · pytest 9.1.1 · import-linter 2.13 · onnxruntime 1.27.0 · opencv-python 5.0.0.93 · onnx 1.22.0 · Flask 3.1.3 · pyzmq 27.1.0 · msgpack 1.2.1 · structlog 26.1.0 · psutil 7.2.2 · hypothesis 6.156.1 (khớp #232/#234).
+- Lint chạy qua `importlinter.api` + `use_cases.lint_imports()` (K-044: AV chặn lint-imports.exe; phải import api trước để configure — nếu không KeyError USER_OPTION_READERS).
+- Bước kế: sẵn sàng PHA code TDD wave 1 (`BackpressureMetrics` DTO kernel) khi user duyệt.
+
+**Đã verify:** CHẠY THẬT + ĐỌC OUTPUT máy `toann`: `.venv\Scripts\python.exe --version`=3.13.12; `pip list` xác nhận 13 gói chủ chốt + version; `pytest -q`=**436 passed/1 skipped (45.92s, EXIT 0)**; `importlinter.api` lint=**5 kept/0 broken** (104 files/326 deps, LINT_RESULT=True). · **Chưa verify:** GPU/torch (không cài — chủ ý); hành vi runtime backpressure (chưa code); an toàn `.git` máy này (không có .git — K-052 phần 🔴).
