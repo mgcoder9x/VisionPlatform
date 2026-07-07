@@ -45,7 +45,7 @@ Thứ tự bắt buộc tuần tự trong nhánh chính: `1 → 2.3 → 2.4 → 
 
 ### Wave 1 — kernel (nền, độc lập)
 
-- [ ] 1. `BackpressureMetrics` DTO ở kernel
+- [x] 1. `BackpressureMetrics` DTO ở kernel
   - Tạo `src/vision_platform/kernel/backpressure_metrics.py`: `@dataclass(frozen=True) BackpressureMetrics` với 6 field `frames_captured/frames_submitted/frames_dropped_backpressure/infer_ok/infer_err/infer_timeout` (int) + property `conserved` (`frames_submitted + frames_dropped_backpressure == frames_captured`).
   - CHỈ import `dataclasses` (thuần Python) — KHÔNG zmq/torch/cv2/mp/shm (R9.1).
   - Test `tests/test_backpressure_metrics.py`: (a) `conserved` True khi bằng, False khi lệch; (b) frozen (gán field → raise); (c) giá trị field giữ đúng.
