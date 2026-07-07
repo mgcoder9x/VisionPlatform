@@ -1,0 +1,72 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="recovery-flow" name="05 - Recovery flow (kill -&gt; quarantine terminal)">
+    <mxGraphModel dx="1100" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="820" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Bai #05 - Recovery flow: process chet giu lock slot -&gt; QUARANTINED (terminal), KHONG dung bus" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="960" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="enter" value="writer.scan slot / reader.pin&#10;gap lock (acquire timeout LOCK_ACQUIRE_TIMEOUT_S)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="330" y="60" width="360" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="peek" value="peek_state(slot) lock-free (state 4B @offset0, atomic)&#10;== QUARANTINED?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;" vertex="1" parent="1">
+          <mxGeometry x="340" y="150" width="340" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="skip" value="bo qua slot, KHONG dung lock&#10;(terminal - co the poison)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=center;" vertex="1" parent="1">
+          <mxGeometry x="760" y="160" width="220" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="quarcall" value="quarantine_poisoned_slot(slot)&#10;double-snapshot (P1-1): doc state/owner/lease 2 lan" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=center;" vertex="1" parent="1">
+          <mxGeometry x="320" y="290" width="380" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="dead" value="owner_liveness(psutil) == DEAD&#10;VA lease qua han?&#10;(WRITING/READY: owner writer; READING: khong reader song bao ve)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="320" y="390" width="380" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="keep" value="ALIVE / UNKNOWN / torn snapshot&#10;-&gt; KHONG quarantine (giu nguyen)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;" vertex="1" parent="1">
+          <mxGeometry x="760" y="410" width="220" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="setq" value="pack_into state = QUARANTINED (atomic 4B, terminal) (L424)&#10;obs.emit(&quot;shm_slot_quarantined&quot;, ...)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=center;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="300" y="560" width="420" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cap" value="ring giam capacity (healthy_slots--). Neu quarantined vuot rebuild_threshold -&gt; emit shm_ring_rebuild_requested (nen switchover, sub-spec)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;align=center;" vertex="1" parent="1">
+          <mxGeometry x="300" y="670" width="420" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="note" value="Vi sao terminal: multiprocessing.Lock KHONG robust - owner chet thi lock ket o muc OS, khong giai duoc -&gt; loai vinh vien slot thay vi tai dung. Danh doi: bus giam dan capacity + canh bao, khong bao gio dung ca bus (bug F-3/F-3b)." style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=11;fontColor=#666666;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="40" y="760" width="920" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e0" value="" style="endArrow=classic;html=1;strokeWidth=2;" edge="1" parent="1" source="enter" target="peek">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="co" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#b85450;fontColor=#b20000;" edge="1" parent="1" source="peek" target="skip">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="khong -&gt; thu lock, timeout" style="endArrow=classic;html=1;strokeWidth=2;" edge="1" parent="1" source="peek" target="quarcall">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="" style="endArrow=classic;html=1;strokeWidth=2;" edge="1" parent="1" source="quarcall" target="dead">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e4" value="khong" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#82b366;fontColor=#2d5a2d;" edge="1" parent="1" source="dead" target="keep">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e5" value="co" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#b85450;fontColor=#b20000;" edge="1" parent="1" source="dead" target="setq">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e6" value="" style="endArrow=classic;html=1;strokeWidth=2;" edge="1" parent="1" source="setq" target="cap">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

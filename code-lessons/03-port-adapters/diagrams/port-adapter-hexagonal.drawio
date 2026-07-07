@@ -1,0 +1,58 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="port-adapter-hexagonal" name="03 - Port va Adapter">
+    <mxGraphModel dx="1100" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="920" pageHeight="520" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Bai #03 - 1 PORT (cong) o giua, NHIEU ADAPTER (bo chuyen) cam vao; loi chi biet port" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="880" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="lbl-adapters" value="ADAPTERS (rim) - bo cai cu the, hay doi" style="text;html=1;align=center;fontStyle=1;fontColor=#6b5500;" vertex="1" parent="1">
+          <mxGeometry x="40" y="55" width="260" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="fake" value="FakeFrameSource&#10;(frame doan truoc - test)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="90" width="260" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="noise" value="NoiseFrameSource&#10;(ngau nhien, seed tai lap)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="160" width="260" height="56" as="geometry" />
+        </mxCell>
+        <mxCell id="rtsp" value="RTSP / file ... (tuong lai)&#10;chi can khop hop dong" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;dashed=1;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="230" width="260" height="56" as="geometry" />
+        </mxCell>
+
+        <mxCell id="lbl-port" value="KERNEL - PORT (hop dong on dinh)" style="text;html=1;align=center;fontStyle=1;fontColor=#1a3c66;" vertex="1" parent="1">
+          <mxGeometry x="360" y="55" width="240" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="port" value="IFrameSource (Protocol)&#10;&#10;setup()&#10;read() -&gt; ReadResult&#10;teardown()&#10;is_finite&#10;source_id" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;align=center;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="360" y="90" width="240" height="196" as="geometry" />
+        </mxCell>
+
+        <mxCell id="lbl-core" value="RUNTIME / APPLICATION - LOI" style="text;html=1;align=center;fontStyle=1;fontColor=#4b2e5e;" vertex="1" parent="1">
+          <mxGeometry x="660" y="55" width="240" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="core" value="Pipeline / Executor (#04)&#10;&#10;chi biet PORT&#10;KHONG biet adapter nao" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;strokeWidth=2;align=center;" vertex="1" parent="1">
+          <mxGeometry x="660" y="120" width="240" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-fake" value="khop (structural)" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#d6b656;fontColor=#6b5500;" edge="1" parent="1" source="fake" target="port">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-noise" value="khop" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#d6b656;fontColor=#6b5500;" edge="1" parent="1" source="noise" target="port">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-rtsp" value="khop" style="endArrow=classic;html=1;strokeWidth=2;dashed=1;strokeColor=#999999;fontColor=#666666;" edge="1" parent="1" source="rtsp" target="port">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-core" value="phu thuoc / dung" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#9673a6;fontColor=#4b2e5e;" edge="1" parent="1" source="core" target="port">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="note" value="CA 2 mui ten deu CHI VAO port: adapter khop port (structural typing - khong ke thua), loi phu thuoc port.&#10;=&gt; Doi/them nguon (vd camera RTSP that) = viet adapter moi, LOI KHONG DOI. Day la Hexagonal (Ports &amp; Adapters)." style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=11;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="40" y="320" width="860" height="50" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

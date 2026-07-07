@@ -1,0 +1,24 @@
+# Chạy trên MÁY GPU (WSL, đã `pip install -e .[pt]`): YOLOv5 .pt trên VIDEO FILE, device=cuda.
+# SỬA cho đúng máy bạn: params.path (video) + params.weights (.pt). Xuất event ra jsonl.
+# Lệnh: python -m vision_platform.profiles.vision_slice_app --config configs/example_video_gpu.toml
+[[pipelines]]
+id = "video-gpu-01"
+# max_frames vắng = chạy hết video (EOF thì dừng).
+
+[pipelines.source]
+type = "video"
+params = { path = "clips/sample.mp4" }
+
+[pipelines.detector]
+type = "pt"
+params = { weights = "models/yolov5s.pt", device = "cuda" }
+
+[[pipelines.stages]]
+type = "detect"
+
+[[pipelines.stages]]
+type = "count"
+
+[[pipelines.sinks]]
+type = "jsonl"
+params = { path = "events/video-gpu-01.jsonl" }

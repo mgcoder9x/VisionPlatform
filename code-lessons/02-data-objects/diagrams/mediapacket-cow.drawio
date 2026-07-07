@@ -1,0 +1,40 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="mediapacket-cow" name="02 - CoW MediaPacket">
+    <mxGraphModel dx="1000" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="500" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="CoW - doi packet = tao ban moi, copy dict nho, dung chung anh" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="800" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p1" value="p1: MediaPacket (frozen)&#10;metadata = {a: empty}&#10;artifacts = {empty}&#10;(van nguyen ven sau CoW)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3eef8;strokeColor=#9673a6;strokeWidth=2;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="70" width="250" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="p2" value="p2: MediaPacket (MOI)&#10;metadata = {a: 1}&#10;artifacts = {empty}&#10;(p1 is not p2)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f3eef8;strokeColor=#9673a6;strokeWidth=2;align=center;" vertex="1" parent="1">
+          <mxGeometry x="530" y="70" width="250" height="110" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cow-edge" value="p2 = p1.with_metadata(a, 1)&#10;copy dict metadata (nho) + them a:1 -> replace()" style="endArrow=classic;html=1;strokeWidth=2.5;strokeColor=#b85450;fontColor=#7a2e2c;fontStyle=1;" edge="1" parent="1" source="p1" target="p2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="mediaref" value="media_ref: InMemoryArrayRef&#10;ndarray (anh ~6,2 trieu so)&#10;read-only · DUNG CHUNG&#10;KHONG copy anh" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;align=center;" vertex="1" parent="1">
+          <mxGeometry x="285" y="300" width="250" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="p1-ref" value="media_ref" style="endArrow=classic;html=1;strokeWidth=1.8;dashed=1;strokeColor=#888888;fontColor=#666666;" edge="1" parent="1" source="p1" target="mediaref">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="p2-ref" value="media_ref (cung 1 anh)" style="endArrow=classic;html=1;strokeWidth=1.8;dashed=1;strokeColor=#888888;fontColor=#666666;" edge="1" parent="1" source="p2" target="mediaref">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="note" value="An toan: p1 bat bien, ai giu p1 khong bi doi sau lung.&#10;Nhanh: chi copy dict nho, anh lon dung chung (zero-copy)." style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=12;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="110" y="420" width="600" height="50" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,25 @@
+# docker compose — Vision Platform web UI (Linux). CHẠY: docker compose up --build
+# ⚠️ CHƯA verify (không có docker ở máy phát triển). Chỉnh URL/labels theo hệ của bạn.
+services:
+  vision:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount thư mục weight ĐÃ export .onnx (KHÔNG bake weight vào image).
+      - ../models:/app/models:ro
+    environment:
+      # KHÔNG hardcode mật khẩu — truyền qua env/secret. Đặt RTSP_URL khi chạy:
+      #   RTSP_URL="rtsp://admin:PASS@192.168.120.101:554/cam/realmonitor?channel=1&subtype=0" docker compose up
+      - RTSP_URL=${RTSP_URL:-}
+    # network_mode host: để container TỚI được camera trong LAN (Linux).
+    network_mode: host
+    command: >
+      python -m vision_platform.profiles.vision_web_app
+      --host 0.0.0.0 --port 8000
+      --rtsp "${RTSP_URL}"
+      --onnx /app/models/last_vehicle_n_640_04052024_dr.onnx
+      --labels "car,moto,truck" --model-size 640 --conf 0.25 --iou 0.5
+    restart: unless-stopped

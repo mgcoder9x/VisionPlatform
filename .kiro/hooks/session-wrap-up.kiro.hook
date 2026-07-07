@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "name": "Chốt phiên (cập nhật log + bộ nhớ)",
+  "description": "Bấm khi kết thúc phiên làm việc: AI tự ghi nốt AI-IMPLEMENTATION-LOG.md + cập nhật memory-bank + LEARNING-MAP để không mất dấu / chống drift.",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Chốt phiên làm việc. Thực hiện đúng thứ tự, KHÔNG làm gì ngoài 3 việc này:\n1. Nếu phiên vừa rồi có thay đổi code/file/quyết định mà CHƯA được ghi, append 1 entry vào AI-IMPLEMENTATION-LOG.md (gốc repo) theo template 4 mục (Quyết định AI tự ra / Chỗ phải đổi / Trade-off / Điều bạn nên biết) + dòng \"Đã verify / Chưa verify\".\n2. Cập nhật memory-bank/activeContext.md (đang làm gì + bước kế) và progress.md (xong/còn/bug) cho khớp hiện tại.\n3. Nếu việc học có tiến triển, cập nhật con trỏ + hồ sơ trong lessons/00-LEARNING-MAP.md.\nNếu không có gì thay đổi từ lần ghi cuối, chỉ báo \"Không có gì để cập nhật\" và dừng. Tuyệt đối không sửa/xóa entry log cũ (append-only)."
+  }
+}

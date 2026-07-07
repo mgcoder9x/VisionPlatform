@@ -1,0 +1,50 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="contract-test-matrix" name="03 - Contract test matrix">
+    <mxGraphModel dx="1000" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="940" pageHeight="540" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Contract test - 1 bo test (9 dieu khoan) x MOI adapter (mau 07)" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="900" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="params" value="params (builder-lambda)" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=top;align=center;fontStyle=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="40" y="70" width="250" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="p1" value="fake_finite_5&#10;FakeFrameSource(max_frames=5)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;align=center;" vertex="1" parent="1">
+          <mxGeometry x="55" y="100" width="220" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="p2" value="fake_infinite&#10;FakeFrameSource(max_frames=None)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;align=center;" vertex="1" parent="1">
+          <mxGeometry x="55" y="155" width="220" height="44" as="geometry" />
+        </mxCell>
+        <mxCell id="p3" value="noise_finite_5&#10;NoiseFrameSource(max_frames=5)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d6b656;align=center;" vertex="1" parent="1">
+          <mxGeometry x="55" y="210" width="220" height="44" as="geometry" />
+        </mxCell>
+
+        <mxCell id="fixture" value="fixture source(request)&#10;&#10;src = request.param()  (instance MOI)&#10;src.setup()&#10;yield src   -- test chay&#10;src.teardown()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=2;align=center;" vertex="1" parent="1">
+          <mxGeometry x="350" y="110" width="240" height="120" as="geometry" />
+        </mxCell>
+
+        <mxCell id="contract" value="TestFrameSourceContract (9 test)&#10;&#10;1 read_returns_readresult&#10;2 first_read_valid_status&#10;3 frame_status_implies_data&#10;4 non_frame_status_no_data&#10;5 source_id_is_str&#10;6 is_finite_is_bool&#10;7 setup_idempotent&#10;8 teardown_idempotent&#10;9 finite_source_eventually_eofs" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;strokeWidth=2;align=left;spacingLeft=10;verticalAlign=top;" vertex="1" parent="1">
+          <mxGeometry x="650" y="60" width="270" height="220" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-pf" value="3 nguon" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#d6b656;fontColor=#6b5500;" edge="1" parent="1" source="params" target="fixture">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e-fc" value="moi nguon chay ca 9 test" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#6c8ebf;fontColor=#1a3c66;" edge="1" parent="1" source="fixture" target="contract">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="math" value="3 nguon x 9 contract = 27 instance  -  1 skip (fake_infinite o test 9 'eventually_eofs', vi nguon vo han khong EOF)  =  26 passed&#10;+ 6 test adapter-specific (fake_content, fake_inject_error, noise_seed_reproducible, source_id_unique, context_manager Fake/Noise)  =  32 passed / 1 skipped  (collected 33)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=left;spacingLeft=10;verticalAlign=middle;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="40" y="300" width="880" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="note" value="Them adapter moi = them 1 dong pytest.param -&gt; ca 9 dieu khoan tu dong ap cho no. Builder-lambda: moi test 1 instance moi (isolation, khong ro state)." style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=11;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="40" y="380" width="880" height="40" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -1,0 +1,53 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="stage-status-state" name="04 - BaseStage.process map exception -&gt; StageStatus">
+    <mxGraphModel dx="1100" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="980" pageHeight="640" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Bai #04 - BaseStage.process() (Template Method): bat loi -&gt; StageResult co status (mau 04)" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="940" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="start" value="process(packet) duoc goi&#10;try: result = self._do_process(packet)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="330" y="55" width="320" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="d" value="_do_process ket thuc the nao?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;" vertex="1" parent="1">
+          <mxGeometry x="360" y="140" width="260" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ok" value="tra packet binh thuong&#10;=&gt; StageResult.success(...)&#10;status = SUCCESS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="290" width="270" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="skip" value="raise SkipFrameSignal (mau 03)&#10;=&gt; StageResult.skipped(reason=str(e))&#10;status = SKIPPED (bo CO Y)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=center;" vertex="1" parent="1">
+          <mxGeometry x="355" y="290" width="270" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="err" value="raise Exception khac&#10;=&gt; StageResult.error(error=e)&#10;chi giu error_type + error_message (str)&#10;status = ERROR - KHONG giu Exception" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=center;" vertex="1" parent="1">
+          <mxGeometry x="670" y="285" width="280" height="90" as="geometry" />
+        </mxCell>
+
+        <mxCell id="cancel" value="CANCELLED&#10;(pipeline bi huy giua chung - executor/cap tren)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;align=center;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="355" y="420" width="270" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="note" value="4 StageStatus = SUCCESS / SKIPPED / ERROR / CANCELLED. Phan biet bang KIEU exception (SkipFrameSignal vs Exception), khong bang chuoi. Khong giu Exception -&gt; chong traceback retention (ro RAM)." style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=11;fontColor=#666666;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="40" y="500" width="910" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e0" value="" style="endArrow=classic;html=1;strokeWidth=2;" edge="1" parent="1" source="start" target="d">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" value="tra ve binh thuong" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#82b366;fontColor=#2d5a2d;" edge="1" parent="1" source="d" target="ok">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="except SkipFrameSignal" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#d6b656;fontColor=#6b5500;" edge="1" parent="1" source="d" target="skip">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3" value="except Exception" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#b85450;fontColor=#b20000;" edge="1" parent="1" source="d" target="err">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

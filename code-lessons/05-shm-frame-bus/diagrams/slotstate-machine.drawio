@@ -1,0 +1,67 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="slotstate-machine" name="05 - SlotState machine (+ QUARANTINED terminal)">
+    <mxGraphModel dx="1100" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1160" pageHeight="720" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Bai #05 - SlotState machine (kernel/shm_layout.py) + chuyen trang thai (runtime/ipc/shm_frame_ring.py)" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="1120" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="free" value="FREE = 0&#10;(trong, writer ghi duoc)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;align=center;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="90" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="writing" value="WRITING = 1&#10;(writer dang giu, do)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="230" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="ready" value="READY = 2&#10;(san sang doc)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="370" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="reading" value="READING = 3&#10;(&gt;=1 reader dang pin)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="510" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="done" value="DONE = 4&#10;(doc xong, tai dung duoc)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;align=center;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="80" y="650" width="200" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="quar" value="QUARANTINED = 0xFFFFFFFF&#10;TERMINAL - loai vinh vien&#10;(owner chet + lease qua han)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=center;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="640" y="370" width="260" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="legend" value="Nhan canh = dieu kien + dong code that trong shm_frame_ring.py. QUARANTINED khong co canh ra (terminal): OS lock khong robust nen KHONG tai dung." style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=11;fontColor=#666666;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="320" y="620" width="580" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="t2" value="writer claim: state in {FREE,DONE} &amp; reader_count==0 (L511) -&gt; set WRITING (L519)" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#6c8ebf;fontColor=#1a3d6d;fontSize=10;" edge="1" parent="1" source="free" target="writing">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t3" value="writer copy xong, ghi state cuoi (L539)" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#82b366;fontColor=#2d5a2d;fontSize=10;" edge="1" parent="1" source="writing" target="ready">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t4" value="reader dau pin: gen khop &amp; state in {READY,READING} (L592) -&gt; READING (L605)" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#82b366;fontColor=#2d5a2d;fontSize=10;" edge="1" parent="1" source="ready" target="reading">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t5" value="reader thu N pin (da reader, cung state) (L592/L605)" style="endArrow=classic;html=1;strokeWidth=1;dashed=1;strokeColor=#82b366;fontColor=#2d5a2d;fontSize=10;" edge="1" parent="1" source="reading" target="reading">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t6" value="reader cuoi unpin (L633)" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#82b366;fontColor=#2d5a2d;fontSize=10;" edge="1" parent="1" source="reading" target="done">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="t2b" value="tai dung: DONE -&gt; WRITING (L511/L519)" style="endArrow=classic;html=1;strokeWidth=2;dashed=1;strokeColor=#6c8ebf;fontColor=#1a3d6d;fontSize=10;" edge="1" parent="1" source="done" target="writing">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="40" y="680" /><mxPoint x="40" y="260" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="q7" value="WRITING: owner DEAD + lease qua han (L406-&gt;L424)" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#b85450;fontColor=#b20000;fontSize=10;" edge="1" parent="1" source="writing" target="quar">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="q8" value="READY: owner DEAD + lease qua han (L406-&gt;L424)" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#b85450;fontColor=#b20000;fontSize=10;" edge="1" parent="1" source="ready" target="quar">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="q9" value="READING: khong con reader song bao ve (L418-&gt;L424)" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#b85450;fontColor=#b20000;fontSize=10;" edge="1" parent="1" source="reading" target="quar">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

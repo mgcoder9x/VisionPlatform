@@ -1,0 +1,43 @@
+
+# B?n clone g?c c?a repo c�ng c? (skill d� copy v�o .kiro/skills)
+external/
+
+# File tam tao ra khi chay lenh/test (KHONG commit) — vd _full.txt, _lint.txt, _probe.txt
+_*.txt
+
+# Virtual env (dung lai cuc bo, khong commit)
+.venv/
+**/.venv/
+
+# Build/ship artifacts (#10 package) — KHONG commit
+build/
+dist/
+*.egg-info/
+**/*.egg-info/
+
+# Python caches / test artifacts
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+**/.pytest_cache/
+.coverage
+htmlcov/
+.hypothesis/
+
+# Temp install venv (verify wheel)
+_tmp_install_venv/
+
+# Output demo app (frame vẽ box sinh ra khi chạy vision_demo_app) — KHONG commit
+demo_frames/
+**/demo_frames/
+
+# Weight model (lớn + tài sản riêng + license model) — KHONG commit
+vision-platform/models/
+*.pt
+*.onnx
+*.engine
+
+# Old virtual env
+.venv_old_del/
+**/.venv_old_del/

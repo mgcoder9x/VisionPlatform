@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 470" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="arx" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 z" fill="#b20000"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="840" height="470" fill="#ffffff"/>
+  <text x="420" y="28" text-anchor="middle" font-size="16" font-weight="bold" fill="#333">5 contract import-linter — trọng tài ép kiến trúc (Bài #01 · mẩu 06)</text>
+  <text x="30" y="50" font-size="11" fill="#666">Mỗi contract type="forbidden": tầng bên trái KHÔNG được import danh sách bên phải. Mũi tên đỏ = CẤM.</text>
+
+  <!-- Row 1 domain -->
+  <rect x="30" y="70" width="150" height="56" rx="6" fill="#d5e8d4" stroke="#82b366" stroke-width="2"/>
+  <text x="105" y="103" text-anchor="middle" font-size="13" font-weight="bold" fill="#2d5a2d">domain</text>
+  <line x1="180" y1="98" x2="238" y2="98" stroke="#b20000" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#arx)"/>
+  <rect x="245" y="70" width="565" height="56" rx="6" fill="#fdecea" stroke="#e0a8a0" stroke-width="1"/>
+  <text x="255" y="93" font-size="11" fill="#7a2e2c">cv2, torch, PyQt6, fastapi, zmq, multiprocessing</text>
+  <text x="255" y="112" font-size="11" fill="#7a2e2c">+ kernel, runtime, application, adapters, profiles  (cấm tất cả)</text>
+
+  <!-- Row 2 kernel -->
+  <rect x="30" y="140" width="150" height="56" rx="6" fill="#dae8fc" stroke="#6c8ebf" stroke-width="2"/>
+  <text x="105" y="173" text-anchor="middle" font-size="13" font-weight="bold" fill="#1a3c66">kernel</text>
+  <line x1="180" y1="168" x2="238" y2="168" stroke="#b20000" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#arx)"/>
+  <rect x="245" y="140" width="565" height="56" rx="6" fill="#fdecea" stroke="#e0a8a0" stroke-width="1"/>
+  <text x="255" y="163" font-size="11" fill="#7a2e2c">cv2, torch, zmq</text>
+  <text x="255" y="182" font-size="11" fill="#7a2e2c">+ runtime, application, adapters, profiles  (chỉ được biết domain)</text>
+
+  <!-- Row 3 runtime -->
+  <rect x="30" y="210" width="150" height="56" rx="6" fill="#ffe6cc" stroke="#d79b00" stroke-width="2"/>
+  <text x="105" y="243" text-anchor="middle" font-size="13" font-weight="bold" fill="#7a5300">runtime</text>
+  <line x1="180" y1="238" x2="238" y2="238" stroke="#b20000" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#arx)"/>
+  <rect x="245" y="210" width="565" height="56" rx="6" fill="#fdecea" stroke="#e0a8a0" stroke-width="1"/>
+  <text x="255" y="244" font-size="11" fill="#7a2e2c">application, adapters, profiles</text>
+
+  <!-- Row 4 application -->
+  <rect x="30" y="280" width="150" height="56" rx="6" fill="#e1d5e7" stroke="#9673a6" stroke-width="2"/>
+  <text x="105" y="313" text-anchor="middle" font-size="13" font-weight="bold" fill="#4b2e5e">application</text>
+  <line x1="180" y1="308" x2="238" y2="308" stroke="#b20000" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#arx)"/>
+  <rect x="245" y="280" width="565" height="56" rx="6" fill="#fdecea" stroke="#e0a8a0" stroke-width="1"/>
+  <text x="255" y="314" font-size="11" fill="#7a2e2c">adapters, profiles  (dùng Ports, không chạm adapter cụ thể)</text>
+
+  <!-- Row 5 adapters -->
+  <rect x="30" y="350" width="150" height="56" rx="6" fill="#fff2cc" stroke="#d6b656" stroke-width="2"/>
+  <text x="105" y="383" text-anchor="middle" font-size="13" font-weight="bold" fill="#6b5500">adapters</text>
+  <line x1="180" y1="378" x2="238" y2="378" stroke="#b20000" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#arx)"/>
+  <rect x="245" y="350" width="565" height="56" rx="6" fill="#fdecea" stroke="#e0a8a0" stroke-width="1"/>
+  <text x="255" y="384" font-size="11" fill="#7a2e2c">runtime, application, profiles  (là leaf — không import ngược lên)</text>
+
+  <text x="30" y="440" font-size="12" font-weight="bold" fill="#2d5a2d">Chạy `lint-imports` → "5 kept, 0 broken" = cả 5 luật được giữ.</text>
+  <text x="30" y="458" font-size="10" fill="#666">Lưu ý ERRATA E-9: contract có module ngoài (cv2/torch/zmq...) thì pyproject phải có include_external_packages = true.</text>
+</svg>

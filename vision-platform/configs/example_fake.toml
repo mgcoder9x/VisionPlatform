@@ -1,0 +1,19 @@
+# Cấu hình SMOKE — không cần GPU/camera. Chạy được trên mọi máy (CI/dev).
+# Lệnh: python -m vision_platform.profiles.vision_slice_app --config configs/example_fake.toml
+[[pipelines]]
+id = "smoke-fake"
+max_frames = 10
+
+[pipelines.source]
+type = "fake"
+params = { max_frames = 10 }
+
+[pipelines.detector]
+type = "fake"
+params = { model_size = 640 }
+
+[[pipelines.stages]]
+type = "detect"
+
+[[pipelines.stages]]
+type = "count"

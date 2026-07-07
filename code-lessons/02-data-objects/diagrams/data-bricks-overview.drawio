@@ -1,0 +1,52 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="data-bricks-overview" name="02 - tong quan vien gach du lieu">
+    <mxGraphModel dx="1100" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="900" pageHeight="700" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Bai #02 - 5 vien gach du lieu + tang + cau truc MediaPacket" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="30" y="10" width="780" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="domain-zone" value="Tang domain - logic/gia tri thuan (khong I/O)" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=top;align=left;spacingLeft=8;fontStyle=1;fillColor=#eef7ee;strokeColor=#82b366;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="30" y="50" width="780" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="bbox" value="BBox (frozen)&#10;x, y, w, h + space&#10;validate (__post_init__)&#10;@property x2 / y2 / area" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;" vertex="1" parent="1">
+          <mxGeometry x="55" y="82" width="330" height="72" as="geometry" />
+        </mxCell>
+        <mxCell id="coordspace" value="CoordinateSpace (Enum)&#10;ORIGINAL_FRAME · MODEL_INPUT&#10;NORMALIZED · DISPLAY" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;" vertex="1" parent="1">
+          <mxGeometry x="420" y="82" width="365" height="72" as="geometry" />
+        </mxCell>
+
+        <mxCell id="kernel-zone" value="Tang kernel - DTO + hop dong (truyen giua cac phan)" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=top;align=left;spacingLeft=8;fontStyle=1;fillColor=#eef3fb;strokeColor=#6c8ebf;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="30" y="185" width="780" height="410" as="geometry" />
+        </mxCell>
+
+        <mxCell id="readresult" value="ReadResult[T] (frozen, DTO)&#10;status: ReadStatus (6 loai)&#10;FRAME/EOF/TIMEOUT/&#10;RECONNECTING/DROPPED/ERROR&#10;data / error / retry_after_ms&#10;has_data = (status==FRAME va data!=None)&#10;-> trang thai ro rang thay vi None" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;" vertex="1" parent="1">
+          <mxGeometry x="55" y="220" width="250" height="160" as="geometry" />
+        </mxCell>
+
+        <mxCell id="packet" value="MediaPacket (frozen - bat bien)&#10;packet_id · source_id · capture_time_ns" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=top;align=center;fontStyle=1;fillColor=#f3eef8;strokeColor=#9673a6;strokeWidth=2;" vertex="1" parent="1">
+          <mxGeometry x="330" y="220" width="455" height="355" as="geometry" />
+        </mxCell>
+        <mxCell id="mediaref" value="media_ref: InMemoryArrayRef (read-only by contract)&#10;ndarray (anh) · setflags(write=False)&#10;chia se zero-copy · giu read-only qua pickle (__setstate__, E-11)&#10;from_owned_array (zero-copy) | from_copy (cach ly)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=center;" vertex="1" parent="1">
+          <mxGeometry x="350" y="275" width="415" height="105" as="geometry" />
+        </mxCell>
+        <mxCell id="metadata" value="metadata&#10;MappingProxyType (chi-doc)&#10;+ defensive copy dict(...)&#10;sua tai cho -> raise" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;" vertex="1" parent="1">
+          <mxGeometry x="350" y="392" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="artifacts" value="artifacts&#10;MappingProxyType (chi-doc)&#10;vd: detections (ket qua AI)&#10;doi qua CoW with_*" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;" vertex="1" parent="1">
+          <mxGeometry x="565" y="392" width="200" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="cownote" value="Doi packet = CoW (Copy-on-Write)&#10;with_metadata / with_artifact / without_artifact -> packet MOI&#10;copy dict nho · DUNG CHUNG media_ref (KHONG copy anh)&#10;-> an toan (bat bien) ma van nhanh" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=center;" vertex="1" parent="1">
+          <mxGeometry x="350" y="486" width="415" height="76" as="geometry" />
+        </mxCell>
+
+        <mxCell id="e-data" value="data: ndarray&#10;(wrap vào media_ref)" style="endArrow=classic;html=1;strokeWidth=1.5;strokeColor=#444444;" edge="1" parent="1" source="readresult" target="mediaref">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

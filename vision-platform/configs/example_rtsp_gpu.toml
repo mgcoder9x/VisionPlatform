@@ -1,0 +1,24 @@
+# Chạy KHI CÓ CAMERA RTSP (máy GPU). Thay url (KHÔNG commit secret thật — K-031) + weights.
+# Lệnh: python -m vision_platform.profiles.vision_slice_app --config configs/example_rtsp_gpu.toml
+[[pipelines]]
+id = "rtsp-cam-01"
+# rtsp = luồng vô hạn; đặt max_frames để dừng thử, hoặc bỏ để chạy liên tục.
+max_frames = 300
+
+[pipelines.source]
+type = "rtsp"
+params = { url = "rtsp://USER:PASS@HOST:554/stream", max_reconnect = 5 }
+
+[pipelines.detector]
+type = "pt"
+params = { weights = "models/yolov5s.pt", device = "cuda" }
+
+[[pipelines.stages]]
+type = "detect"
+
+[[pipelines.stages]]
+type = "count"
+
+[[pipelines.sinks]]
+type = "jsonl"
+params = { path = "events/rtsp-cam-01.jsonl" }

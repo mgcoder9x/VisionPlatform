@@ -1,0 +1,88 @@
+# pyproject.toml
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vision_platform"
+version = "0.1.0"
+description = "Vision platform thật - kiểm chứng thiết kế Design/ (theo Module 03)"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.26",
+    "psutil>=5.9",
+    "structlog>=24.1",
+    "pyzmq>=25.0",
+    "msgpack>=1.0",
+]
+
+[project.optional-dependencies]
+cv2 = ["opencv-python>=4.8"]
+# ONNX detector adapter — OPTIONAL (không phải mọi deployment cần; base install giữ gọn).
+# onnxruntime = MIT (engine), onnx = Apache-2.0 (build/kiểm model). KHÔNG kèm model YOLO (AGPL — xem K-029).
+onnx = ["onnxruntime>=1.20", "onnx>=1.16"]
+# Web UI (MJPEG stream) — OPTIONAL. Container dùng opencv-python-headless thay opencv-python.
+web = ["flask>=3.0"]
+# Chạy THẲNG weight YOLOv5 .pt — OPTIONAL, NẶNG (kéo torch). Dùng ở env cài (vd WSL).
+pt = ["yolov5>=7.0"]
+dev = ["pytest>=7.4", "import-linter>=2.0", "hypothesis>=6.0"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+# ---- Layer boundary enforcement (import-linter) ----
+# Chạy: `lint-imports` (sau khi `pip install -e .[dev]`).
+# 4-layer Hexagonal: domain ← kernel ← runtime ← application; adapters/profiles ở rim.
+[tool.importlinter]
+root_package = "vision_platform"
+# Bắt buộc khi contract 'forbidden' liệt kê module NGOÀI (cv2/torch/zmq/multiprocessing...).
+# import-linter 2.x báo lỗi nếu thiếu. (Design step-01 thiếu dòng này → đã sửa cả Design.)
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Domain khong import I/O hay layer ngoai"
+type = "forbidden"
+source_modules = ["vision_platform.domain"]
+forbidden_modules = [
+    "cv2", "torch", "PyQt6", "fastapi", "zmq", "multiprocessing", "psutil", "msgpack",
+    "onnxruntime", "onnx", "yolov5", "ultralytics",
+    "vision_platform.kernel", "vision_platform.runtime", "vision_platform.application",
+    "vision_platform.adapters", "vision_platform.profiles",
+]
+
+[[tool.importlinter.contracts]]
+name = "Kernel chi phu thuoc domain (DTO + ports thuan)"
+type = "forbidden"
+source_modules = ["vision_platform.kernel"]
+forbidden_modules = [
+    "cv2", "torch", "zmq", "multiprocessing", "shared_memory", "PyQt6", "fastapi", "psutil", "msgpack",
+    "onnxruntime", "onnx", "yolov5", "ultralytics",
+    "vision_platform.runtime", "vision_platform.application",
+    "vision_platform.adapters", "vision_platform.profiles",
+]
+
+[[tool.importlinter.contracts]]
+name = "Runtime khong import application/adapter/profiles"
+type = "forbidden"
+source_modules = ["vision_platform.runtime"]
+forbidden_modules = [
+    "vision_platform.application", "vision_platform.adapters", "vision_platform.profiles",
+]
+
+[[tool.importlinter.contracts]]
+name = "Application dung ports, khong import adapter"
+type = "forbidden"
+source_modules = ["vision_platform.application"]
+forbidden_modules = ["vision_platform.adapters", "vision_platform.profiles"]
+
+[[tool.importlinter.contracts]]
+name = "Adapters la leaf — khong import nguoc len runtime/application/profiles"
+type = "forbidden"
+source_modules = ["vision_platform.adapters"]
+forbidden_modules = [
+    "vision_platform.runtime", "vision_platform.application", "vision_platform.profiles",
+]

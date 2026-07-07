@@ -1,0 +1,80 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="pipeline-flow" name="04 - Pipeline flow (source -&gt; stages -&gt; ExecutionResult)">
+    <mxGraphModel dx="1100" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1000" pageHeight="720" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Bai #04 - Luong pipeline: source(#03) -&gt; Brightness -&gt; DarkFilter -&gt; ExecutionResult (executor lai)" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="960" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="root" value="profiles/demo_pipeline.py = COMPOSITION ROOT (chon adapter + rap chuoi + vong lap + finally teardown)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;align=center;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="40" y="50" width="920" height="34" as="geometry" />
+        </mxCell>
+
+        <mxCell id="src" value="source.read() (#03)&#10;-&gt; ReadResult(FRAME/EOF/ERROR)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="120" width="240" height="60" as="geometry" />
+        </mxCell>
+
+        <mxCell id="pkt" value="MediaPacket (#02)&#10;media_ref = InMemoryArrayRef.from_copy(r.data)&#10;(immutable + copy frame)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;" vertex="1" parent="1">
+          <mxGeometry x="60" y="220" width="240" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="exec" value="SyncLinearExecutor.execute(packet)&#10;chay tuyen tinh, dung o non-SUCCESS dau tien" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=center;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="360" y="120" width="560" height="44" as="geometry" />
+        </mxCell>
+
+        <mxCell id="s1" value="BrightnessStage (mau 05)&#10;_do_process: frame.mean()&#10;-&gt; with_artifact('brightness') [CoW]" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;" vertex="1" parent="1">
+          <mxGeometry x="380" y="200" width="250" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="s2" value="DarkFilterStage (mau 06)&#10;doc artifact 'brightness'&#10;toi -&gt; SkipFrameSignal; thieu -&gt; ValueError" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;" vertex="1" parent="1">
+          <mxGeometry x="670" y="200" width="250" height="80" as="geometry" />
+        </mxCell>
+
+        <mxCell id="res" value="ExecutionResult (mau 02) - result-object giu DU trang thai" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=center;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="360" y="330" width="560" height="34" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ok" value="SUCCESS&#10;packet chay het chuoi&#10;(processed)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;" vertex="1" parent="1">
+          <mxGeometry x="370" y="400" width="170" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="skip" value="SKIPPED&#10;filter bo CO Y&#10;failed_stage + reason" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=center;" vertex="1" parent="1">
+          <mxGeometry x="560" y="400" width="170" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="err" value="ERROR&#10;stage loi (can alert)&#10;error_type + error_message" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=center;" vertex="1" parent="1">
+          <mxGeometry x="750" y="400" width="170" height="70" as="geometry" />
+        </mxCell>
+
+        <mxCell id="note" value="Vi sao result-object thay Optional[MediaPacket]? None khong phan biet 'bo co y' (SKIPPED) voi 'loi' (ERROR)." style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=11;fontColor=#666666;fontStyle=2;" vertex="1" parent="1">
+          <mxGeometry x="360" y="490" width="560" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="ea" value="" style="endArrow=classic;html=1;strokeWidth=2;" edge="1" parent="1" source="src" target="pkt">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eb" value="execute(packet)" style="endArrow=classic;html=1;strokeWidth=2;" edge="1" parent="1" source="pkt" target="exec">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ec" value="" style="endArrow=classic;html=1;strokeWidth=2;" edge="1" parent="1" source="exec" target="s1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ed" value="SUCCESS -&gt; packet moi" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#82b366;fontColor=#2d5a2d;" edge="1" parent="1" source="s1" target="s2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ee" value="" style="endArrow=classic;html=1;strokeWidth=2;" edge="1" parent="1" source="s2" target="res">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="ef" value="" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#82b366;" edge="1" parent="1" source="res" target="ok">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eg" value="" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#d6b656;" edge="1" parent="1" source="res" target="skip">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eh" value="" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#b85450;" edge="1" parent="1" source="res" target="err">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

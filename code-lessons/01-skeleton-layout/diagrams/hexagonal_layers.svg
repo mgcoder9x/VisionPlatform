@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 740" font-family="Segoe UI, Arial, sans-serif">
+  <defs>
+    <marker id="ar" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 z" fill="#444"/>
+    </marker>
+  </defs>
+  <rect x="0" y="0" width="780" height="740" fill="#ffffff"/>
+  <text x="390" y="26" text-anchor="middle" font-size="16" font-weight="bold" fill="#333">6 tầng + hướng phụ thuộc (Bài #01 · mẩu 05)</text>
+  <text x="115" y="52" font-size="11" fill="#666">Mũi tên A → B nghĩa là: A import (biết) B.</text>
+  <text x="115" y="69" font-size="11" fill="#666">LÕI = 4 tầng: domain, kernel, runtime, application (KHÔNG biết rìa).</text>
+  <text x="115" y="86" font-size="11" fill="#666">RÌA = adapters, profiles (chạm thế giới ngoài).</text>
+
+  <!-- core boundary -->
+  <rect x="110" y="115" width="560" height="410" rx="6" fill="#fafafa" stroke="#999" stroke-width="2" stroke-dasharray="8,5"/>
+  <text x="390" y="135" text-anchor="middle" font-size="12" font-weight="bold" fill="#777">LÕI ỨNG DỤNG (CORE / INSIDE)</text>
+
+  <!-- runtime -->
+  <rect x="150" y="150" width="200" height="82" rx="6" fill="#ffe6cc" stroke="#d79b00" stroke-width="2"/>
+  <text x="250" y="178" text-anchor="middle" font-size="12" font-weight="bold" fill="#7a5300">3. RUNTIME</text>
+  <text x="250" y="195" text-anchor="middle" font-size="10" fill="#7a5300">SyncLinearExecutor, BaseStage</text>
+  <text x="250" y="212" text-anchor="middle" font-size="10" fill="#7a5300">[import KERNEL + DOMAIN]</text>
+
+  <!-- application -->
+  <rect x="430" y="150" width="200" height="82" rx="6" fill="#e1d5e7" stroke="#9673a6" stroke-width="2"/>
+  <text x="530" y="174" text-anchor="middle" font-size="12" font-weight="bold" fill="#4b2e5e">4. APPLICATION</text>
+  <text x="530" y="191" text-anchor="middle" font-size="10" fill="#4b2e5e">Supervisor (sẽ có ở #09)</text>
+  <text x="530" y="208" text-anchor="middle" font-size="10" fill="#4b2e5e">[import RUNTIME+KERNEL+DOMAIN]</text>
+
+  <!-- kernel -->
+  <rect x="265" y="288" width="250" height="84" rx="6" fill="#dae8fc" stroke="#6c8ebf" stroke-width="2"/>
+  <text x="390" y="314" text-anchor="middle" font-size="12" font-weight="bold" fill="#1a3c66">2. KERNEL</text>
+  <text x="390" y="331" text-anchor="middle" font-size="10" fill="#1a3c66">DTO (MediaPacket, ReadResult) + Ports</text>
+  <text x="390" y="348" text-anchor="middle" font-size="10" fill="#1a3c66">(IFrameSource) · [chỉ import DOMAIN]</text>
+
+  <!-- domain -->
+  <rect x="300" y="420" width="180" height="82" rx="6" fill="#d5e8d4" stroke="#82b366" stroke-width="2"/>
+  <text x="390" y="448" text-anchor="middle" font-size="12" font-weight="bold" fill="#2d5a2d">1. DOMAIN</text>
+  <text x="390" y="465" text-anchor="middle" font-size="10" fill="#2d5a2d">logic + giá trị thuần (BBox)</text>
+  <text x="390" y="482" text-anchor="middle" font-size="10" fill="#2d5a2d">[không import bất kỳ ai]</text>
+
+  <!-- adapters (rim) -->
+  <rect x="40" y="585" width="300" height="120" rx="6" fill="#fff2cc" stroke="#d6b656" stroke-width="2"/>
+  <text x="190" y="610" text-anchor="middle" font-size="12" font-weight="bold" fill="#6b5500">5. ADAPTERS (RÌA)</text>
+  <text x="190" y="630" text-anchor="middle" font-size="10" fill="#6b5500">bản cài cụ thể của Ports</text>
+  <text x="190" y="646" text-anchor="middle" font-size="10" fill="#6b5500">(FakeFrameSource, NoiseFrameSource)</text>
+  <text x="190" y="668" text-anchor="middle" font-size="9" fill="#6b5500">[import KERNEL+DOMAIN; CẤM import</text>
+  <text x="190" y="682" text-anchor="middle" font-size="9" fill="#6b5500">runtime/application/profiles]</text>
+
+  <!-- profiles (rim) -->
+  <rect x="440" y="585" width="300" height="120" rx="6" fill="#f8cecc" stroke="#b85450" stroke-width="2"/>
+  <text x="590" y="610" text-anchor="middle" font-size="12" font-weight="bold" fill="#7a2e2c">6. PROFILES (RÌA)</text>
+  <text x="590" y="628" text-anchor="middle" font-size="10" fill="#7a2e2c">Composition Root — demo_pipeline.py</text>
+  <text x="590" y="644" text-anchor="middle" font-size="10" fill="#7a2e2c">chọn adapter + ráp pipeline</text>
+  <text x="590" y="666" text-anchor="middle" font-size="9" fill="#7a2e2c">[được import MỌI tầng để ráp nối]</text>
+
+  <!-- arrows -->
+  <!-- kernel -> domain -->
+  <line x1="390" y1="372" x2="390" y2="420" stroke="#6c8ebf" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="398" y="400" font-size="10" fill="#1a3c66">import</text>
+  <!-- runtime -> kernel -->
+  <line x1="270" y1="232" x2="340" y2="288" stroke="#d79b00" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="250" y="270" font-size="10" fill="#7a5300">import</text>
+  <!-- application -> runtime -->
+  <line x1="430" y1="191" x2="352" y2="191" stroke="#9673a6" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="368" y="183" font-size="10" fill="#4b2e5e">import</text>
+  <!-- application -> kernel -->
+  <line x1="510" y1="232" x2="445" y2="288" stroke="#9673a6" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="478" y="270" font-size="10" fill="#4b2e5e">import DTO</text>
+  <!-- adapters -> kernel (implement ports) -->
+  <line x1="240" y1="585" x2="320" y2="372" stroke="#d6b656" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="120" y="500" font-size="10" font-weight="bold" fill="#6b5500">implement Ports</text>
+  <!-- profiles -> adapters -->
+  <line x1="440" y1="650" x2="342" y2="650" stroke="#b85450" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="350" y="642" font-size="10" fill="#7a2e2c">khởi tạo</text>
+  <!-- profiles -> application -->
+  <line x1="560" y1="585" x2="545" y2="234" stroke="#b85450" stroke-width="2" marker-end="url(#ar)"/>
+  <text x="566" y="420" font-size="10" font-weight="bold" fill="#7a2e2c">ráp nối + tiêm dependency</text>
+</svg>

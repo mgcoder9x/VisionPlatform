@@ -1,0 +1,41 @@
+<mxGraphModel dx="900" dy="640" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="700" math="0" shadow="0">
+  <root>
+    <mxCell id="0" />
+    <mxCell id="1" parent="0" />
+    <mxCell id="tt" value="K-012 (van de) vs H2 (giai phap) — cap khoa cross-process" style="text;html=1;fontStyle=1;fontSize=14;align=left;" vertex="1" parent="1">
+      <mxGeometry x="40" y="20" width="640" height="24" as="geometry" />
+    </mxCell>
+    <mxCell id="pbox" value="VAN DE K-012 (naive: tao ring moi luc chay)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;verticalAlign=top;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="40" y="60" width="360" height="270" as="geometry" />
+    </mxCell>
+    <mxCell id="p1" value="Worker process (DANG CHAY)&#10;da spawn tu truoc" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="1">
+      <mxGeometry x="60" y="100" width="150" height="60" as="geometry" />
+    </mxCell>
+    <mxCell id="p2" value="mp.Lock cua RING MOI&#10;(sinh luc chay)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="1">
+      <mxGeometry x="230" y="100" width="150" height="60" as="geometry" />
+    </mxCell>
+    <mxCell id="pX" value="mp.Lock CHI truyen luc spawn&#10;KHONG mo duoc theo ten&#10;=&gt; worker khong nhan duoc khoa ring moi" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+      <mxGeometry x="60" y="200" width="320" height="90" as="geometry" />
+    </mxCell>
+    <mxCell id="pe" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#b85450;dashed=1;startArrow=none;endArrow=cross;" edge="1" parent="1" source="p1" target="p2">
+      <mxGeometry relative="1" as="geometry" />
+    </mxCell>
+    <mxCell id="hbox" value="GIAI PHAP H2 (ring pool cap san, tai dung vong)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;verticalAlign=top;fontStyle=1;" vertex="1" parent="1">
+      <mxGeometry x="440" y="60" width="370" height="270" as="geometry" />
+    </mxCell>
+    <mxCell id="h1" value="STARTUP: RingPool tao K ring&#10;+ slot_locks_map (toan bo khoa)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="1">
+      <mxGeometry x="460" y="100" width="330" height="50" as="geometry" />
+    </mxCell>
+    <mxCell id="h2" value="spawn Worker(args=slot_locks_map)&#10;=&gt; Worker THUA KE khoa CUA MOI ring pool" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="1">
+      <mxGeometry x="460" y="165" width="330" height="55" as="geometry" />
+    </mxCell>
+    <mxCell id="h3" value="switchover = TAI DUNG pool[N%K]&#10;(reset+bump epoch) — KHONG cap khoa moi&#10;=&gt; worker DA co khoa ring dich" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="1">
+      <mxGeometry x="460" y="235" width="330" height="75" as="geometry" />
+    </mxCell>
+    <mxCell id="he1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82b366;" edge="1" parent="1" source="h1" target="h2"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="he2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;strokeColor=#82b366;" edge="1" parent="1" source="h2" target="h3"><mxGeometry relative="1" as="geometry" /></mxCell>
+    <mxCell id="note" value="Bang chung: T-B (spawn that) — parent doc duoc frame epoch moi do worker ghi cross-process (5/5 khong flaky). Windows; POSIX = K-003." style="text;html=1;align=left;fontSize=11;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+      <mxGeometry x="40" y="345" width="770" height="40" as="geometry" />
+    </mxCell>
+  </root>
+</mxGraphModel>

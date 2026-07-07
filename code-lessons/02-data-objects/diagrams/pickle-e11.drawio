@@ -1,0 +1,53 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="pickle-e11" name="02 - E-11 pickle read-only">
+    <mxGraphModel dx="1000" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="900" pageHeight="520" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="ERRATA E-11 - giu read-only qua pickle (verify that, numpy 2.4.6)" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;fontSize=14;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="860" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="row1lbl" value="A) ndarray TRAN (khong co __setstate__)" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=12;fontStyle=1;fontColor=#7a2e2c;" vertex="1" parent="1">
+          <mxGeometry x="40" y="55" width="500" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="a-src" value="ndarray&#10;write=False (read-only)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="80" width="200" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="a-dst" value="ndarray&#10;writeable = TRUE (mat co!)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;align=center;" vertex="1" parent="1">
+          <mxGeometry x="450" y="80" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="a-edge" value="pickle.dumps -> loads" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#b20000;fontColor=#b20000;" edge="1" parent="1" source="a-src" target="a-dst">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="a-bad" value="-> co the ghi de anh o process nhan (BUG)" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=11;fontColor=#b20000;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="690" y="95" width="190" height="40" as="geometry" />
+        </mxCell>
+
+        <mxCell id="row2lbl" value="B) InMemoryArrayRef (CO __setstate__ re-lock)" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=12;fontStyle=1;fontColor=#2d5a2d;" vertex="1" parent="1">
+          <mxGeometry x="40" y="230" width="500" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="b-src" value="InMemoryArrayRef&#10;array write=False" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;align=center;" vertex="1" parent="1">
+          <mxGeometry x="40" y="255" width="200" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="b-mid" value="__setstate__&#10;setflags(write=False)&#10;re-lock" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;align=center;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="340" y="252" width="180" height="76" as="geometry" />
+        </mxCell>
+        <mxCell id="b-dst" value="InMemoryArrayRef&#10;writeable = FALSE (giu duoc)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;align=center;" vertex="1" parent="1">
+          <mxGeometry x="620" y="255" width="220" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="b-e1" value="pickle" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#6c8ebf;" edge="1" parent="1" source="b-src" target="b-mid">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b-e2" value="" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#82b366;" edge="1" parent="1" source="b-mid" target="b-dst">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <mxCell id="why" value="Vi sao: pickle KHONG chay lai __post_init__ + numpy KHONG giu co write=False qua pickle.&#10;Bang chung that (phien nay): ndarray tran -> writeable=True; InMemoryArrayRef -> writeable=False; pytest -k pickle: 1 passed." style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=11;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="40" y="370" width="820" height="60" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
