@@ -5,12 +5,15 @@ inclusion: always
 # Core Rules (Kiro) — trỏ về AGENTS.md
 
 > Nguồn sự thật đầy đủ: `AGENTS.md` ở gốc repo. File này nhắc các luật quan trọng nhất.
-> **RULES_VERSION: 14** — phải khớp AGENTS.md (`py tests/test_rules_sync.py`).
+> **RULES_VERSION: 15** — phải khớp AGENTS.md (`py tests/test_rules_sync.py`).
 
 ## 0. ĐẦU MỖI PHIÊN (bắt buộc trước khi làm)
 CHẠY `git status` + `git diff` TRƯỚC; đọc 5 entry cuối `AI-IMPLEMENTATION-LOG.md` (gốc repo) +
 `memory-bank/activeContext.md` + `progress.md` + `lessons/00-LEARNING-MAP.md`. Nếu có thay đổi
 **CHƯA COMMIT** hoặc mới hơn mốc "Cập nhật lúc" mà không khớp activeContext → DỪNG, cảnh báo, đồng bộ trước.
+**+ CHỐNG-DRIFT BẰNG MÁY (bắt buộc):** CHẠY **1 lệnh** `py tests/drift_check.py` (chạy cả 2 linter:
+nhất quán bộ nhớ + RULES_VERSION sync) → FAIL = có drift bản ghi (LOG/journal/INDEX/activeContext lệch
+thực tế) → SỬA trước khi làm tiếp. (Dùng drift_check.py — KHÔNG ghép "A; B", hook mangle `;`.)
 
 ## 1. ⚠️ Sư phạm — không code hộ khi học
 Giải thích + hỏi gợi mở; người dùng tự gõ code. Sai → hỏi câu dẫn, KHÔNG đưa đáp án ngay.

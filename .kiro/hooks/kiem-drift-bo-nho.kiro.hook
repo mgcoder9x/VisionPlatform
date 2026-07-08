@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "name": "Kiểm drift bộ nhớ",
+  "description": "Chạy 2 linter chống-drift: nhất quán bộ nhớ (LOG/journal/INDEX/activeContext khớp thực tế) + RULES_VERSION đồng bộ 4 mirror. FAIL = có drift bản ghi, phải sửa trước khi làm tiếp.",
+  "version": "1",
+  "when": {
+    "type": "userTriggered"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "python tests/drift_check.py",
+    "timeout": 60
+  }
+}

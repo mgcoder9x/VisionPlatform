@@ -4,7 +4,7 @@
 > làm việc. Nguồn sự thật duy nhất; file luật từng tool (`.github/copilot-instructions.md`,
 > `GEMINI.md`, `.kiro/steering/`) trỏ về đây.
 >
-> **RULES_VERSION: 14** — đổi luật phải BUMP + đồng bộ mọi mirror lên cùng version (kiểm `tests/test_rules_sync.py`).
+> **RULES_VERSION: 15** — đổi luật phải BUMP + đồng bộ mọi mirror lên cùng version (kiểm `tests/test_rules_sync.py`).
 
 ## 0. Đây là gì
 {{PROJECT_DESC — mô tả dự án 2-3 câu}}.
@@ -57,6 +57,11 @@ Công cụ là đòn bẩy, KHÔNG thay người dùng suy nghĩ.
   `AI-IMPLEMENTATION-LOG.md` theo template 4 mục. Không cần được nhắc. Bỏ qua chỉ khi được nói rõ.
 - Append-only. Đầu phiên: đọc 5 entry cuối + `memory-bank/activeContext.md` + `progress.md`
   + `lessons/00-LEARNING-MAP.md` trước khi làm; mâu thuẫn → DỪNG, hỏi.
+- **CHỐNG-DRIFT BẰNG MÁY (BẮT BUỘC đầu phiên + trước khi "xong"):** CHẠY **1 lệnh**
+  `py tests/drift_check.py` (điểm vào DUY NHẤT — chạy cả 2 linter: nhất quán bộ nhớ [entries liên tục ·
+  INDEX↔LOG max · total đếm-thật · ID⇄INDEX · activeContext freshness] + RULES_VERSION khớp mirror).
+  **FAIL = có DRIFT bản ghi → SỬA TRƯỚC khi làm tiếp.** Mạnh hơn luật văn xuôi vì MÁY kiểm được.
+  Copy `tests/{drift_check,test_memory_consistency}.template.py`. *Dùng 1 lệnh — KHÔNG ghép "A; B" (hook mangle `;`).*
 
 ## 2.5 🧠 Cập nhật bộ nhớ — chống dữ liệu cũ (BẮT BUỘC)
 - **Con trỏ LUÔN MỚI (per-turn):** cuối MỖI lượt có đổi trạng thái → cập nhật NGAY

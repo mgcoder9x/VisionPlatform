@@ -98,10 +98,14 @@ class ZmqInferenceClient:
                     req = self._async_outbound.get_or_raise(timeout=0)
                 except queue.Empty:
                     break
-                self._sock.send(msgpack.packb(codec.request_to_dict(req)))
+                # Ghi nhận in-flight + submitted NGAY sau khi rời van, TRƯỚC send() (fix F1 review #252):
+                # đóng cửa sổ đua drain — nếu tăng SAU send, có khoảnh khắc (outbound_size==0 & in_flight==0)
+                # ở frame cuối làm vòng drain camera_worker thoát sớm. send() DEALER là fire-and-forget
+                # (window_size ≪ SNDHWM nên không block/raise) → thứ tự này an toàn + chính xác hơn cho flow-control.
                 self._pending_async[req.request_id] = time.monotonic()
                 self._in_flight += 1
                 self._sent += 1     # đếm TẠI LÚC GỬI (K-051)
+                self._sock.send(msgpack.packb(codec.request_to_dict(req)))
             # 2) poll recv.
             if dict(poller.poll(self._poll_ms)).get(self._sock) == zmq.POLLIN:
                 data = self._sock.recv()
@@ -164,6 +168,15 @@ class ZmqInferenceClient:
     def in_flight(self) -> int:
         """Số request đã gửi nhưng CHƯA có kết cục (response/timeout)."""
         return self._in_flight
+
+    @property
+    def outbound_size(self) -> int:
+        """Số request đang chờ trong van outbound (CHƯA gửi tới server).
+
+        Dùng cho drain: hàng đợi rỗng (outbound_size==0) AND in_flight==0 ⇒ đã gửi hết + có kết cục hết.
+        Chỉ in_flight==0 CHƯA đủ: giữa 2 vòng io có thể còn frame trong van chưa kịp gửi.
+        """
+        return self._async_outbound.qsize()
 
     def poll_responses(self) -> list[InferenceResponse]:
         """Rút mọi response đã hoàn tất (non-blocking). Camera gọi mỗi vòng để tiêu thụ + drain."""

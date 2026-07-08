@@ -67,14 +67,14 @@ Thứ tự bắt buộc tuần tự trong nhánh chính: `1 → 2.3 → 2.4 → 
   - Verify: pytest file + full suite; lint 5/0.
   - _Requirements: 7.1, 7.2_
 
-- [ ] 2.3 `ZmqInferenceClient`: set HWM trước connect (đóng A3)
+- [x] 2.3 `ZmqInferenceClient`: set HWM trước connect (đóng A3)
   - Thêm params `sndhwm:int=1000`, `rcvhwm:int=1000` (≥1). Trong `setup()`: `sock.setsockopt(zmq.SNDHWM, sndhwm)` + `sock.setsockopt(zmq.RCVHWM, rcvhwm)` **TRƯỚC** `sock.connect(endpoint)`.
   - Test: dựng client (không cần server), kiểm `sock.getsockopt(zmq.SNDHWM)/(zmq.RCVHWM)` == giá trị cấu hình sau `setup()`; teardown sạch. (Đường sync `infer()` cũ không đổi.)
   - Verify: pytest + full suite (5 test cross-process cũ vẫn PASS); lint 5/0.
   - _Requirements: 6.1, 6.2, 6.3_
   - _Properties: P6_
 
-- [ ] 2.4 `ZmqInferenceClient`: đường async `submit()` + flow-control + đếm submitted-tại-lúc-gửi
+- [x] 2.4 `ZmqInferenceClient`: đường async `submit()` + flow-control + đếm submitted-tại-lúc-gửi
   - Thêm params `window_size:int=8`, `queue_maxsize:int|None=None` (mặc định = window_size), `policy:BackpressurePolicy=DROP_OLDEST`.
   - Nội bộ thêm `_outbound = BoundedQueue(queue_maxsize, policy)` chứa `InferenceRequest`; biến đếm `_in_flight`, `_sent` (chỉ io thread ghi).
   - `submit(request) -> bool`: non-blocking `self._outbound.put(request)` (BLOCK-policy dùng timeout) → trả accepted.
@@ -86,7 +86,7 @@ Thứ tự bắt buộc tuần tự trong nhánh chính: `1 → 2.3 → 2.4 → 
   - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 2.4_
   - _Properties: P2, P3_
 
-- [ ] 2.5 `ZmqInferenceClient`: `poll_responses()` + quét timeout + `metrics_snapshot()`
+- [x] 2.5 `ZmqInferenceClient`: `poll_responses()` + quét timeout + `metrics_snapshot()`
   - Thêm `_responses: queue.Queue` (thread-safe). io_loop: on recv response → phân loại `is_success` → `_ok += 1` / `_err += 1` → đẩy `InferenceResponse` vào `_responses`.
   - Quét timeout trong io_loop: pending quá `timeout_s` → tạo `InferenceResponse(error=InferenceError("Timeout",...,retryable=True))`, `_timeout += 1`, `_in_flight -= 1`, đẩy vào `_responses`, xoá pending.
   - `poll_responses() -> list[InferenceResponse]`: drain `_responses` non-blocking.
@@ -98,7 +98,7 @@ Thứ tự bắt buộc tuần tự trong nhánh chính: `1 → 2.3 → 2.4 → 
 
 ### Wave 3 — profiles / config (phụ thuộc Wave 2)
 
-- [ ] 3.1 `camera_worker` chuyển sang async submit + drain + ghi metrics
+- [x] 3.1 `camera_worker` chuyển sang async submit + drain + ghi metrics
   - Sửa vòng: `frames_captured += 1` mỗi frame có data; `client.submit(InferenceRequest(...))`; luôn `for resp in client.poll_responses(): phân loại ok/err/timeout`. Bỏ `infer()` blocking (camera không bị chặn — R1).
   - Sau EOF/shutdown: **drain** — tiếp tục `poll_responses()` tới khi `client.in_flight == 0` và outbound rỗng → mọi frame chưa gửi được gửi nốt → bất biến đúng SAU vòng lặp (R4.3). KHÔNG đếm leftover là dropped.
   - Mở rộng artifact (`_write_result`) ghi đủ 6 field `BackpressureMetrics` (thêm captured/submitted/dropped/timeout) — additive, `parse_result` đọc thêm.
@@ -106,7 +106,7 @@ Thứ tự bắt buộc tuần tự trong nhánh chính: `1 → 2.3 → 2.4 → 
   - _Requirements: 1.2, 4.1, 4.2, 4.3, 5.1_
   - _Properties: P1, P5_
 
-- [ ] 3.2 Cấm BLOCK cho nguồn RTSP ở tầng cấu hình
+- [x] 3.2 Cấm BLOCK cho nguồn RTSP ở tầng cấu hình
   - Ở nơi dựng client/pipeline từ config (per-source): nếu `source.type == "rtsp"` AND `policy == BackpressurePolicy.BLOCK` → raise `ConfigError` (thông điệp rõ nguyên nhân). KHÔNG đặt ràng buộc ở `BoundedQueue` (giữ policy-agnostic — R3.2).
   - Test: config RTSP+BLOCK → raise ConfigError khớp message; RTSP+DROP_OLDEST OK; non-RTSP+BLOCK OK.
   - Verify: pytest + full suite; lint 5/0.
@@ -115,7 +115,7 @@ Thứ tự bắt buộc tuần tự trong nhánh chính: `1 → 2.3 → 2.4 → 
 
 ### Wave 4 — test cross-process end-to-end (spawn)
 
-- [ ] 4. Backpressure end-to-end cross-process
+- [x] 4. Backpressure end-to-end cross-process
   - Thêm `detector_kind="slow"` vào `tests/zmq_server_worker.py` → dùng `FakeDetector(delay_s=...)` (đủ chậm để quá tải tất yếu).
   - Mở rộng `tests/test_zmq_inference_cross_process.py` (guard `win32`): server slow + client `window_size=W`, `policy=DROP_OLDEST`, `queue_maxsize` nhỏ; parent ghi `M` frame vào SHM + `submit()` nhanh hơn server xử lý → quá tải. Sau đó drain.
   - Assert: **P1** `captured == submitted + dropped` (từ `metrics_snapshot()`); **R8.2** `dropped > 0` và bằng `_outbound.drops+_outbound.rejects` (tự nhất quán, KHÔNG số cố định); **P5** `in_flight == 0` sau drain, mỗi request có kết cục.
@@ -125,7 +125,7 @@ Thứ tự bắt buộc tuần tự trong nhánh chính: `1 → 2.3 → 2.4 → 
 
 ### Wave 5 — nghiệm thu baseline
 
-- [ ] 5. Verify toàn hệ + không hồi quy
+- [x] 5. Verify toàn hệ + không hồi quy
   - Chạy `.venv\Scripts\python.exe -m pytest -q` → kỳ vọng **≥ 436 passed / 1 skipped** (cộng test mới), 0 fail.
   - Chạy lint qua `importlinter.api` → **5 kept / 0 broken** (kernel không import zmq/torch/cv2/mp/shm; adapters leaf).
   - Cập nhật `AI-IMPLEMENTATION-LOG.md` + `activeContext.md` + `progress.md` với baseline mới (số test thực).

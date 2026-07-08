@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "name": "Auto drift-check sau mỗi lượt",
+  "description": "Tự động chạy linter nhất quán bộ nhớ + rules-sync sau MỖI lượt agent hoàn tất. FAIL hiện ngay trong terminal = có drift bản ghi vừa phát sinh, cần sửa. runCommand (không loop).",
+  "version": "1",
+  "when": {
+    "type": "agentStop"
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "python tests/drift_check.py",
+    "timeout": 60
+  }
+}

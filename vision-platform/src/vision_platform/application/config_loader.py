@@ -15,10 +15,31 @@ from typing import Any
 from vision_platform.kernel.config import (
     AppConfig, PipelineConfig, SourceConfig, StageConfig, SinkConfig, DetectorConfig,
 )
+from vision_platform.kernel.backpressure import BackpressurePolicy
 
 
 class ConfigError(Exception):
     """Config sai (thiếu field / type không phải chuỗi / id trùng / TOML hỏng / file thiếu). Fail-fast."""
+
+
+def assert_policy_allowed_for_source(source_type: str, policy: BackpressurePolicy) -> None:
+    """R3 (Wave 3.2): CẤM `Backpressure_Policy.BLOCK` cho nguồn RTSP.
+
+    Vì sao (bản chất): BLOCK làm producer (camera) CHỜ khi hàng đợi outbound đầy. Với RTSP over TCP, việc
+    ngừng đọc socket → cửa sổ nhận cạn → **TCP Zero Window** → server/camera nghẽn → rớt kết nối/frame IM LẶNG
+    (đúng lỗ A2 đang đóng). RTSP là luồng real-time không thể "chờ" — phải bỏ frame (DROP_*) hoặc REJECT.
+
+    Đặt ở tầng cấu hình per-source (R3.2) — KHÔNG ở `kernel/backpressure.py::BoundedQueue` (giữ nó
+    policy-agnostic, tái dùng được cho nguồn non-RTSP với BLOCK). Guard THUẦN + fail-fast: gọi tại nơi
+    map config→client khi dựng client cho 1 source. (Schema config hiện CHƯA mang `policy` per-source —
+    guard sẵn-sàng-wire, xem journal D-050/K-053.) rtsp+BLOCK → ConfigError; tổ hợp khác → không làm gì.
+    """
+    if source_type == "rtsp" and policy == BackpressurePolicy.BLOCK:
+        raise ConfigError(
+            "policy 'BLOCK' KHÔNG hợp lệ cho nguồn RTSP: BLOCK khiến producer chờ khi hàng đợi đầy → "
+            "TCP Zero Window làm nghẽn luồng → mất kết nối/frame im lặng. "
+            "Dùng DROP_OLDEST / DROP_NEWEST / REJECT cho RTSP."
+        )
 
 
 def _require(cond: bool, msg: str) -> None:

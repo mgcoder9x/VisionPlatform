@@ -404,6 +404,18 @@ Nội dung + LÝ DO:
 - Docker (Linux): giải RTSP-401 (ffmpeg Linux xử lý digest như VLC) + inference bằng onnxruntime (sạch, không torch/GPL runtime). CHƯA build được ở dev (không docker) → tài liệu + để user chạy.
 - `--yolo v5` mặc định (weight user = YOLOv5, xác nhận code syn) → chọn yolov5_decode.
 
+### D-036 — 2026-07-05 — Yolov5PtDetector: chạy THẲNG weight `.pt` YOLOv5 (không cần export ONNX)
+Status: ✅ (verify chạy THẬT trong WSL: load model + names car/moto/truck + detect chạy; Windows 364/1 · lint 5/0)
+Scope: `adapters/yolov5_pt_detector.py` + cờ `--pt` (demo/web) + optional dep `pt` (`yolov5>=7.0`) + contract forbidden torch/yolov5 ở domain+kernel
+Nguồn: LOG Entry #198 · user "chạy thẳng .pt"
+Evidence: WSL ~/vpvenv (yolov5 7.0.14 + torch): load OK, `model.names = {0:car, 1:motorcycle, 2:truck}` (đọc thật), detect chạy (0 det ảnh nhiễu — đúng); Windows `pytest` 364 passed/1 skipped · lint 5 kept/0 broken (+2 test)
+Links: D-034 (yolov5_decode ONNX path), K-030/K-033 (RTSP), K-029 (AGPL license YOLO)
+Nội dung + LÝ DO CHÍNH XÁC:
+- Nguyên nhân gốc `.pt` không load được = **torch ≥ 2.6 mặc định `weights_only=True`** (KHÔNG phải version kiến trúc model) → patch `torch.load(weights_only=False)` khi nạp. Đây là fix GỐC (tìm đúng cơ chế torch), không phải đổi model.
+- `Yolov5PtDetector` lazy-import `yolov5`/`torch` (giữ base install gọn + không kéo dep nặng khi không dùng `--pt`); box trả về hệ **ORIGINAL_FRAME** (không bọc pipeline letterbox — yolov5 pkg tự lo tiền/hậu xử lý).
+- Contract import-linter cấm `torch`/`yolov5` ở domain+kernel (giữ lõi thuần) — detector nặng chỉ ở adapters (leaf).
+Vì sao: cho phép chạy weight `.pt` user có sẵn NGAY (không buộc export `.onnx`) để nghiệm thu nhanh trên máy có GPU/WSL; đường ONNX (D-034) vẫn giữ cho deployment không-torch.
+
 ### D-037 — 2026-07-05 — Web UI TÁCH LUỒNG: video ⊥ detect, browser vẽ bbox overlay (đề xuất user)
 Status: ✅ (verify chạy WSL GPU: video~15fps ⊥ detect~15fps, /boxes JSON person thật)
 Scope: `profiles/vision_web_app.py` (viết lại 2 thread + /boxes JSON + canvas overlay)
@@ -600,3 +612,81 @@ Nội dung (các quyết định AI tự ra, spec ban đầu #237 KHÔNG chốt 
 - **Additive khác:** `FakeDetector.delay_s=0.0` (mặc định không đổi hành vi) · `PushFrameSource` (nhịp cố định, bám interface `ReadResult`) · set `SNDHWM/RCVHWM` TRƯỚC `connect()` (đóng A3) · cấm BLOCK+RTSP ở tầng config (không ở BoundedQueue, giữ nó policy-agnostic).
 - **tasks.md:** 5 wave TDD atomic (1 kernel DTO → 2 adapters → 3 profiles/config → 4 cross-process spawn → 5 nghiệm thu), map Requirement + Property, chống flaky bằng assert BẤT BIẾN + `dropped>0` tất yếu (không assert số drop cố định).
 Vì sao (bản chất): `inference_server.py` là ROUTER single-thread, KHÔNG hủy được request đã nhận → bound sau khi gửi chỉ ngừng tracking mà server vẫn tốn inference = fix NGỌN. Bound trước khi gửi = frame bị bỏ không tới server = GIẢM TẢI THẬT = fix GỐC đúng mục tiêu A2. Đây là điểm dễ chọn sai nếu bám câu chữ requirement gốc thay vì bản chất.
+
+
+### D-049 — 2026-07-08 — Wave 3.1 `camera_worker` async submit + drain + hạch toán backpressure 2-tầng
+Status: ✅ (verify thật — fullstack pass + full 456/1 + lint 5/0)
+Scope: `profiles/vision_fullstack_profile.py::camera_worker` + `_write_result` + `ZmqInferenceClient.outbound_size` · spec backpressure-cross-process Wave 3.1
+Nguồn: LOG Entry #244 · design.md §4.5 · requirements R1.2/R4.1/R4.2/R4.3/R5.1 · đọc code camera_worker (nhánh `ref is None`) + `metrics_snapshot()`
+Evidence: máy `toann` (venv py3.13.12) — `pytest tests/test_fullstack_integration.py` = **1 passed (4.09s)** (camera async chạy end-to-end, frames_ok/infer_ok≥1, drain hoàn tất); full `pytest -q` = **456 passed/1 skipped (39.83s)** (không hồi quy); lint `importlinter.api` = **5 kept/0 broken**
+Links: C-019, T-020, K-053, D-048, K-051
+Nội dung: Chuyển `camera_worker` từ `client.infer()` SYNC blocking → `client.submit()` async (Mô hình A): `frames_captured += 1` mỗi frame `has_data` (R4.1); `wcoord.write()` trả None (SHM ring đầy) → `frames_dropped_shm += 1` (KHÔNG submit); có ref → `client.submit(InferenceRequest(...))` non-blocking; mỗi vòng gọi `client.poll_responses()` để drain + đếm `dets_total` + log sample. Sau vòng lặp: **drain** — poll tới khi `client.in_flight == 0` AND `client.outbound_size == 0` (thêm property `outbound_size` vào client, additive), có deadline an toàn `timeout_s+1`. Ghi artifact 6 field `BackpressureMetrics` (`frames_captured/frames_submitted/frames_dropped_backpressure/infer_ok/infer_err/infer_timeout`) từ `metrics_snapshot(frames_captured)` + `frames_dropped_shm` riêng + `dets_total`; GIỮ key cũ `frames_ok`(=frames_submitted)/`infer_ok`/`infer_err` để test fullstack cũ không vỡ (additive). `frames_dropped_backpressure` ghi ra artifact = client-window drops + `frames_dropped_shm` (gộp 2 tầng, xem C-019/T-020).
+Vì sao (bản chất): bỏ `infer()` blocking = camera không bị chặn bởi inference chậm (đóng A2/R1). Đếm submitted TẠI LÚC GỬI do client (K-051). Drain sau vòng lặp đảm bảo mọi frame chưa gửi được gửi nốt → bất biến đúng SAU vòng lặp (R4.3). Thêm `outbound_size` vì drain cần biết van outbound đã rỗng chưa (chỉ `in_flight==0` chưa đủ: có thể còn frame trong queue chưa kịp gửi giữa 2 vòng io).
+
+### D-050 — 2026-07-08 — Wave 3.2: R3 (cấm BLOCK+RTSP) làm HÀM GUARD THUẦN, KHÔNG bơm field `policy` vào schema
+Status: ✅ (verify thật — 8 test guard pass + full 464/1 + lint 5/0)
+Scope: `application/config_loader.py::assert_policy_allowed_for_source` + `tests/test_backpressure_policy_guard.py` · spec backpressure-cross-process Wave 3.2
+Nguồn: LOG Entry #245 · ĐỌC `kernel/config.py` (SourceConfig chỉ type+params, KHÔNG có policy) + `pipeline_factory` (path config-declarative dựng PipelineRunner, KHÔNG dựng ZmqInferenceClient)
+Evidence: máy `toann` — `pytest tests/test_backpressure_policy_guard.py` = **8 passed (0.42s)**; full **464 passed/1 skipped (39.67s)**; lint **5 kept/0 broken**
+Links: D-049, T-021, C-018, K-053
+Nội dung: Xác minh: KHÔNG đường config nào gắn `Backpressure_Policy` vào nguồn RTSP (schema không có policy + config path không dựng ZMQ client). → Implement R3 dạng hàm THUẦN `assert_policy_allowed_for_source(source_type, policy)` (application/config_loader): `rtsp+BLOCK → ConfigError` (thông điệp nêu TCP Zero Window + mất frame im lặng); tổ hợp khác OK. Đặt ở tầng config per-source (R3.2), KHÔNG ở BoundedQueue (giữ policy-agnostic). 8 test (rtsp+BLOCK raise · rtsp+{DROP_OLDEST/DROP_NEWEST/REJECT} ok · non-rtsp+BLOCK ok).
+Vì sao (bản chất): schema hiện KHÔNG mang policy → bơm field vào TOML + parse + wire lúc này = xây cho nhu-cầu-chưa-tồn-tại (over-engineer, trái nguyên tắc user + T-015). Guard thuần thỏa R3 (nền tảng TỪ CHỐI được rtsp+BLOCK, có test = P7) + "sẵn-sàng-wire" khi config sau này có policy per-source. Fix bản chất (R3 = ngăn tổ hợp nguy hiểm), không phình schema thừa.
+
+
+### D-051 — 2026-07-08 — Wave 4: test overload cross-process (assert bất biến 2-tầng) + Wave 5 nghiệm thu — spec backpressure-cross-process HOÀN TẤT
+Status: ✅ (verify thật — overload 4x không flaky + full 465/1 (3 lần sạch) + lint 5/0)
+Scope: `tests/test_zmq_inference_cross_process.py` (+test overload, +harness n_slots/client_kwargs) + `tests/zmq_server_worker.py` (detector_kind="slow") · Wave 4+5
+Nguồn: LOG Entry #246, #247 · design §8.2 · R8.1/8.2/8.4/8.5 · P1/P5
+Evidence: máy `toann` — `test_zmq_backpressure_overload_conserves` PASS 4 lần (1.47/1.56/1.26s isolation + trong full) không flaky; cross-process file 6 passed (5.76s); full `pytest -q` = **465 passed/1 skipped** (3 lần liên tiếp sạch); lint **5 kept/0 broken**. 1 flake tạm 1 lần = K-035 shutdown (test_step_09_shutdown 6 passed cô lập → không hồi quy).
+Links: C-019, T-020, K-053, D-048, D-049, K-035
+Nội dung (quyết định AI tự ra cho test):
+- `detector_kind="slow"` = `FakeDetector(delay_s=0.05)` (~20 infer/s) — hằng số `SLOW_DETECTOR_DELAY_S`; chậm hơn submit → quá tải TẤT YẾU (deterministic, không xác suất).
+- Mở rộng `_harness` thêm `n_slots`/`client_kwargs` (additive, call cũ không đổi) → dùng **SHM ring lớn (n_slots=64 > M=50)** để CÔ LẬP backpressure tầng client-window (thứ spec thêm) khỏi tầng SHM → test tập trung đúng cơ chế mới, ít ghép.
+- Test kế toán **2 tầng** giống camera_worker (shm_dropped + client-window) → assert bất biến CHÍNH XÁC `submitted + client_dropped + shm_dropped == M` (airtight: submit_calls = _sent + queue.drops sau drain) + `dropped_total>0` (quá tải tất yếu) + `in_flight==0` (P5). KHÔNG assert số drop cố định (chống flaky). Guard win32.
+Vì sao (bản chất): đây là bằng chứng cross-process cho bất biến bảo toàn dưới quá tải THẬT — nâng C-019/T-020/K-053 từ 🟡 (by-construction) lên ✅ (test-asserted). window=1/queue=1 làm quá tải cực đại → drop chắc chắn. Lặp 4x xác nhận deterministic (không dựa may rủi timing).
+
+
+### D-052 — 2026-07-08 — Cơ chế chống-drift "cực mạnh" = LINTER NHẤT QUÁN BỘ NHỚ (kiểm bằng máy, không thêm luật văn xuôi)
+Status: ✅ (chạy thật PASS + đã BẮT drift tồn đọng thật khi dogfood)
+Scope: `tests/test_memory_consistency.py` (mới) + wire vào AGENTS §0/§2 (RULES_VERSION 14→15) + hook userTriggered
+Nguồn: LOG Entry #248 · user yêu cầu "1 cách cực mạnh để tránh drift" · pattern có sẵn `tests/test_rules_sync.py`
+Evidence: `py tests/test_memory_consistency.py` = PASS (6 nhóm check); khi CHẠY LẦN ĐẦU đã BẮT drift thật: LOG dup #90/91/95/96 + thiếu detail D-036 → đã xử lý (allowlist legacy + khôi phục D-036 từ LOG #198)
+Links: C-020, K-054, K-050/K-052 (drift đa-máy)
+Nội dung: Biến các BẤT BIẾN "bản ghi khớp thực tế" thành TEST khách quan (giống test_rules_sync). 6 check nhắm đúng loại drift đã xảy ra: C1 LOG entries liên tục/không dup · C2 INDEX "Log canonical tới #N" == max LOG (bắt INDEX cũ) · C3 journal D/C/T/K liên tục · C4 header total == đếm thật (bắt tự-đếm-sai 133-vs-137) · C5 ID journal ⇄ dòng INDEX (bắt orphan/thiếu) · C6 activeContext có mốc + nhắc #maxEntry (bắt con trỏ cũ). Pure stdlib, exit 0/1 + pytest fn.
+Vì sao (bản chất): drift ở repo này = cập-nhật-tay nhiều mirror → luật văn xuôi TỰ NÓ drift. Cách mạnh nhất theo đúng triết lý user ("code validate khách quan bằng test") = MÁY kiểm bản ghi, chạy đầu mỗi phiên = cổng khách quan. Không phải thêm chữ (ngọn) mà là công cụ kiểm chứng (gốc).
+
+
+
+### D-053 — 2026-07-08 — Củng cố chống-drift: ENFORCEMENT tự động (hook agentStop) + PORT cơ chế vào kit (RULES_VERSION 15)
+Status: ✅ (2 linter PASS đầu phiên; kit template tạo + bump; hook tạo)
+Scope: hook `auto-drift-check` (agentStop) + `ai-learning-os-kit/tests/test_memory_consistency.template.py` (mới) + `ai-learning-os-kit/AGENTS.template.md` (§2 + bump 15)
+Nguồn: LOG Entry #249 · user re-nhấn "cách CỰC MẠNH chống drift" · nợ §2.5 (đồng bộ kit) từ #248
+Evidence: đầu phiên chạy `test_memory_consistency.py` + `test_rules_sync.py` = PASS (dogfood §0 mới); kit AGENTS.template RULES_VERSION=15 + có luật anti-drift §2; hook agentStop tạo thành công
+Links: D-052, K-054
+Nội dung:
+- **Mắt xích yếu = "phải nhớ chạy" linter** (phụ thuộc kỷ luật AI). Đóng bằng hook **agentStop runCommand** `auto-drift-check`: tự chạy 2 linter SAU MỖI lượt agent → drift lộ NGAY trong terminal, không cần nhớ. Chọn `runCommand` (KHÔNG `askAgent`) để KHÔNG loop (agentStop+askAgent = nguy cơ vòng lặp theo doc hook). Giữ hook userTriggered `kiem-drift` (thủ công) song song.
+- **Port cơ chế vào kit** (giá trị lâu dài, sản phẩm thương mại): thêm `test_memory_consistency.template.py` (generic, allowlist rỗng cho dự án mới) + luật §2 anti-drift-linter + bump AGENTS.template 14→15 → dự án SAU copy kit có sẵn chống-drift bằng máy.
+Vì sao (bản chất): "cực mạnh" = KHÔNG dựa kỷ luật con người/AI (thứ drift được) mà là (a) MÁY kiểm (linter D-052) + (b) TỰ ĐỘNG chạy (hook) + (c) tái dùng được (kit). 3 tầng: rule §0 (agent chạy) + hook agentStop (tự chạy) + hook userTriggered (thủ công). Không chỉ bump số kit (ngọn) mà port cả cơ chế (gốc) → số 15 của kit là THẬT (rule + reference impl đều có).
+
+
+
+### D-054 — 2026-07-08 — Review đối kháng (doubt-driven) code backpressure + FIX GỐC F1 (đua drain io_loop)
+Status: ✅ (verify thật — 14 test đích + overload 3/3 không flaky + full 465/1 + lint 5/0)
+Scope: `adapters/zmq_inference_client.py::_io_loop` (reorder step 1b) · review toàn client + camera_worker drain
+Nguồn: LOG Entry #252 · đọc THẬT io_loop/submit/metrics_snapshot/camera_worker drain · user "validate nhiều lần, nhìn sâu rộng, fix bản chất"
+Evidence: máy `toann` — `pytest` 4 file đích (async/hwm/fullstack/cross-process) = **14 passed (15.72s)**; overload lặp **3/3 pass (1.24/1.18/1.18s)** không flaky; full **465/1**; lint **5/0**
+Links: K-056, K-051, K-053, D-048
+Nội dung: Review đối kháng phát hiện **F1 (đua drain, benign nhưng thật):** io_loop step 1b thứ tự `send()→pending→_in_flight+=1` → giữa `get_or_raise` (pop, outbound_size↓) và `_in_flight+=1` có cửa sổ (outbound=0 & in_flight=0) ở frame CUỐI → vòng drain `camera_worker` (`while outbound_size>0 or in_flight>0`) có thể thoát sớm (bất biến VẪN đúng vì frame vẫn đếm submitted; chỉ sót `dets_total` 1 frame trong µs hiếm). **FIX GỐC (sửa thứ tự nhân-quả, không patch drain):** set `_pending_async`/`_in_flight`/`_sent` NGAY sau pop, TRƯỚC `send()` → cửa sổ biến mất + chính xác hơn cho flow-control. An toàn: send() DEALER fire-and-forget, `window_size ≪ SNDHWM` nên không block/raise.
+Vì sao: fix ở THỨ TỰ (gốc) thay vì thêm settle-check ở drain (ngọn). Đã VERIFY KHÔNG bug ở: timeout-scan (không double-decrement, single-thread, `expired` build sau recv-pop); response về sau timeout (pending_async đã pop → bỏ an toàn, in_flight không âm); mỗi request giảm in_flight đúng 1 lần.
+
+
+
+### D-055 — 2026-07-08 — Bất biến bảo toàn ĐÚNG VÔ ĐIỀU KIỆN: đếm shutdown-leftover + snapshot-sau-quiesce (camera_worker)
+Status: ✅ (verify thật — fullstack pass + full 465/1 + lint 5/0)
+Scope: `profiles/vision_fullstack_profile.py` (`camera_worker.finally` + `_write_result` thêm `frames_dropped_shutdown`)
+Nguồn: LOG Entry #253 · review đối kháng tiếp D-054 · design §4.5 ghi rõ "drain deadline-cut → bất biến lệch (biên hiếm)"
+Evidence: máy `toann` — `test_fullstack_integration` 1 passed; full **465/1**; lint **5/0** (parse_result đọc field mới generic, không phá test cũ)
+Links: D-054, C-019, T-020, K-053, K-056 (F2 đóng)
+Nội dung: Review phát hiện biên THẬT: drain deadline = `timeout_s+1`; nếu server CHẾT + van còn Q frame lúc shutdown → window đầy, io chỉ gửi tiếp sau mỗi timeout-scan (`timeout_s`) → flush Q cần ~`ceil(Q/window)*timeout_s` ≫ deadline → drain thoát khi `outbound_size>0` → frame còn trong van: captured NHƯNG không submit/không evict → **bất biến VỠ đúng bằng leftover**. **FIX GỐC (hoàn thiện kế toán, không nới deadline vô hạn = ngọn):** `finally` teardown TRƯỚC (dừng io thread → counters+van ỔN ĐỊNH) → đếm `frames_dropped_shutdown = client.outbound_size` (leftover) → `_write_result` GỘP 3 tầng drop (client-window + SHM + shutdown) → bất biến `submitted+dropped==captured` đúng **VÔ ĐIỀU KIỆN**. Kèm: snapshot đọc SAU teardown = sau quiesce → đóng luôn F2 (K-056).
+Vì sao: bất biến bảo toàn là LINH HỒN của fix A2 (không mất frame im lặng); "đúng nếu drain hoàn tất" là guarantee YẾU. Hoàn thiện kế toán 3 tầng (mỗi captured frame → đúng 1 trong {submitted, client-drop, shm-drop, shutdown-leftover}) = guarantee MẠNH vô điều kiện = đúng bản chất cho sản phẩm 24/7.
+

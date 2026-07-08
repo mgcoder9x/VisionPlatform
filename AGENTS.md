@@ -4,7 +4,7 @@
 > này trước khi làm việc. Đây là nguồn sự thật duy nhất; các file luật riêng của từng tool
 > (`.github/copilot-instructions.md`, `GEMINI.md`, `.kiro/steering/`) trỏ về đây.
 >
-> **RULES_VERSION: 14** (2026-06-20) — đổi luật phải BUMP số này + đồng bộ MỌI mirror lên cùng
+> **RULES_VERSION: 15** (2026-07-08) — đổi luật phải BUMP số này + đồng bộ MỌI mirror lên cùng
 > version (xem §2.5). Kiểm tra lệch: `py tests/test_rules_sync.py`.
 
 ## 0. Đây là gì
@@ -96,6 +96,12 @@ multi-camera). **Mục tiêu tối thượng của người dùng: HIỂU hệ t
   rồi đối chiếu mốc "Cập nhật lúc" trong `activeContext.md` (+ `git log -n 3` + mtime file).
   Nếu có thay đổi CHƯA COMMIT hoặc mới hơn mốc mà không khớp activeContext → DỪNG, cảnh báo,
   đồng bộ memory trước khi tiếp.
+- **CHỐNG-DRIFT BẰNG MÁY (BẮT BUỘC đầu phiên + trước khi tuyên bố "xong"):** CHẠY **1 lệnh**
+  `py tests/drift_check.py` (điểm vào DUY NHẤT — chạy cả 2 linter: nhất quán bộ nhớ D-052 [LOG liên tục ·
+  INDEX↔LOG max · journal liên tục · total đếm-thật · ID⇄INDEX · activeContext freshness] + RULES_VERSION
+  khớp 4 mirror). **FAIL = có DRIFT bản ghi → SỬA cho khớp thực tế TRƯỚC khi làm tiếp** (cổng khách quan,
+  mạnh hơn luật văn xuôi vì máy kiểm được). *Lưu ý: dùng 1 lệnh drift_check.py — KHÔNG ghép "A; B" (hook
+  runCommand mangle `;`, D-053/#250).*
 
 ## 2.5 🧠 Cập nhật bộ nhớ — chống dữ liệu cũ (BẮT BUỘC)
 - **Con trỏ LUÔN MỚI (per-turn — chống dữ liệu cũ, BẮT BUỘC):** cuối MỖI lượt có đổi trạng thái

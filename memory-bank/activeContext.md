@@ -1,7 +1,71 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-08)
-**Cập nhật lúc:** 2026-07-08T11:15:00+07:00.
+**Cập nhật lúc:** 2026-07-08T18:20:00+07:00.
+**[🔬 #253 — Bất biến bảo toàn ĐÚNG VÔ ĐIỀU KIỆN (đếm shutdown-leftover) — verify 465/1·5/0]**
+- **Review tiếp:** biên "server chết + van đầy lúc shutdown" → drain deadline-cut để lại frame trong van (captured nhưng không submit/drop) → bất biến vỡ. **FIX GỐC:** `camera_worker.finally` teardown-trước (quiesce) → đếm `frames_dropped_shutdown=outbound_size` + `_write_result` gộp 3 tầng drop → bất biến `submitted+dropped==captured` đúng **VÔ ĐIỀU KIỆN**. Đóng luôn F2 (snapshot sau quiesce).
+- **VERIFY:** fullstack pass + full **465/1** + lint **5/0**. Journal +D-055 (tổng 152). Log #253. K-056 F2 đóng; F3 = hợp đồng dùng.
+- **Backpressure giờ review-hardened 2 vòng** (F1 đua drain + D-055 bất biến vô điều kiện). Anti-drift 3 tầng verified.
+- **Fork còn (vướng tiền đề):** A1 (GPU) · K-007 (no .git) · R3 wire (schema) · C1 metrics. Khuyến nghị: dừng mốc sạch hoặc mở 1 tiền đề.
+---
+**[🔬 #252 — Review đối kháng code backpressure + fix gốc F1 (đua drain io_loop) — verify 465/1·5/0]**
+- **Review doubt-driven** toàn client `_io_loop`/drain (đọc code thật). **F1 (đua drain, benign):** thứ tự `send()→in_flight++` để lộ cửa sổ (outbound=0 & in_flight=0) frame cuối → drain camera_worker thoát sớm. **FIX GỐC:** reorder — set pending/in_flight/_sent TRƯỚC send() (send DEALER fire-and-forget, an toàn).
+- **VERIFY:** 14 test đích + overload **3/3 không flaky** + full **465/1** + lint **5/0**. Journal +D-054/K-056 (tổng 151). Log #252.
+- **KHÔNG bug ở:** timeout-scan (không double-decrement) · late-response-sau-timeout (bỏ an toàn) · in_flight không âm. **Residual K-056 (hợp đồng dùng, không bug):** metrics_snapshot đọc-sau-quiesce · không trộn infer()+submit() nặng.
+- **Trạng thái:** backpressure DONE + đã review-hardened · anti-drift DONE+verified 3 tầng. Fork còn (vướng tiền đề): K-007 (no .git) · A1 (cần GPU) · R3 wire (cần schema) · C1 metrics.
+---
+**[✅ #251 — hook agentStop drift-check ĐÃ VERIFY tự chạy (PASS) — chống-drift 3 tầng hoàn chỉnh + checkpoint chờ hướng]**
+- **Bằng chứng:** user dán output = hook `auto-drift-check` (agentStop) tự chạy sau #250 → `python tests/drift_check.py` PASS/EXIT 0 → đóng "chưa verify hook trigger" (#249/#250). K-055 = VERIFIED.
+- **Chống-drift 3 tầng verify end-to-end:** rule §0 + hook agentStop (tự chạy, đã chứng minh) + hook userTriggered + kit template.
+- **Trạng thái:** spec backpressure DONE (465/1·5/0) + anti-drift DONE. **KHÔNG còn task bắt buộc mở.** Log #251.
+- **Fork bước kế (chờ user chọn — mỗi cái có tiền đề THẬT, không tự lao):** (1) K-007 backup (máy này KHÔNG .git → cần user quyết cách) · (2) K-040 A1 batching (cần benchmark GPU — máy không torch, tiền đề thiếu) · (3) wire R3 (cần thêm policy vào config schema) · (4) K-040 C1 metrics / hoặc dừng mốc sạch.
+---
+**[🔧 #250 — FIX GỐC hook drift-check + điểm vào DUY NHẤT `tests/drift_check.py`]**
+- **Lỗi thật:** hook `runCommand "python A.py; python B.py"` → `;` bị dán vào argv → `python` mở nhầm file `A.py;` → exit 2. Nguyên nhân gốc từ chính error (K-055).
+- **Fix GỐC:** tạo `tests/drift_check.py` (1 điểm vào gọi cả 2 linter nội bộ) → hook + §0 dùng **1 lệnh** `py tests/drift_check.py` (shell-agnostic, một-nguồn-sự-thật). Sửa 2 hook + §0 (4 mirror + kit) + tạo kit `drift_check.template.py`. RULES_VERSION GIỮ 15 (cùng luật).
+- **VERIFY:** `python tests/drift_check.py` (đúng lệnh hook, từ repo root) = **PASS cả 2 linter, EXIT=0**. Journal +K-055 (tổng 149). Log #250.
+- **Bài học (K-055):** hook `runCommand` KHÔNG ghép lệnh bằng `;`/`&&` — gói vào 1 script.
+- **Bước kế (chờ user):** test 2 hook khi Kiro kích hoạt thật · K-007 backup · nợ spec K-040/R3. Spec backpressure DONE (465/1·5/0).
+---
+**[🛡️ #249 — CHỐNG-DRIFT 3 TẦNG hoàn chỉnh (máy-kiểm + tự-chạy + tái-dùng)]**
+- **Tầng 1 (rule):** §0 AGENTS/steering/GEMINI/copilot bắt chạy linter đầu phiên + trước "xong" (RULES_VERSION 15).
+- **Tầng 2 (tự-chạy):** hook **agentStop** `auto-drift-check` (runCommand, không loop) tự chạy 2 linter sau MỖI lượt → đóng mắt xích "phải nhớ chạy".
+- **Tầng 3 (tái-dùng):** port cơ chế vào kit — `ai-learning-os-kit/tests/test_memory_consistency.template.py` + §2 rule + bump AGENTS.template 15 (đóng nợ §2.5). + hook userTriggered `kiem-drift` (thủ công).
+- **Dogfood đầu phiên (§0):** `test_memory_consistency.py` + `test_rules_sync.py` = **PASS**. Journal +D-053 (tổng 148). Log #249.
+- **Spec backpressure DONE (465/1·5/0).** Bước kế (chờ user): K-007 backup · K-040 A1/C1 · wire R3 · hoặc test 2 hook khi tiện.
+---
+**[🛡️ #248 — CƠ CHẾ CHỐNG-DRIFT "cực mạnh": linter nhất quán bộ nhớ (D-052) + wire §0/§2 (RULES_VERSION 15)]**
+- **`tests/test_memory_consistency.py`** (pure stdlib, exit 0/1 + pytest fn) — 6 check MÁY-kiểm: C1 LOG entries liên tục · C2 INDEX "Log canonical tới #N"==max LOG · C3 journal D/C/T/K liên tục · C4 header total==đếm-thật · C5 ID⇄dòng-INDEX · C6 activeContext có mốc + nhắc #maxEntry. Chạy `py tests/test_memory_consistency.py`.
+- **DOGFOOD bắt drift THẬT** (K-054): LOG dup legacy #90/91/95/96 (append-only → allowlist documented) + thiếu detail D-036 (khôi phục từ LOG #198, C-020) → sau xử lý **linter PASS**.
+- Wire vào **AGENTS §0/§2 + steering/GEMINI/copilot** (RULES_VERSION 14→15): đầu phiên + trước khi "xong" phải chạy linter + `test_rules_sync`; FAIL=sửa bản ghi trước. Journal +D-052/C-020/K-054 (tổng 147). Log #248.
+- **Bước kế (chờ user):** tạo hook userTriggered "kiem-drift" gọi 2 linter · hoặc quay lại nợ spec (K-007 backup / K-040 A1·C1 / wire R3). **Spec backpressure vẫn DONE (465/1·5/0).**
+---
+**[🎯 #247 — spec `backpressure-cross-process` HOÀN TẤT (Wave 1–5, đóng A2+A3) — máy `toann`, verify THẬT 465/1 · 5/0]**
+- **Wave 4 (D-051):** `test_zmq_backpressure_overload_conserves` — server `detector_kind="slow"` (FakeDetector delay 0.05) + client window=1/queue=1 DROP_OLDEST + submit 50 nhanh → quá tải cực đại. Kế toán 2 tầng → assert CHÍNH XÁC `submitted+client_drop+shm_drop==M` + dropped>0 + in_flight==0. Harness thêm `n_slots`/`client_kwargs` (ring 64 cô lập client-window). PASS **4 lần không flaky**.
+- **Wave 5 nghiệm thu:** full **465 passed/1 skipped** (3 lần liên tiếp sạch: 39.36/40.18/41.86s) · lint **5 kept/0 broken**. 1 flake tạm 1/4 lần = K-035 shutdown (isolated 6 passed → KHÔNG hồi quy). Từ 436 đầu spec → +29 test. ADDITIVE tuyệt đối (infer() sync + 5 test cross-process cũ không đổi). C-019/T-020/K-053 → ✅ (test-asserted).
+- **tasks.md: Wave 1–5 = [x] HẾT.** Journal: +D-049/D-050/D-051 · +C-019 · +T-020/T-021 · +K-053 (tổng 144). Log #246/#247.
+- **CÒN NỢ (ghi rõ):** (a) R3 guard cấm BLOCK+RTSP CHƯA wire end-to-end (config chưa mang policy per-source — D-050/T-021, sẵn-sàng-wire) · (b) POSIX chưa verify (guard win32) · (c) K-035 shutdown flaky dưới tải · (d) git chưa push backup (K-007).
+- **Bước kế (chờ user):** commit/backup K-007 · hoặc spec kế K-040 (A1 batching / C1 metrics) · hoặc wire R3 khi config tích hợp ZMQ client.
+---
+**[✅ #245 — máy `toann`: WAVE 3 XONG (3.1 camera_worker async + 3.2 guard BLOCK+RTSP) — verify THẬT 464/1 · 5/0]**
+- **Wave 3.2 (D-050/T-021):** R3 làm HÀM GUARD THUẦN `assert_policy_allowed_for_source(source_type, policy)` ở `application/config_loader.py` (rtsp+BLOCK→ConfigError; khác→ok) + 8 test (`test_backpressure_policy_guard.py`, P7). KHÔNG bơm field `policy` vào schema TOML — vì config-path hiện KHÔNG dựng ZMQ client/không tiêu thụ policy → tránh over-engineer; guard "sẵn-sàng-wire" khi config sau có policy per-source.
+- **VERIFY THẬT máy `toann`:** `test_backpressure_policy_guard` 8 passed; full **464 passed/1 skipped (39.67s)**; lint **5 kept/0 broken**. tasks.md: Wave 1 + 2.1–2.5 + 3.1 + 3.2 = [x]. Log #245.
+- **Bước kế:** **Wave 4** — mở rộng `tests/test_zmq_inference_cross_process.py` + `zmq_server_worker.py` (thêm `detector_kind="slow"` = FakeDetector(delay_s)): server chậm + client window nhỏ + submit nhanh → quá tải TẤT YẾU → assert **bất biến `submitted+dropped==captured`** (chỗ ASSERT 2-tầng K-053/C-019) + `dropped>0` + `in_flight==0` sau drain (guard win32, chống flaky = assert bất biến không assert số cố định). Rồi **Wave 5** (nghiệm thu + cập nhật baseline).
+- **Nợ:** git chưa push backup (K-007); flaky shutdown dưới tải (K-035).
+---
+**[✅ #244 — máy `toann`: WAVE 3.1 XONG (camera_worker async + drain + hạch toán 2-tầng) — verify THẬT 456/1 · 5/0]**
+- **Wave 3.1 (D-049):** `camera_worker` bỏ `infer()` blocking → `client.submit()` async + `_consume()` poll mỗi vòng + **drain** sau loop (poll tới `outbound_size==0 & in_flight==0`, cap `timeout_s+1`). `frames_captured` đếm mỗi has_data (R4.1); `write()→None`=SHM-full→`frames_dropped_shm++`. Thêm property `client.outbound_size`. `_write_result` ghi 6 field metrics + tách drop 2 tầng, GIỮ key cũ `frames_ok`/`infer_ok` (test fullstack không vỡ).
+- **Quyết định 2-tầng backpressure (C-019/T-020/K-053, user duyệt):** SHM-ring-đầy CŨNG tính drop → `frames_dropped_backpressure` artifact = client-window + shm → giữ R4.1 + bất biến. Bất biến đúng BY-CONSTRUCTION; **assert bằng test ở Wave 4** (chưa test riêng ở 3.1).
+- **VERIFY THẬT máy `toann`:** `test_fullstack_integration` = 1 passed (4.09s); full **456 passed/1 skipped (39.83s)**; lint **5 kept/0 broken**. tasks.md: Wave 1 + 2.1–2.5 + 3.1 = [x]. Log #244.
+- **Bước kế:** **Wave 3.2** cấm BLOCK+RTSP ở config — ⚠️ CHỜ CHỐT (D-050): `kernel/config.py`/`pipeline_factory` KHÔNG có field `policy` per-source → cần quyết thêm-schema-policy hay không TRƯỚC khi code. Rồi Wave 4 (cross-process spawn slow-detector, assert bất biến + dropped>0) → Wave 5 (nghiệm thu).
+- **Nợ:** git chưa push backup (K-007); flaky shutdown dưới tải (K-035).
+---
+**[✅ #243 — máy `toann`: WAVE 2 HOÀN TẤT (2.3/2.4/2.5) + reconcile drift + verify THẬT 456/1 · 5/0]**
+- **Drift-check phát hiện:** code `ZmqInferenceClient` ĐÃ có đủ 2.3 (HWM trước connect) + 2.4 (async submit+flow-control, đếm `_sent` lúc gửi K-051) + 2.5 (poll_responses+timeout-scan+metrics_snapshot) + 2 file test (`test_zmq_client_hwm.py` 3 · `test_zmq_client_async.py` 4) NHƯNG tasks.md `[ ]` + LOG dừng #242 → phiên trước bị cắt trước khi ghi. Đã ĐỌC client xác minh khớp design + verify thật, KHÔNG viết lại.
+- **Baseline máy `toann` (venv scoop py3.13.12): pytest 456 passed/1 skipped (39.50s) · lint 5 kept/0 broken** (verify thật). Chênh 449→456 = 7 test client mới; flaky K-035 phiên này pass. tasks.md 2.3/2.4/2.5 = [x]. Log #243.
+- **Bước kế:** **Wave 3.1** `camera_worker` → async `submit()` + drain (poll tới `in_flight==0` + outbound rỗng) + ghi 6 field metrics ra artifact (bỏ `infer()` blocking) · **3.2** cấm BLOCK+RTSP ở tầng config → Wave 4 (cross-process spawn slow-detector) → Wave 5 (nghiệm thu). Giữ additive, `infer()` sync + 5 test cross-process cũ KHÔNG đổi.
+- **Nợ:** git chưa push backup (K-007); flaky shutdown dưới tải (K-035).
+---
 **[✅ #242 — máy `k.nguyen.manh.toan`: rebuild venv + baseline THẬT + Wave 2 task 2.1/2.2 XONG]**
 - **Baseline TỰ-VERIFY THẬT máy này:** rebuild `.venv` (`py -3.11` py3.11.9 + `.[dev,onnx,cv2,web]`, KHÔNG torch) → `pytest -q` = **443 passed/1 skipped (47.43s)** · lint `importlinter.api` = **5 kept/0 broken**. Khớp end.md `toann` (#241). Có gốc "không hồi quy" tại máy này.
 - **Wave 2 task 2.1 ✅** `FakeDetector(delay_s=...)` keyword-only (mặc định 0.0, sleep trước trả) · **task 2.2 ✅** `adapters/push_frame_source.py::PushFrameSource` (nhịp cố định, `time_fn` tiêm được, frame deterministic value=idx%256, TIMEOUT khi chưa tới nhịp). +2 file test (`test_fake_detector_delay.py` 3 · `test_push_frame_source.py` 3) = **6 test mới PASS**. `tasks.md` 2.1/2.2=[x].

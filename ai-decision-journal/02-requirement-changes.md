@@ -185,3 +185,24 @@ Links: D-048, T-018
 - **Glossary:** `Submission_Window` định nghĩa lại thành 2 van (flow-control in-flight + hàng đợi outbound có giới hạn); thêm `In_Flight_Count` (số request ĐÃ gửi chưa trả lời) + `Metric_DTO`.
 - **Introduction:** thêm đoạn "Mô hình đã chốt — bound-before-send" giải thích bằng chứng server không hủy được request.
 Vì sao (bản chất): requirements #237 (WHAT) đúng cho CẢ hai mô hình A/B, nhưng câu chữ "in-flight cũ nhất" ngầm ám chỉ Mô hình B (phản mục tiêu). Đây là **đổi ngữ nghĩa requirement, KHÔNG phải chi tiết vặt** → user đã duyệt hướng (Mô hình A) TRƯỚC khi sửa (không tự ý sửa lén requirement).
+
+
+### C-019 — 2026-07-08 — Ngữ nghĩa `frames_dropped_backpressure` (artifact profile) = drop client-window + drop SHM-ring (2 tầng)
+Status: ✅ (Wave 4 ASSERT bất biến 2-tầng cross-process — `test_zmq_backpressure_overload_conserves` PASS 4x, D-051)
+Scope: `camera_worker` artifact · spec backpressure-cross-process (R4.1/R4.3 + design §4.5)
+Nguồn: LOG Entry #244 · đọc `camera_worker` (2 tầng backpressure: SHM ring `write()→None` ⊥ client-window BoundedQueue) · design §4.5 (không xử lý nhánh write→None)
+Evidence: `_write_result` ghi `frames_dropped_backpressure = client-window + frames_dropped_shm` + tách `frames_dropped_client_window`/`frames_dropped_shm` (đọc code); fullstack pass (4.09s) + full 456/1 + lint 5/0. Bất biến `submitted+dropped==captured` đúng BY-CONSTRUCTION (mỗi captured → shm-drop / client-drop / submitted, loại trừ nhau) — assert bằng test ở Wave 4
+Links: D-049, T-020, K-053
+Đổi gì (so với design §4.5 ban đầu): design chỉ nói "frames_captured += 1 on has_data" + `metrics_snapshot` đếm drop của client-window. KHÔNG xử lý khi `wcoord.write()` trả None (SHM ring đầy) → frame captured nhưng không submit & không nằm trong drop client-window → "loại thứ ba" làm VỠ bất biến `submitted+dropped==captured`. → CHỐT (user duyệt): coi SHM-ring-đầy CŨNG là backpressure drop; artifact ghi `frames_dropped_backpressure = client_window_drops + frames_dropped_shm`; thêm counter quan sát riêng `frames_dropped_shm` (minh bạch tầng nào bỏ).
+Vì sao (bản chất): giữ đúng R4.1 (captured = mọi frame đọc từ source) ĐỒNG THỜI giữ bất biến bảo toàn đúng (mỗi frame captured hoặc submitted hoặc dropped-vì-backpressure). Bỏ qua nhánh write→None = giấu mất-frame im lặng = đúng lỗ A2 mà spec phải đóng → phải đếm, không được lơ.
+
+
+### C-020 — 2026-07-08 — Khôi phục detail `D-036` bị thiếu trong `01-decisions.md` (INDEX có dòng nhưng file thiếu heading)
+Status: ✅ (linter C3-D/C5-D PASS sau khôi phục)
+Scope: `ai-decision-journal/01-decisions.md` (chèn `### D-036` giữa D-035 và D-037)
+Nguồn: LOG Entry #248 · phát hiện bởi linter D-052 (C3-D THIẾU=[36] + C5-D orphan-INDEX=[36]) · nội dung nguồn = LOG #198
+Evidence: `py tests/test_memory_consistency.py` C3-D PASS (51 ID liên tục) + C5-D "khớp INDEX"
+Links: D-052, D-036, K-054
+Đổi gì: file `01-decisions.md` nhảy D-035 → D-037 (thiếu heading `### D-036`) dù INDEX đã có dòng D-036 (drift bản-ghi, nghi mất khi sync đa-máy). → khôi phục detail D-036 (Yolov5PtDetector) từ nguồn canonical LOG #198 — KHÔNG bịa (mọi dữ kiện: names car/moto/truck, patch weights_only, 364/1 lint 5/0 đều lấy nguyên từ #198).
+Vì sao: journal là chỉ-mục-kiểm-chứng; INDEX trỏ D-036 mà không có detail = gãy audit. Khôi phục từ LOG (nguồn sự thật) là fix gốc, không phải xoá dòng INDEX (fix ngọn).
+

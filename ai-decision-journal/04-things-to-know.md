@@ -544,3 +544,48 @@ Evidence: (a) `git status` = "fatal: not a git repository" (chạy thật). (b) 
 Đóng khi: (phần .git) repo được đặt dưới git trên máy này HOẶC xác nhận đây chỉ là bản sao working-tree.
 Nội dung: baseline **436/1 · lint 5/0** GIỜ đã tự-kiểm trên máy `toann` (không còn kế thừa suông từ máy khác) → có gốc so sánh "không hồi quy" khi code. Riêng repo máy này KHÔNG có `.git` → drift-check dùng file-state + diagnostics thay git. (venv rebuild lặp lại K-013: venv per-machine, artifact gitignore, dựng lại là đúng gốc.)
 Vì sao ghi: (1) chốt mốc baseline THẬT tại đây trước khi triển khai (đúng nguyên tắc user "valid trước khi làm"); (2) trung thực đa-máy (K-013) — số 436/1 trước phiên này là kế thừa, nay đã tự chạy lại.
+
+
+### K-053 — ✅ (2026-07-08) `camera_worker` có HAI tầng backpressure độc lập (SHM ring ⊥ client submission-window)
+Status: ✅ (đã hiện thực Wave 3.1 + ASSERT bất biến 2-tầng cross-process Wave 4, D-051 — 465/1)
+Scope: `profiles/vision_fullstack_profile.py::camera_worker` · spec backpressure-cross-process
+Nguồn: LOG Entry #244 · đọc code camera_worker + `WriterEpochCoordinator.write` (trả None khi ring đầy) + `ZmqInferenceClient` (BoundedQueue outbound)
+Evidence: (chờ) test Wave 3.1/Wave 4 + bất biến
+Đóng khi: Wave 3.1 code xong + verify bất biến `submitted+dropped==captured` (dropped gộp 2 tầng) qua test.
+Nội dung: Frame trong `camera_worker` đi qua 2 chốt điều tiết KHÁC NHAU: (1) **SHM ring** — `wcoord.write()` trả None khi ring đầy (backpressure tầng truyền cross-process, có trước spec này); (2) **cửa sổ submit client** — `BoundedQueue` DROP_OLDEST khi in-flight window đầy (spec này thêm). `metrics_snapshot()` CHỈ đếm tầng (2). Để bất biến `submitted+dropped==captured` đúng, `camera_worker` PHẢI cộng thêm drop tầng (1) (`frames_dropped_shm`) vào dropped khi ghi artifact (C-019/T-020).
+Vì sao ghi: đây là điểm CỰC dễ "fix ngọn" — nếu chỉ lấy dropped từ `metrics_snapshot()` mà bỏ nhánh SHM-full, bất biến vỡ âm thầm dưới tải (đúng lỗ A2). Ai code/đọc sau phải nhớ 2 tầng này tách biệt.
+
+
+### K-054 — ✅ (2026-07-08) Drift TỒN ĐỌNG bị linter D-052 bắt + xử lý — LOG dup legacy #90/91/95/96 + thiếu detail D-036
+Status: ✅ (đã xử lý; linter PASS)
+Scope: `AI-IMPLEMENTATION-LOG.md` + `ai-decision-journal/01-decisions.md` · phát hiện bởi `tests/test_memory_consistency.py`
+Nguồn: LOG Entry #248 · dogfood linter D-052 lần đầu
+Evidence: linter lần đầu FAIL (C1 dup=[90,91,95,96] · C3-D thiếu=[36] · C5-D orphan=[36]) → sau xử lý PASS toàn bộ
+Đóng khi: (đã đóng — nhưng lưu để audit hiểu vì sao có allowlist + D-036 khôi phục)
+Nội dung: (1) **LOG dup #90/91/95/96** — mỗi số 2 entry do 2 AI (Gemini+Kiro) append cùng ngày 2026-06-21..24 (va chạm số). Lịch sử THẬT → KHÔNG renumber (append-only + tránh vỡ tham chiếu); linter allowlist 4 số này (documented) + fail mọi dup MỚI. (2) **D-036 detail thiếu** khỏi 01-decisions.md (nghi mất khi sync đa-máy) dù INDEX có dòng → khôi phục từ LOG #198 (C-020).
+Vì sao ghi: chứng minh giá trị linter (bắt drift người không thấy) + giải thích vì sao có allowlist (không phải giấu lỗi mà là tôn trọng append-only cho lịch sử đông cứng, siết chặt cho tương lai).
+
+
+
+### K-055 — ✅ (2026-07-08) Hook `runCommand` KHÔNG hiểu `;` là separator → dán vào argv → HỎNG. Dùng 1-script entry.
+Status: ✅ (đã fix gốc: drift_check.py; verify chạy thật EXIT=0)
+Scope: `.kiro/hooks/{auto-drift-check,kiem-drift-bo-nho}.kiro.hook` · `tests/drift_check.py`
+Nguồn: LOG Entry #250 · lỗi thật hook: `python: can't open file '...test_memory_consistency.py;'`
+Evidence: `python tests/drift_check.py` (đúng dạng hook) chạy cả 2 linter, EXIT=0 (đọc output thật)
+Đóng khi: (đã đóng)
+Nội dung: Hook `runCommand` command `"python A.py; python B.py"` bị mangle — `;` KHÔNG được hiểu là dấu phân tách lệnh mà bị dán vào argv → `python` nhận filename `A.py;` → "No such file". Bằng chứng gốc = chính thông báo lỗi (không đoán). Fix GỐC: tạo `tests/drift_check.py` (điểm vào DUY NHẤT gọi cả 2 linter nội bộ) → hook chỉ cần 1 lệnh `python tests/drift_check.py` (không separator, shell-agnostic). Cập nhật cả §0/§2 (4 mirror + kit) dùng 1 lệnh này = một-nguồn-sự-thật.
+Vì sao ghi: (a) bài học cho MỌI hook sau — KHÔNG ghép nhiều lệnh bằng `;`/`&&` trong runCommand; gói vào 1 script. (b) chống-drift đầu phiên giờ dùng `py tests/drift_check.py` (1 lệnh), không phải 2 lệnh rời.
+**CẬP NHẬT #251 (VERIFIED):** hook `auto-drift-check` (agentStop) ĐÃ TỰ KÍCH HOẠT thật sau lượt #250 → chạy `python tests/drift_check.py` → **PASS, EXIT 0** (bằng chứng: output user dán). → đóng nốt "chưa verify hook trigger" của #249/#250. Cơ chế chống-drift 3 tầng hoạt động end-to-end.
+
+
+
+### K-056 — 🟡 (2026-07-08) Ranh giới client backpressure (KHÔNG phải bug — dùng đúng cách): snapshot-đọc-sau-quiesce + không-trộn sync/async
+Status: 🟡 (ranh giới thiết kế, ghi để dùng đúng — không cần fix)
+Scope: `adapters/zmq_inference_client.py` (metrics_snapshot · infer() sync vs submit() async)
+Nguồn: LOG Entry #252 · review đối kháng D-054
+Evidence: đọc code io_loop + metrics_snapshot; test hiện có gọi snapshot SAU drain (io idle) → không lộ vấn đề
+Đóng khi: (ranh giới, không đóng — tuân thủ khi dùng)
+Nội dung: (F2) `metrics_snapshot()` đọc `_sent/_ok/_err/_timeout` + `queue.drops/rejects` từ thread GỌI trong khi io thread có thể ghi → 6 field KHÔNG chụp nguyên tử. An toàn khi đọc SAU khi io quiesce (in_flight==0 & outbound rỗng, tức sau drain — đúng cách camera_worker + test dùng). Đọc giữa lúc tải cao → snapshot có thể lệch tức thời (không vỡ bất biến sau drain). (F3) `infer()` sync gửi qua `_outbound` KHÔNG qua flow-control window (chỉ async `submit()` bị window giới hạn) → nếu TRỘN infer()+submit() nặng trên cùng client, đường sync bỏ qua window có thể làm ngập server. Dùng: 1 client cho 1 kiểu (profile hiện chỉ dùng submit()).
+Vì sao ghi: chống hiểu nhầm "snapshot realtime chính xác" + chống dùng sai (trộn 2 đường). Không phải lỗi — là hợp đồng sử dụng.
+**CẬP NHẬT #253 (D-055):** F2 giờ được xử lý CẤU TRÚC trong `camera_worker` — `finally` teardown TRƯỚC (dừng io thread → quiesce) rồi mới `metrics_snapshot()` → snapshot luôn đọc sau quiesce (không còn dựa "nhớ đọc đúng lúc"). F3 vẫn là hợp đồng dùng (không trộn sync/async nặng).
+

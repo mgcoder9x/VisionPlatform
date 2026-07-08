@@ -54,14 +54,39 @@ def _free_port() -> int:
     return port
 
 
-def _write_result(path: Optional[str], frames_ok: int, infer_ok: int, infer_err: int, dets_total: int = 0) -> None:
-    """Ghi artifact số liệu để test/CLI đọc cross-process (design QĐ-4). Không có path → bỏ qua."""
+def _write_result(path: Optional[str], metrics, frames_dropped_shm: int = 0,
+                  frames_dropped_shutdown: int = 0, dets_total: int = 0) -> None:
+    """Ghi artifact số liệu để test/CLI đọc cross-process (design QĐ-4). Không có path → bỏ qua.
+
+    `metrics` = `BackpressureMetrics` (snapshot client). Ghi CẢ key cũ (`frames_ok`/`infer_ok`/`infer_err`/
+    `dets_total` — giữ test fullstack cũ không vỡ, `frames_ok`=frames_submitted) LẪN 6 field metrics mới +
+    phân tách 3 tầng bỏ frame. `frames_dropped_backpressure` GỘP CẢ 3 tầng (client-window + SHM + shutdown-leftover)
+    → bất biến `frames_submitted + frames_dropped_backpressure == frames_captured` đúng **VÔ ĐIỀU KIỆN**
+    (kể cả khi drain bị deadline cắt lúc server chết — leftover van được đếm; xem C-019/T-020/K-053/D-055).
+
+    3 tầng bỏ frame: (1) client-window = `metrics.frames_dropped_backpressure` (DROP_OLDEST/NEWEST/REJECT ở van);
+    (2) SHM = `frames_dropped_shm` (ring đầy, write→None); (3) shutdown = `frames_dropped_shutdown` (frame CÒN
+    trong van chưa gửi khi shutdown cắt drain — captured nhưng không submit/không evict).
+    """
     if path is None:
         return
+    dropped_total = metrics.frames_dropped_backpressure + frames_dropped_shm + frames_dropped_shutdown
     with contextlib.suppress(Exception):
         with open(path, "w", encoding="utf-8") as f:
             f.write(
-                f"frames_ok={frames_ok}\ninfer_ok={infer_ok}\ninfer_err={infer_err}\ndets_total={dets_total}\n"
+                # --- key cũ (backward-compat cho test/CLI hiện có) ---
+                f"frames_ok={metrics.frames_submitted}\n"
+                f"infer_ok={metrics.infer_ok}\n"
+                f"infer_err={metrics.infer_err}\n"
+                f"dets_total={dets_total}\n"
+                # --- 6 field BackpressureMetrics + phân tách 3 tầng drop (mới) ---
+                f"frames_captured={metrics.frames_captured}\n"
+                f"frames_submitted={metrics.frames_submitted}\n"
+                f"frames_dropped_backpressure={dropped_total}\n"
+                f"frames_dropped_client_window={metrics.frames_dropped_backpressure}\n"
+                f"frames_dropped_shm={frames_dropped_shm}\n"
+                f"frames_dropped_shutdown={frames_dropped_shutdown}\n"
+                f"infer_timeout={metrics.infer_timeout}\n"
             )
 
 
@@ -102,11 +127,16 @@ def inference_server_entry(shutdown_event, endpoint, cp_name, locks_map, n_slots
 
 
 def camera_worker(shutdown_event, heartbeat, endpoint, cp_name, locks_map, n_slots, h, w, c, result_path) -> None:
-    """Process camera: NoiseFrameSource → WriterEpochCoordinator.write(SHM, switchover-aware) →
-    ZmqInferenceClient.infer → InferenceResponse. Cooperative (poll shutdown_event #09) + heartbeat (#09b).
-    Ghi frames_ok/infer_ok/infer_err ra artifact lúc `finally` (design QĐ-4, R2.3).
+    """Process camera (Mô hình A — bound-before-send, Wave 3.1): NoiseFrameSource →
+    WriterEpochCoordinator.write(SHM, switchover-aware) → ZmqInferenceClient.**submit** (ASYNC, non-blocking) →
+    poll_responses. Cooperative (poll shutdown_event #09) + heartbeat (#09b). Ghi BackpressureMetrics ra
+    artifact lúc `finally` (design QĐ-4 / §4.5, R1/R4/R5).
 
-    Backpressure TỰ NHIÊN (design QĐ-3, Q3=hoãn BoundedQueue): `write()` trả None khi ring đầy → skip + sleep.
+    HAI tầng backpressure (K-053): (1) SHM ring `write()→None` khi đầy → `frames_dropped_shm` (bỏ, KHÔNG
+    submit); (2) cửa sổ submit client (BoundedQueue DROP_OLDEST) → `metrics.frames_dropped_backpressure`.
+    Artifact ghi `frames_dropped_backpressure` GỘP cả 2 tầng (C-019/T-020) → bất biến
+    `frames_submitted + frames_dropped_backpressure == frames_captured` đúng SAU drain (R4.3).
+    `frames_submitted` đếm TẠI LÚC GỬI trong client (K-051), KHÔNG lúc enqueue.
     """
     # Import adapter transport ở đây (leaf) — giữ import module gọn ở tầng profile.
     from vision_platform.adapters.zmq_inference_client import ZmqInferenceClient
@@ -116,14 +146,36 @@ def camera_worker(shutdown_event, heartbeat, endpoint, cp_name, locks_map, n_slo
     setup_logging()
     logger = structlog.get_logger("camera_worker")
     metrics = InMemoryMetrics()
-    frames_ok = infer_ok = infer_err = dets_total = 0
+    timeout_s = 5.0
+    frames_captured = 0
+    frames_dropped_shm = 0
+    dets_total = 0
     _logged_sample = False
 
     cp = RingControlPlane(cp_name, create=False)
     opener = make_pool_opener(locks_map, n_slots, h, w, c)
     wcoord = WriterEpochCoordinator(cp, opener)
-    client = ZmqInferenceClient(endpoint, timeout_s=5.0)
+    client = ZmqInferenceClient(endpoint, timeout_s=timeout_s)
     source = NoiseFrameSource(width=w, height=h, max_frames=1_000_000, seed=7)
+
+    def _consume() -> None:
+        """Rút response đã hoàn tất (non-blocking): đếm dets_total + log 1 sample. ok/err/timeout do client
+        đếm nội bộ (io thread) → đọc từ metrics_snapshot lúc cuối (KHÔNG đếm lại ở đây, tránh trùng)."""
+        nonlocal dets_total, _logged_sample
+        for resp in client.poll_responses():
+            if resp.is_success:
+                dets_total += len(resp.detections)
+                metrics.counter("camera_infer_total", result="ok")
+                if not _logged_sample and resp.detections:
+                    d = resp.detections[0]
+                    logger.info(
+                        "detection_sample", label=d.label, confidence=round(d.confidence, 3),
+                        box_space=d.box.space.value,
+                        box=[round(d.box.x, 1), round(d.box.y, 1), round(d.box.w, 1), round(d.box.h, 1)],
+                    )
+                    _logged_sample = True
+            else:
+                metrics.counter("camera_infer_total", result="err")
 
     try:
         wcoord.bootstrap()          # register_writer ring epoch hiện tại TRƯỚC frame đầu (1-writer/ring)
@@ -136,34 +188,38 @@ def camera_worker(shutdown_event, heartbeat, endpoint, cp_name, locks_map, n_slo
                 if r.status == ReadStatus.EOF:
                     break
                 continue
-            ref = wcoord.write(r.data)             # None nếu ring đầy (backpressure tự nhiên)
+            frames_captured += 1                   # R4.1: đếm MỌI frame nhận từ source
+            ref = wcoord.write(r.data)             # None nếu ring đầy → backpressure tầng SHM (K-053)
             if ref is None:
-                time.sleep(0.01)
+                frames_dropped_shm += 1            # bỏ vì hạ nguồn đầy (T-020) — KHÔNG submit
+                _consume()                         # vẫn tiêu thụ response để in_flight giảm
                 continue
-            frames_ok += 1
             req_id = uuid.uuid4().hex
             with log_context(camera_id="cam1", request_id=req_id):
-                resp = client.infer(InferenceRequest(req_id, "cam1", ref))
-            if resp.is_success:
-                infer_ok += 1
-                dets_total += len(resp.detections)
-                metrics.counter("camera_infer_total", result="ok")
-                if not _logged_sample and resp.detections:
-                    d = resp.detections[0]
-                    logger.info(
-                        "detection_sample", label=d.label, confidence=round(d.confidence, 3),
-                        box_space=d.box.space.value,
-                        box=[round(d.box.x, 1), round(d.box.y, 1), round(d.box.w, 1), round(d.box.h, 1)],
-                    )
-                    _logged_sample = True
-            else:
-                infer_err += 1
-                metrics.counter("camera_infer_total", result="err")
-            time.sleep(0.02)                       # pace: cho server kịp đọc (tránh cycle-đè slot)
+                client.submit(InferenceRequest(req_id, "cam1", ref))   # ASYNC non-blocking (R1.2) — camera KHÔNG bị chặn
+            _consume()
+            time.sleep(0.02)                       # pace nhẹ: cho server kịp đọc SHM (tránh cycle-đè slot)
+        # DRAIN sau vòng lặp (R4.3): io thread gửi nốt frame trong van → thu kết cục, tới khi van rỗng &
+        # in_flight==0. Cap an toàn: nếu server chết, timeout-scan (timeout_s) tự dọn in_flight → drain kết thúc.
+        drain_deadline = time.monotonic() + timeout_s + 1.0
+        while (client.outbound_size > 0 or client.in_flight > 0) and time.monotonic() < drain_deadline:
+            heartbeat.value = time.time()
+            _consume()
+            time.sleep(0.01)
+        _consume()                                 # quét nốt response cuối cùng
     finally:
-        _write_result(result_path, frames_ok, infer_ok, infer_err, dets_total)
+        # teardown TRƯỚC (dừng io thread) → counters + van outbound ỔN ĐỊNH (quiesce) rồi mới đọc snapshot
+        # (K-056 F2: snapshot phải đọc sau quiesce) + đếm leftover chính xác (D-055).
         with contextlib.suppress(Exception):
             client.teardown()
+        _consume()                                 # thu nốt response còn trong _responses (dets_total chính xác)
+        frames_dropped_shutdown = 0
+        with contextlib.suppress(Exception):
+            # Frame CÒN trong van chưa gửi khi shutdown cắt drain (vd server chết + van đầy): captured nhưng
+            # KHÔNG submit/KHÔNG evict → đếm là "dropped-shutdown" để bất biến đúng VÔ ĐIỀU KIỆN (D-055).
+            frames_dropped_shutdown = client.outbound_size
+        snap = client.metrics_snapshot(frames_captured)
+        _write_result(result_path, snap, frames_dropped_shm, frames_dropped_shutdown, dets_total)
         with contextlib.suppress(Exception):
             source.teardown()
         with contextlib.suppress(Exception):

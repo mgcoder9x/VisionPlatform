@@ -2,7 +2,7 @@
 
 > Rà nhanh: lọc mọi dòng **🔴 / 🟡** → đó là danh sách "chưa chắc chắn / rủi ro mở" cần đối chiếu.
 > Chi tiết + `Nguồn`/`Evidence` của mỗi ID nằm trong file tương ứng. Trạng thái nguồn: xem `README.md` §4.
-> **Cập nhật lúc:** 2026-07-07 (máy `toann` — rebuild venv scoop py3.13.12 + **TỰ-VERIFY baseline THẬT tại đây**; spec `backpressure-cross-process` PHA design+tasks chốt Mô hình A: D-048/C-018/T-018/T-019/K-051 + sự cố `.git` máy `k.nguyen.manh.toan` K-050 + môi trường máy toann K-052). Log canonical tới **Entry #241**. Baseline test: **436 passed/1 skipped (45.92s) · lint 5 kept/0 broken** — ✅ **ĐÃ TỰ VERIFY trên máy `toann`** (py3.13.12, LOG #241; không cài pt/torch). Tổng **137 entry** (D48·C18·T19·K52). Backpressure spec CHƯA code.
+> **Cập nhật lúc:** 2026-07-08 (máy `toann` — spec backpressure HOÀN TẤT Wave 1–5 + **CƠ CHẾ CHỐNG-DRIFT: linter nhất quán bộ nhớ D-052** `tests/test_memory_consistency.py` (dogfood đã bắt+sửa drift tồn đọng K-054); +D-052/C-020/K-054). Log canonical tới **Entry #253**. Baseline test: **465 passed/1 skipped · lint 5 kept/0 broken** — ✅ tự-verify máy `toann`. **Drift-check (`py tests/drift_check.py`): PASS · hook agentStop verify tự chạy.** Tổng **152 entry** (D55·C20·T21·K56). Review-hardened backpressure: F1 (đua drain) + D-055 (bất biến vô điều kiện: đếm shutdown-leftover); F3 = hợp đồng dùng (K-056). Còn nợ: R3 chưa wire end-to-end · POSIX chưa verify · git chưa push (K-007).
 
 ## 1. Quyết định tự ra — `01-decisions.md`
 | ID | Trạng thái | Tóm tắt | Nguồn (LOG Entry) |
@@ -54,7 +54,14 @@
 | D-045 | ✅ | Strict-key params (đóng K-046): mỗi builder khai báo `allowed_params` + `_check_params` từ chối key lạ (ConfigError fail-fast) ở CẢ validate_config LẪN build_runner (trước lazy-import torch). Builder chưa khai báo→lenient. **VERIFY TDD 427/1 · lint 5/0** (4 test) | #230 |
 | D-046 | 🔵 design-only | Mở sub-spec `node-capacity-benchmark` (PHA1 phương pháp đo C_inf/C_dec/combined/VRAM/latency cho scale-arch R6.1). 0-diag. Bám code thật (batch dưới port=bằng chứng lỗ A1; RunStats thiếu timing→tự đo). → PHA2 = D-047 | #231 |
 | D-047 | ✅ logic · 🔴 số GPU | PHA2 harness `benchmarks/` (_stats/_env/bench_capacity, DI-friendly, ngoài src K-022) + 9 test verify LOGIC (fake/CPU) — full **436/1 · lint 5/0**. CPU=cảnh báo "không phải capacity"; cuda-thiếu-torch→exit3 không số giả. Số capacity thật chờ `.[pt]` (K-048) | #232 |
-| D-048 | 🔵 design/tasks | Spec `backpressure-cross-process` chốt **Mô hình A (bound-before-send)** — design + tasks (đóng A2/A3). 3 file spec 0-diag; tái dùng BoundedQueue + Metric_DTO@kernel + submit/poll async + HWM-trước-connect + FakeDetector.delay_s + PushFrameSource + cấm BLOCK+RTSP@config. **CHƯA code** (436/1 theo LOG#234, chưa tự-kiểm máy toann) | #237–#239 |
+| D-048 | 🔵 design/tasks | Spec `backpressure-cross-process` chốt **Mô hình A (bound-before-send)** — design + tasks (đóng A2/A3). 3 file spec 0-diag; tái dùng BoundedQueue + Metric_DTO@kernel + submit/poll async + HWM-trước-connect + FakeDetector.delay_s + PushFrameSource + cấm BLOCK+RTSP@config. Code: Wave1/2/3.1 xong (D-049) | #237–#244 |
+| D-049 | ✅ | Wave 3.1 `camera_worker` async submit + drain (poll tới outbound_size==0 & in_flight==0) + hạch toán 2-tầng backpressure + property `outbound_size`. **VERIFY THẬT máy toann: fullstack 1 passed (4.09s) + full 456/1 + lint 5/0** | #244 |
+| D-050 | ✅ | Wave 3.2 (cấm BLOCK+RTSP, R3/P7): làm HÀM GUARD THUẦN `assert_policy_allowed_for_source` (config_loader), KHÔNG bơm field policy vào schema (config chưa tiêu thụ → tránh over-engineer). **VERIFY: 8 test guard + full 464/1 + lint 5/0** | #245 |
+| D-051 | ✅ | Wave 4+5: test overload cross-process (`detector_kind=slow` + harness n_slots/client_kwargs + window=1/queue=1) assert bất biến 2-tầng `submitted+client_drop+shm_drop==M` + dropped>0 + in_flight==0. **Spec HOÀN TẤT (đóng A2+A3). VERIFY: overload 4x không flaky + full 465/1 + lint 5/0** | #246,#247 |
+| D-052 | ✅ | Cơ chế chống-drift "cực mạnh" = LINTER nhất quán bộ nhớ `tests/test_memory_consistency.py` (6 check: LOG liên tục · INDEX↔LOG · journal liên tục · total đếm-thật · ID⇄INDEX · activeContext freshness). Dogfood BẮT drift thật (LOG dup + thiếu D-036). Wire §0/§2 + hook | #248 |
+| D-053 | ✅ | Củng cố chống-drift 3 tầng: hook **agentStop** `auto-drift-check` (tự chạy linter sau mỗi lượt, runCommand không loop) + PORT cơ chế vào kit (`test_memory_consistency.template.py` + §2 rule + bump AGENTS.template 15). "Cực mạnh" = máy-kiểm + tự-chạy + tái-dùng, không dựa kỷ luật | #249 |
+| D-054 | ✅ | Review đối kháng code backpressure + FIX GỐC F1 (đua drain): reorder io_loop step 1b — set pending/in_flight/_sent TRƯỚC send() → đóng cửa sổ (outbound=0 & in_flight=0) frame cuối. **VERIFY: 14 test đích + overload 3/3 không flaky + full 465/1 + lint 5/0** | #252 |
+| D-055 | ✅ | Bất biến bảo toàn ĐÚNG VÔ ĐIỀU KIỆN: `camera_worker.finally` teardown-trước → đếm `frames_dropped_shutdown`=leftover-van + snapshot-sau-quiesce; `_write_result` gộp 3 tầng drop (client+shm+shutdown). Đóng biên "server chết+van đầy" + F2(K-056). **VERIFY: fullstack + full 465/1 + lint 5/0** | #253 |
 ## 2. Chỗ phải đổi — `02-requirement-changes.md`
 | ID | Trạng thái | Đổi gì | Nguồn |
 |---|---|---|---|
@@ -76,6 +83,8 @@
 | C-016 | ✅ | `_run_from_config` đổi return code LUÔN-0 → 0 (mọi pipeline ok) / 1 (có ≥1 lỗi) — chống giấu lỗi cho vận hành nhiều-cam. 3 test cũ (toàn-ok) vẫn 0 | #229 |
 | C-017 | ✅ | `build_runner`+`validate_config` giờ TỪ CHỐI key params lạ (ConfigError) thay vì bỏ qua im lặng — chống typo cấu hình chạy sai. Config/test cũ dùng key hợp lệ nên không phá | #230 |
 | C-018 | ✅ | `backpressure-cross-process` R2.2 đổi ngữ nghĩa "in-flight cũ nhất" → "frame chờ-gửi (CHƯA gửi) cũ nhất" + tách R1 (4→5 AC) + Glossary 2-van. User duyệt hướng (Mô hình A) trước khi sửa requirement | #238 |
+| C-019 | ✅ | `frames_dropped_backpressure` (artifact profile) = drop client-window + drop SHM-ring (2 tầng) — design §4.5 không xử lý nhánh write→None; gộp để giữ R4.1 + bất biến. **Bất biến ASSERT cross-process ở Wave 4 (D-051)** | #244,#246 |
+| C-020 | ✅ | Khôi phục detail `D-036` bị thiếu trong 01-decisions.md (INDEX có dòng, file thiếu heading — nghi mất khi sync đa-máy) từ nguồn LOG #198. Phát hiện bởi linter D-052 | #248 |
 
 ## 3. Trade-off — `03-tradeoffs.md`
 | ID | Trạng thái | A vs B → chọn | Nguồn |
@@ -99,6 +108,8 @@
 | T-017 | ✅ | key lạ fail-fast ConfigError (siết) vs cảnh báo-log (lỏng) → fail-fast (sai config báo NGAY > chạy sai âm thầm); builder chưa khai báo allowed_params → lenient (không siết registry bên thứ 3) | #230 |
 | T-018 | ✅ chốt | Mô hình A (bound TRƯỚC gửi, 2 van) vs B (bound in-flight đã gửi, đúng câu chữ cũ) → **A** (server ROUTER không hủy được request đã nhận → B không giảm tải = fix ngọn) | #238 |
 | T-019 | ✅ | Tái dùng `BoundedQueue` kernel vs viết mới → tái dùng (client 1 process, thread⊥thread → thỏa K-016 thread-safe; có sẵn 4 policy + đếm) | #238 |
+| T-020 | ✅ | SHM-ring-đầy tính DROP (gộp `frames_dropped_backpressure` + counter riêng) vs `frames_captured`=chỉ-frame-ghi-SHM-OK → chọn gộp (giữ R4.1 + không giấu mất-frame tầng SHM = đúng mục tiêu A2). Assert Wave 4 (D-051) | #244,#246 |
+| T-021 | ✅ | R3 cấm BLOCK+RTSP: hàm guard THUẦN sẵn-sàng-wire vs bơm field policy vào schema+parse+wire ngay → guard thuần (config chưa tiêu thụ policy → schema = over-engineer; guard+test nắm bản chất R3, P7) | #245 |
 
 ## 4. Điều nên biết / rủi ro — `04-things-to-know.md`
 | ID | Trạng thái | Nội dung | Đóng khi |
@@ -155,6 +166,10 @@
 | K-050 | 🟢 cứu · 🔴 lặp | SỰ CỐ `.git` bị tiến trình NGOÀI xoá giữa phiên (máy `k.nguyen.manh.toan`, 09:47) — ĐÃ restore từ Recycle Bin + `git fsck` sạch + bundle backup ngoài folder (43 commit an toàn). Công cụ xoá [chưa xác định]; working-tree chưa commit + rủi ro xoá lại VẪN mở | #235,#236 |
 | K-051 | 🔵 | BẤT BIẾN: `frames_submitted` đếm TẠI LÚC GỬI (không lúc enqueue) — nếu sai, DROP_OLDEST đếm trùng → vỡ `submitted+dropped==captured`. Phải verify khi code (wave 2.4/2.5, PBT) | #238 |
 | K-052 | 🟢 baseline · 🔴 .git | Máy `toann` KHÔNG có `.git` (drift-check dùng file-state+diagnostics). **Baseline ĐÃ tự-verify tại đây (#241):** rebuild venv scoop py3.13.12 → `pytest` **436/1 (45.92s)** + lint `importlinter.api` **5/0** (khớp #232/#234, không torch) | #240,#241 |
+| K-053 | ✅ | `camera_worker` có 2 tầng backpressure độc lập (SHM ring `write()→None` ⊥ client submission-window). `metrics_snapshot()` CHỈ đếm tầng client → camera_worker phải cộng `frames_dropped_shm` khi ghi artifact (nếu không bất biến vỡ âm thầm = lỗ A2). **ASSERT bất biến cross-process Wave 4 (D-051)** | #244,#246 |
+| K-054 | ✅ | Drift TỒN ĐỌNG bị linter D-052 bắt: LOG dup legacy #90/91/95/96 (2 AI append cùng ngày → allowlist, không renumber vì append-only) + thiếu detail D-036 (khôi phục từ LOG #198, C-020) | #248 |
+| K-055 | ✅ | Hook `runCommand` KHÔNG hiểu `;` separator (dán vào argv → "No such file") → fix gốc: 1-script entry `tests/drift_check.py` gọi cả 2 linter; hook + §0 dùng 1 lệnh. Bài học: hook KHÔNG ghép lệnh bằng `;`/`&&` | #250 |
+| K-056 | 🟡 | Ranh giới client backpressure (KHÔNG bug — hợp đồng dùng): F2 `metrics_snapshot` đọc-sau-quiesce (io idle); F3 không trộn `infer()` sync + `submit()` async nặng (sync bỏ qua flow-control window) | #252 |
 
 ## Tổng quan trạng thái (cập nhật 2026-07-06 — phiên máy-3 `endgame`, sync đầy đủ config-declarative + môi trường)
 - **Tổng 127 entry:** D 47 (D-001..047) · C 17 (C-001..017) · T 17 (T-001..017) · K 49 (K-001..049). Baseline **436 passed/1 skipped · lint 5/0** — ✅ **ĐÃ TỰ VERIFY phiên này** (máy `endgame`, scoop py3.13.12, LOG #232: pytest 48.70s EXIT 0 + `importlinter.api` LINT_OK True). K-047+K-045+K-046 đóng; +9 test bench.

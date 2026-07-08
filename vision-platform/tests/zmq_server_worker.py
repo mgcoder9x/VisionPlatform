@@ -18,10 +18,20 @@ class CrashDetector:
         raise ValueError("boom detector")
 
 
+# Độ trễ detector "slow" cho test backpressure (Wave 4): ~20 infer/s — CHẬM hơn tốc độ submit của client
+# → quá tải TẤT YẾU (deterministic), không phụ thuộc xác suất timing → chống flaky.
+SLOW_DETECTOR_DELAY_S = 0.05
+
+
 def inference_server_worker(shutdown_event, endpoint, cp_name, locks_map, n_slots, h, w, c, detector_kind="fake"):
     cp = RingControlPlane(cp_name, create=False)
     opener = make_pool_opener(locks_map, n_slots, h, w, c)
     coord = ReaderEpochCoordinator(cp, opener)
-    detector = CrashDetector() if detector_kind == "crash" else FakeDetector()
+    if detector_kind == "crash":
+        detector = CrashDetector()
+    elif detector_kind == "slow":
+        detector = FakeDetector(delay_s=SLOW_DETECTOR_DELAY_S)   # tạo tải chậm (Wave 4, R7.3)
+    else:
+        detector = FakeDetector()
     server = InferenceServer(coord, detector, endpoint)
     server.serve(shutdown_event)

@@ -1,7 +1,7 @@
 # GEMINI.md — trỏ về AGENTS.md
 
 > **Luôn đọc `AGENTS.md` ở gốc repo trước khi làm việc** — nguồn sự thật đầy đủ.
-> **RULES_VERSION: 14** — phải khớp AGENTS.md (`py tests/test_rules_sync.py`).
+> **RULES_VERSION: 15** — phải khớp AGENTS.md (`py tests/test_rules_sync.py`).
 
 ## 0. ĐẦU MỖI PHIÊN (bắt buộc)
 CHẠY `git status` + `git diff` TRƯỚC; đọc 5 entry cuối `AI-IMPLEMENTATION-LOG.md` (gốc repo) +

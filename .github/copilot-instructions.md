@@ -1,12 +1,14 @@
 # Copilot Instructions — trỏ về AGENTS.md
 
 > **Luôn đọc `AGENTS.md` ở gốc repo trước** — nguồn sự thật đầy đủ.
-> **RULES_VERSION: 14** — phải khớp AGENTS.md (`py tests/test_rules_sync.py`).
+> **RULES_VERSION: 15** — phải khớp AGENTS.md (`py tests/test_rules_sync.py`).
 
 ## 0. ĐẦU MỖI PHIÊN (bắt buộc)
 CHẠY `git status` + `git diff` TRƯỚC; đọc 5 entry cuối `AI-IMPLEMENTATION-LOG.md` (gốc repo) +
 `memory-bank/activeContext.md` + `progress.md` + `lessons/00-LEARNING-MAP.md`. Thay đổi CHƯA
 COMMIT hoặc mới hơn mốc "Cập nhật lúc" mà không khớp activeContext → DỪNG, cảnh báo, đồng bộ trước.
+**+ CHẠY 1 lệnh `py tests/drift_check.py`** (chống-drift bằng máy — chạy cả 2 linter) —
+FAIL = có drift bản ghi → SỬA trước khi làm tiếp.
 
 ## Mục tiêu tối thượng
 Người dùng học để **TỰ VIẾT LẠI được hệ thống**. Công cụ là đòn bẩy, KHÔNG thay người dùng suy nghĩ.

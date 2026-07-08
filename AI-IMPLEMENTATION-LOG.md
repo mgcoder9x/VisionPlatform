@@ -4899,3 +4899,231 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - git máy này: `main` 3 commit, tree sạch (lịch sử 72-commit/develop cũ không còn — K-050/K-052, git dựng lại qua máy; chưa push backup — nợ K-007).
 
 **Đã verify:** `pytest tests/test_fake_detector_delay.py tests/test_push_frame_source.py -q` = 6 passed; full = 448 passed/1 skipped + 1 flaky (isolated pass); lint `importlinter.api` = 5 kept/0 broken. · **Chưa verify:** hành vi cross-process end-to-end của nguồn/detector mới (Wave 4 mới dựng); POSIX (guard win32).
+
+
+### Entry #243 — 2026-07-08 — Backpressure Wave 2 HOÀN TẤT (2.3/2.4/2.5) — reconcile drift + TỰ-VERIFY THẬT máy `toann` (456/1 · lint 5/0) — Kiro-Opus
+
+**Bối cảnh:** Tiếp phiên trên máy `toann` (workspace `c:\Users\toann\...`). Đầu phiên drift-check phát hiện: code `ZmqInferenceClient` ĐÃ có đủ Wave 2.3 (HWM trước connect) + 2.4 (async submit + flow-control) + 2.5 (poll_responses + timeout-scan + metrics_snapshot) + 2 file test (`test_zmq_client_hwm.py` 3 test, `test_zmq_client_async.py` 4 test) — NHƯNG `tasks.md` vẫn `[ ]` và LOG dừng ở #242 (chỉ 2.1/2.2). Work đã làm ở phiên trước nhưng CHƯA ghi nhận (phiên bị cắt trước khi cập nhật memory).
+
+**1. Quyết định AI tự ra:**
+- KHÔNG viết lại 2.3/2.4/2.5 (code đã tồn tại + test xanh + đọc-khớp design). Thay vào đó ĐỌC client xác minh khớp design/K-051, chạy verify thật, rồi reconcile memory (đánh dấu tasks + log). Đây là fix gốc (đồng bộ bản-ghi với thực tế) thay vì tạo trùng.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không (bám design 4.2/4.2.b + K-051).
+
+**3. Trade-off đã cân nhắc:** viết lại cho "chắc" (rủi ro phá code đang xanh + trùng) vs tin code hiện có SAU KHI đọc+verify → chọn đọc+verify+reconcile (code đã đúng, chạy test thật làm bằng chứng).
+
+**4. Điều bạn nên biết:**
+- Xác minh client khớp design: `setup()` set `SNDHWM/RCVHWM` TRƯỚC `connect()` (2.3); io_loop gửi async có flow-control `while _in_flight < _window_size`, đếm `_sent` TẠI LÚC GỬI (K-051, không lúc enqueue); `submit()` non-blocking qua BoundedQueue; `poll_responses()` drain `_responses`; `metrics_snapshot()` gộp `_sent`/`drops+rejects`/`_ok`/`_err`/`_timeout`; quét timeout tạo InferenceError(retryable=True). Đường sync `infer()` cũ giữ nguyên, tách riêng (`_pending` vs `_pending_async`) — cùng 1 io thread sở hữu socket.
+- **Baseline máy `toann` GIỜ: pytest 456 passed/1 skipped · lint 5 kept/0 broken** (verify thật). Chênh 449→456 = 7 test client mới (hwm 3 + async 4); flaky K-035 (#242) phiên này pass.
+- Còn lại: Wave 3.1 (camera_worker → async submit + drain + ghi metrics) · 3.2 (cấm BLOCK+RTSP ở config) · Wave 4 (cross-process spawn) · Wave 5 (nghiệm thu). tasks.md 2.3/2.4/2.5 đã đánh `[x]`.
+
+**Đã verify:** CHẠY THẬT máy `toann`: `pytest -q` = **456 passed/1 skipped (39.50s)**; `importlinter.api` lint = **5 kept/0 broken** (LINT_RESULT=True); đọc `zmq_inference_client.py` khớp design 2.3/2.4/2.5 + K-051. · **Chưa verify:** hành vi cross-process end-to-end (Wave 4 chưa làm); camera_worker chưa chuyển async (Wave 3.1); POSIX (guard win32).
+
+
+### Entry #244 — 2026-07-08 — Backpressure Wave 3.1: camera_worker async submit + drain + hạch toán 2-tầng (verify THẬT 456/1 · 5/0) — Kiro-Opus
+
+**Bối cảnh:** Tiếp PHA code spec `backpressure-cross-process` (Mô hình A) trên máy `toann`. Wave 2 đã xong (#243). Trước khi code Wave 3.1, doubt-driven phát hiện điểm thiết kế chưa giải (2 tầng backpressure) → nêu + user duyệt hướng → code.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Thêm property `ZmqInferenceClient.outbound_size` (đọc `_async_outbound.qsize()`) — cần cho drain biết van outbound đã rỗng chưa (chỉ `in_flight==0` chưa đủ vì có thể còn frame trong queue giữa 2 vòng io). Additive.
+- `camera_worker`: `frames_captured` đếm mỗi `has_data` (R4.1); `write()→None` → `frames_dropped_shm++` (KHÔNG submit); có ref → `client.submit()` non-blocking; mỗi vòng `_consume()` (poll_responses → đếm dets_total + log sample, KHÔNG đếm ok/err/timeout ở đây — client đếm nội bộ, tránh trùng). Drain sau vòng lặp: poll tới `outbound_size==0 AND in_flight==0`, cap `timeout_s+1` (timeout-scan tự dọn nếu server chết).
+- `_write_result` ghi 6 field BackpressureMetrics từ `metrics_snapshot(frames_captured)` + GIỮ key cũ `frames_ok`(=frames_submitted)/`infer_ok`/`infer_err`/`dets_total` (test fullstack cũ không vỡ) + `frames_dropped_backpressure` GỘP 2 tầng + tách `frames_dropped_client_window`/`frames_dropped_shm`.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu (design §4.5):** design không xử lý nhánh `write()→None` (SHM ring đầy) → sẽ vỡ bất biến. CHỐT (user duyệt): coi SHM-full là backpressure drop, gộp vào `frames_dropped_backpressure`, thêm counter quan sát riêng (journal C-019/T-020/K-053).
+
+**3. Trade-off đã cân nhắc:** (T-020) SHM-full tính drop (gộp + counter riêng) vs `frames_captured`=chỉ-frame-ghi-SHM-thành-công → chọn gộp (giữ R4.1 nguyên văn + không giấu mất-frame tầng SHM = đúng mục tiêu A2).
+
+**4. Điều bạn nên biết:**
+- Bỏ `infer()` blocking khỏi camera_worker → camera KHÔNG bị chặn (R1). `infer()` sync trong client VẪN còn (5 test cross-process cũ + fullstack dùng đường async giờ). 
+- Bất biến `frames_submitted + frames_dropped_backpressure == frames_captured` đúng BY-CONSTRUCTION (mỗi captured → đúng 1 trong {shm-drop, client-drop, submitted}) NHƯNG chưa có test assert trực tiếp trong 3.1 (fullstack chỉ check frames_ok/infer_ok≥1) → assert ở Wave 4 (cross-process overload) + đã có unit ở Wave 2.5.
+- Nếu drain bị cắt bởi deadline (server chết + van chưa rỗng) → có thể còn frame trong queue chưa gửi → bất biến lệch đúng bằng phần leftover (biên hiếm; timeout-scan thường dọn kịp trong timeout_s).
+- **Wave 3.2 (cấm BLOCK+RTSP ở config) có PHỤ THUỘC ẩN:** `kernel/config.py`/`pipeline_factory.py` hiện KHÔNG có field `policy`/`Backpressure_Policy` per-source → chưa có gì để kiểm (D-050). Cần chốt hướng (thêm field schema hay không) TRƯỚC khi code 3.2.
+
+**Đã verify:** CHẠY THẬT máy `toann`: `pytest tests/test_fullstack_integration.py` = **1 passed (4.09s)**; full `pytest -q` = **456 passed/1 skipped (39.83s)**; lint `importlinter.api` = **5 kept/0 broken**. · **Chưa verify:** bất biến 2-tầng bằng test riêng (Wave 4); hành vi drain khi server chết giữa chừng (biên); POSIX (guard win32).
+
+
+### Entry #245 — 2026-07-08 — Backpressure Wave 3.2: guard cấm BLOCK+RTSP (R3/P7) — hàm thuần, KHÔNG bơm schema (verify 464/1 · 5/0) — Kiro-Opus
+
+**Bối cảnh:** Tiếp Wave 3 spec `backpressure-cross-process` trên máy `toann`. Wave 3.1 xong (#244). Wave 3.2 (R3 cấm BLOCK cho RTSP).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Implement R3 dạng HÀM GUARD THUẦN `assert_policy_allowed_for_source(source_type, policy)` ở `application/config_loader.py` — KHÔNG bơm field `policy` vào `SourceConfig`/schema TOML (D-050/T-021).
+- 8 test (`test_backpressure_policy_guard.py`): rtsp+BLOCK→ConfigError (check message) · rtsp+{DROP_OLDEST/DROP_NEWEST/REJECT}→ok · non-rtsp(noise/video/fake/push)+BLOCK→ok.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** design §4.5/task 3.2 nói "ở nơi dựng client/pipeline từ config" — nhưng ĐỌC code xác nhận KHÔNG đường config nào gắn policy vào RTSP (schema không có policy + config-path dựng PipelineRunner in-process, không ZMQ client). → làm guard sẵn-sàng-wire thay vì wire vào đường không tồn tại (tránh bịa + over-engineer).
+
+**3. Trade-off đã cân nhắc (T-021):** guard thuần sẵn-sàng-wire vs bơm field policy vào schema + parse + wire ngay → chọn guard thuần (R3 bản chất = cấm tổ hợp nguy hiểm; guard+test nắm trọn + kiểm chứng P7; bơm schema khi chưa ai tiêu thụ = over-engineer, trái T-015).
+
+**4. Điều bạn nên biết:**
+- R3 giờ có nền tảng TỪ CHỐI rtsp+BLOCK (có test = P7) nhưng CHƯA được gọi trong 1 đường config end-to-end (config chưa mang policy per-source). Khi config-declarative tích hợp ZMQ client (spec sau) → gọi `assert_policy_allowed_for_source` tại nơi map config→client.
+- Guard đặt ở application (config_loader) — import `kernel.backpressure.BackpressurePolicy` (application→kernel hợp lệ). KHÔNG ở BoundedQueue (R3.2, giữ policy-agnostic).
+- **Wave 3 XONG (3.1+3.2).** Còn Wave 4 (cross-process spawn slow-detector: assert bất biến `submitted+dropped==captured` + `dropped>0` tất yếu — chỗ ASSERT bất biến 2-tầng K-053/C-019) + Wave 5 (nghiệm thu). tasks.md 3.1/3.2 = [x].
+
+**Đã verify:** máy `toann`: `pytest tests/test_backpressure_policy_guard.py` = **8 passed (0.42s)**; full `pytest -q` = **464 passed/1 skipped (39.67s)**; lint `importlinter.api` = **5 kept/0 broken**. · **Chưa verify:** R3 trong đường config end-to-end (chưa wire — chờ config có policy); bất biến 2-tầng (Wave 4); POSIX.
+
+
+### Entry #246 — 2026-07-08 — Backpressure Wave 4: test overload cross-process assert bất biến 2-tầng (không flaky, verify THẬT) — Kiro-Opus
+
+**Bối cảnh:** Tiếp spec `backpressure-cross-process` máy `toann`. Wave 3 xong (#245). Wave 4 = bằng chứng cross-process cho bất biến bảo toàn dưới quá tải thật (R8).
+
+**1. Quyết định AI tự ra (spec không nói) — xem D-051:**
+- `detector_kind="slow"` = `FakeDetector(delay_s=0.05)` (hằng `SLOW_DETECTOR_DELAY_S`, ~20 infer/s) trong `zmq_server_worker.py`.
+- Mở rộng `_harness` thêm `n_slots`/`client_kwargs` (additive) → dùng SHM ring lớn `n_slots=64 > M=50` để CÔ LẬP backpressure tầng client-window khỏi tầng SHM.
+- `test_zmq_backpressure_overload_conserves`: `window_size=1, queue_maxsize=1, DROP_OLDEST`, submit 50 frame nhanh → quá tải cực đại. Kế toán 2 tầng (shm_dropped + client-window) → assert CHÍNH XÁC `submitted + client_dropped + shm_dropped == M` + `dropped_total>0` + `in_flight==0`. Guard win32.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** design §8.2 gợi ý test; tôi cô lập client-window bằng ring lớn (design không nói kích thước) để test đúng cơ chế mới + deterministic.
+
+**3. Trade-off đã cân nhắc:** ring lớn (cô lập client-window, shm_dropped~0) vs ring nhỏ (cả 2 tầng drop, sát profile hơn nhưng nhiễu) → chọn ring lớn + kế toán 2 tầng tổng quát (robust cả 2 trường hợp) → test tập trung + không flaky.
+
+**4. Điều bạn nên biết:**
+- Bất biến airtight: submit_calls = _sent + queue.drops (sau drain queue rỗng) → M = shm_dropped + submitted + client_dropped (chính xác, không phải bound).
+- Nâng C-019/T-020/K-053 từ 🟡 (by-construction) → ✅ (test-asserted cross-process).
+
+**Đã verify:** máy `toann`: `test_zmq_backpressure_overload_conserves` PASS **4 lần** (isolation 1.47/1.56/1.26s + trong full) KHÔNG flaky; cross-process file **6 passed (5.76s)**; lint **5 kept/0 broken**. · **Chưa verify:** POSIX (guard win32); hành vi khi server chết giữa drain (biên, timeout-scan xử lý).
+
+### Entry #247 — 2026-07-08 — Backpressure Wave 5 NGHIỆM THU: spec `backpressure-cross-process` HOÀN TẤT (đóng A2+A3) — baseline 465/1 · 5/0 — Kiro-Opus
+
+**Bối cảnh:** Wave 5 = nghiệm thu toàn hệ + cập nhật baseline. Toàn bộ tasks.md Wave 1–5 = [x].
+
+**1. Quyết định AI tự ra:** Không (chỉ nghiệm thu + cập nhật memory).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không.
+
+**3. Trade-off đã cân nhắc:** Không.
+
+**4. Điều bạn nên biết:**
+- **Spec `backpressure-cross-process` HOÀN TẤT** (đóng lỗ hổng K-040 **A2** no-backpressure-cross-process + **A3** no-HWM): Wave 1 (BackpressureMetrics kernel) · Wave 2 (client HWM-trước-connect + async submit/flow-control/poll/timeout/metrics_snapshot, đếm submitted-lúc-gửi K-051) · Wave 3 (camera_worker async + drain + hạch toán 2-tầng · guard cấm BLOCK+RTSP) · Wave 4 (test overload cross-process assert bất biến) · Wave 5 (nghiệm thu).
+- **Baseline mới máy `toann`: 465 passed / 1 skipped · lint 5 kept/0 broken** (từ 436 đầu spec → +29 test: 7 metrics + 3 fake_delay + 3 push_source + 3 hwm + 4 async + 8 policy_guard + 1 overload). ADDITIVE tuyệt đối: `infer()` sync + 5 test cross-process cũ KHÔNG đổi.
+- **Còn nợ (ghi rõ, không giấu):** (a) R3 guard cấm BLOCK+RTSP CHƯA wire vào đường config end-to-end (config chưa mang policy per-source — D-050/T-021, "sẵn-sàng-wire"); (b) POSIX chưa verify (mọi test cross-process guard win32); (c) K-035 shutdown flaky dưới tải (1 flake trong 1/4 lần chạy full, isolated 6 passed — không hồi quy); (d) git chưa push backup (K-007).
+- Bước kế (chờ user): commit/backup (K-007) · hoặc spec kế trong K-040 (A1 batching / C1 metrics) · hoặc wire R3 khi config-declarative tích hợp ZMQ client.
+
+**Đã verify:** máy `toann` (venv py3.13.12): `pytest -q` = **465 passed/1 skipped** (3 lần liên tiếp sạch: 39.36/40.18/41.86s); lint `importlinter.api` = **5 kept/0 broken**; test_step_09_shutdown 6 passed cô lập (xác nhận flake là K-035, không hồi quy). · **Chưa verify:** POSIX; GPU/torch (không cài); R3 end-to-end (chưa wire).
+
+
+### Entry #248 — 2026-07-08 — Cơ chế chống-drift "cực mạnh": LINTER nhất quán bộ nhớ + wire §0/§2 (RULES_VERSION 15) + dogfood bắt drift tồn đọng — Kiro-Opus
+
+**Bối cảnh:** User yêu cầu "1 cách CỰC MẠNH để tránh drift". Phân tích drift THẬT đã xảy ra (đa máy K-050/K-052; code↔tasks/log lệch #243; con trỏ cũ #234; tự-đếm-sai 133-vs-137) → gốc = cập-nhật-tay nhiều mirror + luật văn xuôi tự drift. Giải: MÁY kiểm bản ghi (đúng triết lý "validate bằng test").
+
+**1. Quyết định AI tự ra:**
+- Tạo `tests/test_memory_consistency.py` (D-052) — linter 6 check (C1 LOG liên tục · C2 INDEX↔LOG max · C3 journal liên tục · C4 total đếm-thật · C5 ID⇄INDEX · C6 activeContext freshness). Pure stdlib, cùng pattern `test_rules_sync.py` (exit 0/1 + pytest fn).
+- Allowlist LOG dup LEGACY #90/91/95/96 (documented) — append-only cấm renumber; fail dup MỚI.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Khôi phục detail D-036 thiếu (C-020) từ LOG #198 — linter phát hiện.
+- Bump RULES_VERSION 14→15 (thêm luật §0/§2 chạy linter đầu phiên) + sync AGENTS/GEMINI/copilot/steering.
+
+**3. Trade-off đã cân nhắc:**
+- Thêm LUẬT văn xuôi (ngọn, tự drift) vs TEST khách quan (gốc, chạy được) → chọn test (mạnh + tự-kiểm). Cái mất: phải chạy 1 lệnh đầu phiên (rẻ).
+- Renumber LOG dup (sạch số) vs allowlist legacy (giữ append-only) → allowlist (không phá lịch sử + không vỡ tham chiếu chéo).
+
+**4. Điều bạn nên biết:**
+- **Dogfood chứng minh giá trị:** chạy lần đầu BẮT NGAY drift tồn đọng người không thấy (LOG dup + D-036 thiếu) → đã xử lý → PASS.
+- Cách dùng: đầu mỗi phiên chạy `py tests/test_memory_consistency.py` (+ `test_rules_sync.py`). FAIL = sửa bản ghi TRƯỚC khi làm tiếp. Hook userTriggered "kiem-drift" gọi cả hai.
+- Linter chạy bằng bất kỳ python (dùng `vision-platform\.venv\Scripts\python.exe` hoặc scoop py) — pure stdlib, không cần dep.
+
+**Đã verify:** `py tests/test_memory_consistency.py` = **PASS** (6 nhóm; sau khôi phục D-036 + allowlist legacy); trước đó FAIL đúng 3 điểm drift thật (bằng chứng linter có răng). · **Chưa verify:** chưa chạy `test_rules_sync` sau bump 15 (làm ngay dưới); hook chưa tạo.
+
+
+### Entry #249 — 2026-07-08 — Củng cố chống-drift: hook agentStop tự-chạy linter + port cơ chế vào kit (đóng nợ §2.5) — Kiro-Opus
+
+**Bối cảnh:** User re-nhấn "cách CỰC MẠNH chống drift". Đầu phiên tuân §0 mới: chạy 2 linter (memory-consistency + rules-sync) = **PASS** (dogfood chính rule vừa thêm). Rồi củng cố + đóng nợ kit từ #248.
+
+**1. Quyết định AI tự ra:**
+- Hook **agentStop** `auto-drift-check` (runCommand) tự chạy 2 linter sau MỖI lượt agent → mắt xích yếu "phải nhớ chạy" được đóng (không dựa kỷ luật). Chọn runCommand (KHÔNG askAgent) tránh loop.
+- Port cơ chế vào kit: `ai-learning-os-kit/tests/test_memory_consistency.template.py` (generic, allowlist rỗng) + luật §2 anti-drift + bump `AGENTS.template.md` 14→15.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** đóng nợ #248 (kit chưa bump 15) — nhưng port ĐÚNG BẢN CHẤT (rule + reference impl), không chỉ đổi số (số phải thật).
+
+**3. Trade-off đã cân nhắc:**
+- agentStop runCommand (tự chạy, visible, no-loop) vs agentStop askAgent (tự sửa nhưng LOOP-risk) → runCommand (an toàn); vs chỉ userTriggered (phụ thuộc nhớ) → thêm auto để mạnh hơn. Cái mất: terminal chạy linter mỗi lượt (có thể tắt hook nếu ồn).
+- Chỉ bump số kit (nhanh) vs port cả cơ chế (đúng) → port (số 15 kit mới THẬT + giá trị lâu dài).
+
+**4. Điều bạn nên biết:**
+- Chống-drift giờ **3 tầng:** (a) rule §0 AGENTS/steering/GEMINI/copilot (agent chạy đầu phiên + trước "xong") · (b) hook agentStop `auto-drift-check` (tự chạy mỗi lượt) · (c) hook userTriggered `kiem-drift` (thủ công). + kit mang cơ chế cho dự án sau.
+- 2 hook CHỈ chạy trong Kiro; tool khác dựa rule §0. Hook chưa test bấm/agentStop thật (mới tạo).
+- Kit là template portable — `test_memory_consistency.template.py` cần copy + chỉnh nếu cấu trúc dự án khác.
+
+**Đã verify:** đầu phiên `py tests/test_memory_consistency.py` + `py tests/test_rules_sync.py` = **PASS** (đọc output thật); kit AGENTS.template RULES_VERSION=15 (grep) + template linter tạo; 2 hook tạo thành công. · **Chưa verify:** hành vi hook agentStop/userTriggered khi kích hoạt thật (mới tạo); linter template trên dự án khác.
+
+
+### Entry #250 — 2026-07-08 — FIX GỐC hook drift-check lỗi (`;` bị mangle) → điểm vào DUY NHẤT `tests/drift_check.py` — Kiro-Opus
+
+**Bối cảnh:** Hook `auto-drift-check` chạy thật BÁO LỖI: `python: can't open file '...test_memory_consistency.py;'` (exit 2). Điều tra gốc từ chính thông báo (không đoán).
+
+**1. Quyết định AI tự ra:**
+- **Nguyên nhân gốc (verified bằng error):** hook `runCommand` command `"python A.py; python B.py"` bị mangle — `;` KHÔNG là separator mà dán vào argv → python nhận `A.py;`. → mọi lệnh nhiều-phần trong runCommand đều hỏng bất kể shell.
+- **Fix GỐC (không fix ngọn = không mò separator):** tạo `tests/drift_check.py` — điểm vào DUY NHẤT gọi cả 2 linter nội bộ (import `test_memory_consistency` + `test_rules_sync`, chạy `check()`, exit 0/1). Hook chỉ cần 1 lệnh `python tests/drift_check.py` (shell-agnostic).
+- Sửa 2 hook (`auto-drift-check` agentStop + `kiem-drift-bo-nho` userTriggered) → command 1-lệnh. Cập nhật §0/§2 (AGENTS/steering/GEMINI/copilot + kit AGENTS.template) dùng `py tests/drift_check.py` = một-nguồn-sự-thật. Tạo kit `drift_check.template.py` (để không nhắc file không tồn tại).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** command hook + §0 docs: "2 lệnh rời `;`" → "1 lệnh `drift_check.py`". RULES_VERSION GIỮ 15 (cùng luật chống-drift, chỉ tinh chỉnh cách gọi — không phải luật mới).
+
+**3. Trade-off đã cân nhắc:** mò separator hook hiểu (đoán liều, mong manh) vs gói 1 script (chắc chắn, shell-agnostic) → 1 script (fix gốc). + tiện: 1 lệnh drift_check chạy cả 2 = dễ dùng + một-nguồn-sự-thật.
+
+**4. Điều bạn nên biết (K-055):**
+- BÀI HỌC cho mọi hook sau: `runCommand` KHÔNG ghép nhiều lệnh bằng `;`/`&&` — gói vào 1 script.
+- `drift_check.py` verify chạy thật đúng dạng hook (`python tests/drift_check.py` từ repo root) = EXIT 0, chạy cả 2 linter.
+- Còn nợ verify: hành vi hook khi Kiro kích hoạt thật (mới sửa — kỳ vọng chạy vì lệnh đã test tay khớp môi trường hook).
+
+**Đã verify:** `python tests/drift_check.py` (đúng lệnh hook) = **PASS cả 2 linter, EXIT=0** (đọc output thật); 2 file hook đã sửa command (đọc lại file); §0 4 mirror + kit cập nhật; kit drift_check.template.py tạo. · **Chưa verify:** hook tự kích hoạt trong Kiro (agentStop/userTriggered) — mới sửa; RULES_VERSION sync sau sửa docs (chạy drift_check dưới đây xác nhận).
+
+
+### Entry #251 — 2026-07-08 — VERIFIED: hook agentStop tự kích hoạt drift-check thật (PASS) — đóng "chưa verify" + checkpoint chờ hướng — Kiro-Opus
+
+**Bối cảnh:** User dán output = hook `auto-drift-check` (agentStop) TỰ CHẠY sau lượt #250. Đây là bằng chứng đóng nốt "chưa verify hook trigger" của #249/#250.
+
+**1. Quyết định AI tự ra:** Không (chỉ ghi nhận verify + checkpoint).
+
+**2. Chỗ phải đổi:** Không.
+
+**3. Trade-off:** Không.
+
+**4. Điều bạn nên biết:**
+- **Cơ chế chống-drift 3 tầng ĐÃ VERIFY END-TO-END:** (a) rule §0 (agent chạy `py tests/drift_check.py`) · (b) hook agentStop `auto-drift-check` **ĐÃ tự chạy thật** (bằng chứng: user-pasted output PASS/EXIT 0) · (c) hook userTriggered `kiem-drift` (thủ công) + kit template. → K-055 cập nhật VERIFIED.
+- **Trạng thái tổng:** spec `backpressure-cross-process` DONE (Wave 1–5, đóng A2+A3, 465/1·5/0) · anti-drift DONE+verified. KHÔNG còn task bắt buộc đang mở.
+- **Fork bước kế (mỗi cái có tiền đề/quyết định thật — cần user chọn, KHÔNG tự lao):**
+  (1) **K-007 backup:** máy `toann` KHÔNG có `.git` (K-052) → "backup git" ở đây bất khả; cần user quyết đặt repo dưới git / dùng máy có `.git` / bundle thủ công.
+  (2) **K-040 A1 (inference batching):** lever throughput #1 cho ~100 cam; NHƯNG design-first cần số benchmark 1-node (K-041) mà cần GPU+torch (máy này không có) → tiền đề chưa đủ để làm ĐÚNG (không bịa số).
+  (3) **Wire R3 end-to-end:** cần thêm `policy` per-source vào config schema (D-050) — quyết định mở rộng schema.
+  (4) **K-040 C1 (metrics tập trung)** hoặc dừng ở mốc sạch.
+
+**Đã verify:** hook agentStop tự chạy drift_check.py = PASS/EXIT 0 (user-pasted, khớp output drift_check.py); drift-gate #251 chạy lại PASS (dưới đây). · **Chưa verify:** hook userTriggered khi bấm tay (agentStop đã đủ chứng minh cơ chế hook chạy).
+
+
+### Entry #252 — 2026-07-08 — Review đối kháng code backpressure + fix gốc F1 (đua drain io_loop) — Kiro-Opus
+
+**Bối cảnh:** User "tiếp tục" + nhấn "validate nhiều lần, nhìn sâu rộng, fix bản chất". Các fork lớn (A1/K-007/R3) vướng tiền đề (GPU/git/over-engineer) → chọn việc GIÁ TRỊ + LÀM ĐƯỢC NGAY + không over-engineer: review đối kháng tính đúng đắn code backpressure vừa ship.
+
+**1. Quyết định AI tự ra:**
+- Review doubt-driven toàn client `_io_loop`/`submit`/`metrics_snapshot` + `camera_worker` drain (đọc code THẬT).
+- **Fix F1 (đua drain):** reorder step 1b io_loop — set `_pending_async`/`_in_flight`/`_sent` TRƯỚC `send()` (thay vì sau) → đóng cửa sổ (outbound=0 & in_flight=0) ở frame cuối làm drain thoát sớm.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** thứ tự trong io_loop (send-sau thay vì send-trước) — cùng hành vi đếm, chính xác hơn cho drain + flow-control.
+
+**3. Trade-off đã cân nhắc:** reorder io_loop (fix gốc, thứ tự nhân-quả) vs thêm settle-check 2-lần ở drain (patch ngọn) → reorder. Rủi ro: send() sau khi ++ → nếu send raise thì overcount; nhưng DEALER fire-and-forget + window≪SNDHWM → không raise → chấp nhận.
+
+**4. Điều bạn nên biết:**
+- F1 benign (bất biến luôn đúng; chỉ cosmetic dets_total trong µs hiếm) nhưng fix để chính xác + lâu dài.
+- Residual (K-056, KHÔNG bug — hợp đồng dùng): F2 metrics_snapshot đọc-sau-quiesce; F3 không trộn infer()+submit() nặng (sync bỏ qua window).
+- Đã VERIFY KHÔNG bug: timeout-scan không double-decrement; late-response-sau-timeout bỏ an toàn; in_flight không âm.
+
+**Đã verify:** máy `toann`: 4 file đích (async/hwm/fullstack/cross-process) = **14 passed**; overload lặp **3/3 không flaky**; full `pytest -q` = **465 passed/1 skipped (33.79s)**; lint **5 kept/0 broken**. · **Chưa verify:** POSIX (guard win32); tải fps thật (không đo).
+
+
+### Entry #253 — 2026-07-08 — Bất biến bảo toàn ĐÚNG VÔ ĐIỀU KIỆN (đếm shutdown-leftover + snapshot-sau-quiesce) — Kiro-Opus
+
+**Bối cảnh:** Tiếp review đối kháng D-054. Soi biên "server chết + van đầy lúc shutdown" (đã đánh dấu "biên hiếm" nhiều lần) — biên này liên quan LINH HỒN của fix A2 (bất biến bảo toàn) nên hoàn thiện.
+
+**1. Quyết định AI tự ra:**
+- `camera_worker.finally`: teardown TRƯỚC (dừng io thread → counters+van ổn định) → đếm `frames_dropped_shutdown = client.outbound_size` (leftover van chưa gửi) → `metrics_snapshot` (sau quiesce).
+- `_write_result` thêm param + field `frames_dropped_shutdown`; `frames_dropped_backpressure` GỘP 3 tầng (client-window + SHM + shutdown).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** design §4.5 ghi "drain deadline-cut → bất biến lệch (biên hiếm)" như giới hạn CHẤP NHẬN → nay HOÀN THIỆN: leftover được đếm → bất biến đúng vô điều kiện.
+
+**3. Trade-off đã cân nhắc:** nới drain deadline vô hạn (chờ flush hết — treo lâu khi server chết, ngọn) vs đếm leftover (bất biến đúng, drain vẫn bounded, gốc) → đếm leftover. + teardown-trước-snapshot (đóng F2 K-056) đổi lấy: đọc snapshot sau khi thread dừng (đúng, an toàn hơn).
+
+**4. Điều bạn nên biết:**
+- Mỗi captured frame giờ có ĐÚNG 1 fate: submitted | client-drop | shm-drop | shutdown-leftover → `submitted+dropped==captured` đúng VÔ ĐIỀU KIỆN (kể cả drain deadline-cut).
+- F2 (K-056) đóng cấu trúc: snapshot đọc sau teardown/quiesce. F3 (không trộn sync/async) vẫn là hợp đồng dùng.
+- Chưa thêm test cross-process cho ca "server chết + van đầy" (khó dựng deterministic, dễ flaky) — bất biến đúng by-construction; overload test (server sống) vẫn phủ ca chính.
+
+**Đã verify:** máy `toann`: `test_fullstack_integration` 1 passed (8.95s); full `pytest -q` = **465 passed/1 skipped (40.64s)**; lint **5 kept/0 broken**; parse_result đọc field mới generic (không phá test cũ). · **Chưa verify:** ca dead-server-full-queue bằng test riêng (by-construction + documented); POSIX.

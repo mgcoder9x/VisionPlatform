@@ -198,3 +198,25 @@ Chọn: **tái dùng `BoundedQueue` sẵn có** làm hàng đợi outbound trong
 - Cái mất: `BoundedQueue` THREAD-safe (threading.Lock) chứ KHÔNG process-safe (K-016) → chỉ đúng khi dùng TRONG 1 process.
 - Đổi lại: client ZMQ là 1 process với thread capture ⊥ thread io (chia sẻ bộ nhớ trong process) → ràng buộc "chỉ trong 1 process" của K-016 được thỏa → tái dùng hợp lệ + đã có sẵn 4 policy + đếm drops/rejects (khớp thẳng metric cần) → không phát minh lại, không thêm bề mặt lỗi.
 - Vì sao chấp nhận (bản chất): backpressure ở đây là điều tiết GIỮA HAI THREAD trong client trước khi gửi, KHÔNG phải cross-process (khác ngữ cảnh K-016 cảnh báo). Đúng công cụ cho đúng ngữ cảnh — tái dùng cái verified thay vì viết mới.
+
+
+### T-020 — 2026-07-08 — SHM-ring-đầy tính là DROP (gộp vào `frames_dropped_backpressure` + counter riêng)  vs  `frames_captured` chỉ đếm frame ghi-SHM-thành-công
+Status: ✅ (chọn A — bất biến 2-tầng đã ASSERT cross-process ở Wave 4, D-051)
+Scope: `camera_worker` hạch toán · spec backpressure-cross-process Wave 3.1
+Nguồn: LOG Entry #244 · design §4.5 · R4.1
+Links: D-049, C-019, K-053
+Chọn: **coi SHM-ring-đầy là một dạng backpressure drop** — `frames_captured` đếm mọi `has_data` (R4.1 nguyên văn); `write()→None` → `frames_dropped_shm += 1`; artifact `frames_dropped_backpressure = client_window_drops + frames_dropped_shm`; thêm counter quan sát `frames_dropped_shm`.
+- Cái mất: `frames_dropped_backpressure` gộp 2 tầng (SHM ⊥ client-window) → cần counter phụ `frames_dropped_shm` để tách khi phân tích; `metrics_snapshot()` (chỉ biết client-window) KHÔNG phải nguồn duy nhất cho số dropped ghi ra artifact (camera_worker phải cộng thêm).
+- Phương án B (bác): `frames_captured` = chỉ frame ghi-SHM-thành-công (có ref) → bất biến đúng tự nhiên, `metrics_snapshot` đủ. Nhưng VI PHẠM R4.1 (captured phải là "nhận từ source") + GIẤU số frame mất ở tầng SHM (đúng lỗ A2) → không minh bạch cho hệ 24/7.
+- Vì sao chấp nhận A (bản chất): mục tiêu tối thượng của spec = KHÔNG mất frame im lặng. Frame bị bỏ vì SHM đầy cũng là mất-vì-quá-tải → phải đếm + phơi ra. Gộp vào dropped giữ bất biến; counter riêng giữ minh bạch. Đây là "nhìn bản chất" (mọi mất-mát do backpressure đều phải kế toán), không phải "fix ngọn" (lơ nhánh khó).
+
+
+### T-021 — 2026-07-08 — R3 (cấm BLOCK+RTSP): hàm guard THUẦN sẵn-sàng-wire  vs  bơm field `policy` vào schema TOML + parse + wire ngay
+Status: ✅ (chọn guard thuần — verify 8 test + full 464/1 + lint 5/0)
+Scope: spec backpressure-cross-process Wave 3.2 · `config_loader.assert_policy_allowed_for_source`
+Nguồn: LOG Entry #245 · đọc `kernel/config.py` + `pipeline_factory` (không đường nào gắn policy vào RTSP)
+Links: D-050, C-018, K-053, T-015
+Chọn: **hàm guard THUẦN** `assert_policy_allowed_for_source(source_type, policy)` + test — KHÔNG thêm field `policy` vào `SourceConfig`/schema TOML lúc này.
+- Cái mất: R3 chưa được gọi trong 1 đường config THẬT (vì config chưa mang policy per-source) → là guard "sẵn-sàng-wire", chưa chặn ở runtime end-to-end. Khi config có policy phải nhớ gọi guard tại nơi map config→client.
+- Phương án B (bác): thêm `policy` vào SourceConfig + parse TOML + validate + wire vào ZmqInferenceClient. Đầy đủ hơn NHƯNG: (a) config-declarative path hiện dựng PipelineRunner in-process, KHÔNG dùng ZMQ client → field policy không có nơi tiêu thụ; (b) = xây hạ tầng cho khả năng chưa tồn tại = over-engineer (trái nguyên tắc user + T-015 "làm khi thực sự cần").
+- Vì sao chấp nhận A (bản chất): R3 về BẢN CHẤT = "ngăn tổ hợp rtsp+BLOCK nguy hiểm (TCP Zero Window)". Guard thuần + test nắm trọn bản chất đó, kiểm chứng được (P7), zero-schema-bloat. Bơm schema khi chưa ai tiêu thụ = fix phần ngọn (hình thức "có field") thay vì phần gốc (logic cấm). Wire đầy đủ để dành khi config-declarative thực sự tích hợp ZMQ client (spec sau).
