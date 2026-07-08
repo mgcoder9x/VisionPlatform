@@ -55,13 +55,13 @@ Thứ tự bắt buộc tuần tự trong nhánh chính: `1 → 2.3 → 2.4 → 
 
 ### Wave 2 — adapters (leaf; 2.1/2.2 song song được, 2.3–2.5 tuần tự vì cùng file client)
 
-- [ ] 2.1 `FakeDetector.delay_s` (additive)
+- [x] 2.1 `FakeDetector.delay_s` (additive)
   - Thêm `__init__(self, *, delay_s: float = 0.0)`; trong `detect()` nếu `delay_s > 0` → `time.sleep(delay_s)` trước khi trả. Mặc định 0.0 → hành vi cũ KHÔNG đổi.
   - Test: `delay_s=0` giữ nguyên output cũ (1 detection, confidence=brightness/255); `delay_s>0` → thời gian `detect()` ≥ delay (đo bằng monotonic, ngưỡng nới rộng để không flaky). Không cần torch/GPU.
   - Verify: pytest file + full suite; lint 5/0 (adapters vẫn leaf).
   - _Requirements: 7.3_
 
-- [ ] 2.2 `PushFrameSource` (nguồn đẩy nhịp cố định)
+- [x] 2.2 `PushFrameSource` (nguồn đẩy nhịp cố định)
   - Tạo `src/vision_platform/adapters/push_frame_source.py`: bám interface `setup()/read(timeout_ms)->ReadResult/teardown()` (như `NoiseFrameSource`). Params `width,height,max_frames:int,interval_s:float=0.0,seed`. `read()`: phát đủ `max_frames` → `ReadResult(EOF)`; `interval_s>0` và chưa tới hạn → `ReadResult(TIMEOUT)` (nhịp độc lập tốc độ tiêu thụ); tới hạn → `ReadResult(FRAME, data)`. Frame deterministic (giá trị = chỉ số frame) để kiểm recency.
   - Test: phát đúng `M` frame FRAME + 1 EOF; với `interval_s>0` mô phỏng đồng hồ → nhịp không phụ thuộc tốc độ gọi; frame value tăng dần.
   - Verify: pytest file + full suite; lint 5/0.

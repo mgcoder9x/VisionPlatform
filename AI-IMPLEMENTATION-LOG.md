@@ -4874,3 +4874,28 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Bước kế: sẵn sàng PHA code TDD wave 1 (`BackpressureMetrics` DTO kernel) khi user duyệt.
 
 **Đã verify:** CHẠY THẬT + ĐỌC OUTPUT máy `toann`: `.venv\Scripts\python.exe --version`=3.13.12; `pip list` xác nhận 13 gói chủ chốt + version; `pytest -q`=**436 passed/1 skipped (45.92s, EXIT 0)**; `importlinter.api` lint=**5 kept/0 broken** (104 files/326 deps, LINT_RESULT=True). · **Chưa verify:** GPU/torch (không cài — chủ ý); hành vi runtime backpressure (chưa code); an toàn `.git` máy này (không có .git — K-052 phần 🔴).
+
+
+### Entry #242 — 2026-07-08 — Backpressure Wave 2: FakeDetector.delay_s + PushFrameSource (máy k.nguyen.manh.toan) — Kiro-Opus
+
+**Bối cảnh:** Tiếp PHA code spec `backpressure-cross-process` (Mô hình A). Đầu phiên rebuild `.venv` verify baseline THẬT máy này, rồi làm Wave 2 task 2.1 + 2.2 (2 task adapters độc lập, song song).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- `PushFrameSource` nhận `time_fn` tiêm được (mặc định `time.monotonic`) — để test nhịp phát bằng đồng hồ mô phỏng, KHÔNG sleep thật → test xác định, chống flaky.
+- Frame đầu phát NGAY tại `setup()`; `_next_emit += interval_s` (không theo `now`) để nhịp không trôi.
+- Frame deterministic: mọi pixel = `frame_index % 256` (kiểm recency + value tăng dần).
+- `delay_s` là keyword-only (`*`) → mọi call `FakeDetector()` hiện có (8 chỗ) giữ nguyên chữ ký.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không có (bám đúng tasks.md 2.1/2.2 + design §7).
+
+**3. Trade-off đã cân nhắc:**
+- Clock tiêm vs sleep thật trong test → chọn tiêm (xác định, nhanh, không flaky) — cái mất: thêm 1 param `time_fn`.
+- `_next_emit += interval_s` (nhịp cố định) vs `= now + interval_s` (nhịp trôi theo call) → chọn cố định để nhịp độc lập tốc độ gọi (đúng R7.2).
+
+**4. Điều bạn nên biết:**
+- Baseline máy `k.nguyen.manh.toan` (rebuild `.venv` py3.11.9 + `.[dev,onnx,cv2,web]`, KHÔNG torch) TỰ-VERIFY THẬT: **443 passed/1 skipped (47.43s) · lint 5 kept/0 broken** — khớp end.md máy `toann` (#241).
+- Sau Wave 2.1/2.2: full-suite **448 passed/1 failed/1 skipped**; test fail = `test_step_09_shutdown::test_supervisor_non_cooperative_worker_terminated_cleanly` → chạy RIÊNG file đó = **6 passed** ⇒ flaky do tải (K-035, kill-process timing Windows), KHÔNG phải hồi quy (2 file test mới đều pass, lint 5/0, thay đổi không đụng supervisor).
+- Còn lại Wave 2: 2.3 (HWM) → 2.4 (async submit+flow-control) → 2.5 (poll+timeout+metrics_snapshot) cùng file `ZmqInferenceClient` (tuần tự). Rồi Wave 3/4/5.
+- git máy này: `main` 3 commit, tree sạch (lịch sử 72-commit/develop cũ không còn — K-050/K-052, git dựng lại qua máy; chưa push backup — nợ K-007).
+
+**Đã verify:** `pytest tests/test_fake_detector_delay.py tests/test_push_frame_source.py -q` = 6 passed; full = 448 passed/1 skipped + 1 flaky (isolated pass); lint `importlinter.api` = 5 kept/0 broken. · **Chưa verify:** hành vi cross-process end-to-end của nguồn/detector mới (Wave 4 mới dựng); POSIX (guard win32).

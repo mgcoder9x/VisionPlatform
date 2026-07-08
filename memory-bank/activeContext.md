@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
-## Trạng thái hiện tại (2026-07-07)
-**Cập nhật lúc:** 2026-07-07T15:10:00+07:00.
+## Trạng thái hiện tại (2026-07-08)
+**Cập nhật lúc:** 2026-07-08T11:15:00+07:00.
+**[✅ #242 — máy `k.nguyen.manh.toan`: rebuild venv + baseline THẬT + Wave 2 task 2.1/2.2 XONG]**
+- **Baseline TỰ-VERIFY THẬT máy này:** rebuild `.venv` (`py -3.11` py3.11.9 + `.[dev,onnx,cv2,web]`, KHÔNG torch) → `pytest -q` = **443 passed/1 skipped (47.43s)** · lint `importlinter.api` = **5 kept/0 broken**. Khớp end.md `toann` (#241). Có gốc "không hồi quy" tại máy này.
+- **Wave 2 task 2.1 ✅** `FakeDetector(delay_s=...)` keyword-only (mặc định 0.0, sleep trước trả) · **task 2.2 ✅** `adapters/push_frame_source.py::PushFrameSource` (nhịp cố định, `time_fn` tiêm được, frame deterministic value=idx%256, TIMEOUT khi chưa tới nhịp). +2 file test (`test_fake_detector_delay.py` 3 · `test_push_frame_source.py` 3) = **6 test mới PASS**. `tasks.md` 2.1/2.2=[x].
+- **Full-suite: 448 passed/1 skipped + 1 FLAKY** (`test_step_09_shutdown::...non_cooperative_worker...` → chạy RIÊNG = 6 passed ⇒ K-035 tải, KHÔNG hồi quy). lint 5/0. Log #242.
+- **Bước kế:** Wave 2 tuần tự cùng file `ZmqInferenceClient`: **2.3** set SNDHWM/RCVHWM TRƯỚC connect (đóng A3) → **2.4** async `submit()`+flow-control+đếm submitted-tại-lúc-gửi → **2.5** `poll_responses()`+quét timeout+`metrics_snapshot()`. Rồi Wave 3 (camera_worker async + cấm BLOCK+RTSP) → Wave 4 (cross-process spawn) → Wave 5 (nghiệm thu). Giữ additive, đường sync `infer()` cũ + 5 test cross-process cũ KHÔNG đổi.
+- **Nợ:** git chưa push backup (K-007); flaky shutdown dưới tải (K-035).
+---
+**[✅ BASELINE TỰ-VERIFY THẬT máy `toann` (#241) — sẵn sàng PHA code backpressure]**
 **[✅ BASELINE TỰ-VERIFY THẬT máy `toann` (#241) — sẵn sàng PHA code backpressure]**
 - **Rebuild `.venv`** (cũ trỏ máy `k.nguyen.manh.toan`, hỏng) bằng scoop **py3.13.12** + `.[dev,onnx,cv2,web]` (KHÔNG torch). **CHẠY THẬT: `pytest -q` = 436 passed/1 skipped (45.92s, EXIT 0) · lint `importlinter.api` = 5 kept/0 broken** (104 files/326 deps). Version khớp #232/#234.
 - → Có **gốc so sánh "không hồi quy"** tại máy này trước khi code. Journal K-052: phần baseline 🟢 đóng; phần thiếu `.git` 🔴 vẫn mở. Log #241.
