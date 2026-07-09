@@ -663,3 +663,40 @@ Evidence: `vp verify` 519/1 · 8 test (gồm integration gate giảm downstream 
 Đóng khi: (giới hạn — đóng nếu thêm MOG2/ROI/min-interval)
 Nội dung: (a) motion = tỉ-lệ-pixel-đổi full-frame → NHẠY với đổi-ánh-sáng-toàn-cục (đèn bật/tắt, mây qua → coi là motion, chạy detector thừa). MOG2/background-subtraction chịu tốt hơn = Non-Goal v1. (b) KHÔNG ROI-mask (gate cả khung, không chỉ vùng quan tâm). (c) KHÔNG min-frame-interval (tĩnh liên tục → detector KHÔNG chạy suốt; nếu cần "chắc chắn chạy 1 frame/N" để không miss → thêm sau). (d) cast int16 BẮT BUỘC (uint8 underflow). (e) frame đầu/đổi-shape → đi tiếp (không bỏ nhầm). (f) camera-affinity 1-instance/1-camera. (g) đặt TRƯỚC detect trong chuỗi.
 Vì sao ghi: rõ khi nào gate đếm nhầm motion (ánh sáng) + điểm nâng cấp (MOG2/ROI/min-interval); tránh kỳ vọng "lọc hoàn hảo".
+
+
+### K-064 — ✅ (2026-07-09) BÀI HỌC chống-drift: KHÔNG tin output tool DÁN trong tin nhắn là trạng thái hiện tại — TỰ chạy drift-check đầu phiên (§0)
+Status: ✅ (sự cố đã sửa; drift-check PASS #268)
+Scope: quy trình đầu phiên · AI-IMPLEMENTATION-LOG (#269)
+Nguồn: LOG Entry #269
+Evidence: log từng có 2× `### Entry #254` (Select-String) → sau xoá dup: drift-check PASS (#268, 172 entry); baseline 521/1 verify máy toann
+Đóng khi: (bài học — luôn áp dụng)
+Nội dung: Lượt #269 tôi TIN output drift-check user DÁN (hiển thị #253) là trạng thái hiện tại → append entry #254 → TRÙNG số với #254 thật (repo đã sync đè lên #268 giữa chừng). Output dán là SNAPSHOT CŨ (hook chụp sau lượt #253, trước khi #268 sync về). Anti-drift tự bắt: đọc INDEX thấy header #268 ≠ #253 → điều tra → xoá dup → PASS.
+Vì sao ghi (bài học vận hành): (1) §0 "TỰ chạy `py tests/drift_check.py` đầu phiên" là BẮT BUỘC — output dán/nhớ KHÔNG thay được (repo đa-máy có thể sync đè bất kỳ lúc nào, K-052). (2) Trước khi APPEND log/journal, luôn xác nhận max entry THẬT bằng grep/drift-check (chống trùng số). (3) Anti-drift linter (D-052) chứng minh giá trị lần nữa: nó là thứ phát hiện #268 vs #253.
+
+### K-065 — ✅ (2026-07-09) BÀI HỌC thiết kế: "0 diagnostic" chứng nhận CẤU TRÚC, KHÔNG chứng nhận ĐÚNG-BẢN-CHẤT — phải đọc-lại + đối chiếu code thật
+Status: ✅ (đã fix 3 lỗ design motion-gate-roi trước khi code)
+Scope: quy trình design-first · `.kiro/specs/motion-gate-roi/design.md` · LOG Entry #271
+Nguồn: LOG Entry #271
+Evidence: design #270 tuy `get_diagnostics`=No diagnostics (đúng Kiro Spec Format) VẪN chứa 3 lỗ logic; sau đọc code thật (`motion.py`/`MotionGateStage`/`pipeline_factory`/CLI) + đối chiếu → lộ 3 lỗ → sửa; get_diagnostics vẫn 0.
+Đóng khi: (bài học — luôn áp dụng cho mọi spec design-first)
+Nội dung: Review đối kháng design `motion-gate-roi` tìm 3 lỗ THIẾT KẾ: (1) mâu thuẫn thứ-tự mask/mean trong `changed_ratio` (pseudo-code mean-toàn-mảng ⟂ chú thích mean-trong-mask) → fix: mask-TRƯỚC-rồi-mean-sub (mean trong vùng xét, tránh đổi-sáng-ngoài-ROI tạo motion giả); (2) khoảng hở fail-fast — validate ROI range nằm trong `roi_mask` (cần shape→chỉ chạy runtime) → tách `validate_roi` thuần-số gọi ở config-time (ConfigError sớm); (3) CLI naming lạc prefix `--motion-gate-*`.
+Vì sao ghi (bài học vận hành): (1) checker format (0 diagnostic) là ĐIỀU KIỆN CẦN, KHÔNG đủ — nó không đọc được logic. Muốn design đúng-bản-chất phải TỰ đọc-lại + đối chiếu CODE THẬT nền tảng (chống bịa: mọi tham chiếu design phải khớp code đang chạy). (2) Fix ở tầng thiết kế (tài liệu) RẺ hơn fix sau khi code nhiều lần — đúng triết lý "valid thiết kế kiểm-chứng-được RỒI mới triển khai". (3) Nguyên tắc "kiểm cái gì ở nơi có đủ dữ kiện để kiểm" (range→config-time; rỗng-pixel→runtime-có-shape).
+
+### K-066 — 🟡 (2026-07-09) Cài torch CUDA (RTX 2060) trên máy `toann`: bẫy CPU-wheel + CDN PyTorch chậm → hoãn chờ mirror/mạng
+Status: 🟡 (torch CHƯA cài — network-bound; lệnh+version đã đúng, chờ mạng/mirror)
+Scope: môi trường GPU máy `toann` · LOG Entry #273 · liên quan K-048/K-049
+Nguồn: LOG Entry #273
+Evidence: `nvidia-smi` RTX 2060 6GB driver 591.86; wheel CPU 122MB vs CUDA 2532MB (quan sát pip); tốc độ CDN 11–615 kB/s eta tới 61h (đọc thật); venv sau hủy = numpy 2.5.1/opencv 5.0.0/torch chưa cài + `pytest` 546/1
+Đóng khi: cài được torch CUDA + `torch.cuda.is_available()==True` + re-verify baseline
+Nội dung: (1) **Bẫy CPU-wheel:** `--extra-index-url pypi` KHÔNG kèm pin → pip lấy torch bản cao từ PyPI (Windows = CPU-only, ~122MB) thay vì CUDA (~2.5GB). FIX: PIN `torch==2.6.0+cu124` (local-version `+cu124` chỉ có ở pytorch index) → buộc CUDA build, dep phụ vẫn lấy PyPI. (2) **CDN chậm:** download.pytorch.org từ mạng này 11–615 kB/s (eta 1.5–61h) → không khả dụng; fix gốc = mirror (bên thứ ba → cần user duyệt) hoặc chờ mạng tốt. (3) pip tải hết wheel TRƯỚC khi install → hủy giữa tải KHÔNG trôi gói (loại trừ K-049 lần này).
+Vì sao ghi (chống lặp công + chống bịa): phiên sau retry cài torch phải dùng NGAY lệnh đúng (`pip install "torch==2.6.0+cu124" "torchvision==0.21.0+cu124" --index-url .../cu124 --extra-index-url pypi`) + hiểu bẫy CPU-wheel, KHÔNG mất lượt phát hiện lại. Motion-gate-roi core đã xong (D-067) độc lập torch; GPU chỉ cần cho detector+tune thực địa.
+
+### K-067 — ✅ (2026-07-10) BÀI HỌC (củng cố K-065): review đối chiếu LUỒNG THỰC THI lộ lỗ "mù-lúc-outage" mà 0-diagnostic không bắt
+Status: ✅ (đã fix 3 lỗ design pipeline-observability trước khi code)
+Scope: quy trình design-first · `.kiro/specs/pipeline-observability/design.md` · LOG Entry #275
+Nguồn: LOG Entry #275
+Evidence: design #274 (0-diagnostic) vẫn có lỗ: emit-theo-giờ đặt sau `frames_read++` → camera reconnecting (read→no-data→continue) không bao giờ emit; lộ khi đọc-lại vòng lặp `PipelineRunner.run` thật; sau fix get_diagnostics vẫn 0.
+Đóng khi: (bài học — luôn áp dụng)
+Nội dung: Review đối kháng design pipeline-observability tìm 3 lỗ: (A) emit-theo-giờ phải ở ĐẦU vòng lặp (không sau frames_read++) → nếu không, mất-camera = mù đúng lúc cần quan sát; (B) "emit-cuối chỉ khi khác no-op" = isinstance coupling → luôn emit, noop là guard; (C) fps tích-luỹ che sự cố → dùng interval-fps.
+Vì sao ghi (bài học vận hành): củng cố K-065 — "0 diagnostic" chứng nhận CẤU TRÚC, KHÔNG chứng nhận LOGIC. Lỗ A đặc biệt tinh vi: chỉ lộ khi đọc-lại theo LUỒNG THỰC THI (nhánh no-data/continue), không lộ khi đọc từng phần. Nguyên tắc: review design phải TRACE luồng thật (gồm nhánh edge: no-data, reconnecting, raise) đối chiếu code nền, KHÔNG chỉ đọc mô tả xuôi. Fix ở tầng design rẻ hơn sau khi code.

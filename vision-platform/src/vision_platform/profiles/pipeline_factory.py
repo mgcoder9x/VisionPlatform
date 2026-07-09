@@ -67,13 +67,34 @@ def _stage_count(params: Mapping, detector: Any):
     return CountStage()
 
 
+def _parse_roi(raw: Any) -> tuple:
+    """Parse config 'roi' (list/tuple 4 số [x,y,w,h]) → tuple + validate range NGAY (fail-fast config-time)."""
+    from vision_platform.domain.motion import validate_roi
+    try:
+        vals = tuple(float(v) for v in raw)
+    except (TypeError, ValueError):
+        raise ConfigError(f"motion_gate 'roi' phải là 4 số [x,y,w,h], got {raw!r}")
+    if len(vals) != 4:
+        raise ConfigError(f"motion_gate 'roi' cần đúng 4 số [x,y,w,h], got {len(vals)}")
+    try:
+        validate_roi(*vals)
+    except ValueError as e:
+        raise ConfigError(f"motion_gate 'roi' không hợp lệ: {e}")
+    return vals
+
+
 def _stage_motion_gate(params: Mapping, detector: Any):
     # Gate CPU chặn frame tĩnh trước detector (giảm tải GPU). Đặt TRƯỚC 'detect' trong chuỗi.
     from vision_platform.runtime.stages.motion_gate_stage import MotionGateStage
+    roi = params.get("roi", None)
+    if roi is not None:
+        roi = _parse_roi(roi)
     return MotionGateStage(
         pixel_diff_threshold=params.get("pixel_diff_threshold", 25),
         min_area_ratio=params.get("min_area_ratio", 0.005),
         max_consecutive_skip=params.get("max_consecutive_skip", 0),
+        roi=roi,
+        illumination_robust=bool(params.get("illumination_robust", False)),
     )
 
 
@@ -130,7 +151,9 @@ _det_fake.allowed_params = frozenset({"model_size"})
 _det_pt.allowed_params = frozenset({"weights", "device"})
 _stage_detect.allowed_params = frozenset()
 _stage_count.allowed_params = frozenset()
-_stage_motion_gate.allowed_params = frozenset({"pixel_diff_threshold", "min_area_ratio", "max_consecutive_skip"})
+_stage_motion_gate.allowed_params = frozenset(
+    {"pixel_diff_threshold", "min_area_ratio", "max_consecutive_skip", "roi", "illumination_robust"}
+)
 _stage_track.allowed_params = frozenset({"iou_threshold", "max_age"})
 _stage_line_crossing.allowed_params = frozenset({"ax", "ay", "bx", "by"})
 _sink_jsonl.allowed_params = frozenset({"path"})

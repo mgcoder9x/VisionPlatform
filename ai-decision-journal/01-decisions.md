@@ -790,3 +790,39 @@ Evidence: `pytest tests/test_motion_gate.py` 10 passed; `vp verify` 521/1 · lin
 Links: D-064 (motion-gate), K-063
 Nội dung: Thêm `max_consecutive_skip` (0=không giới hạn/hành vi gốc; N>0=sau N skip liên tiếp ép 1 frame đi tiếp, artifact `motion_forced=True`). State `_consecutive_skips` reset khi motion/pass. Cắm config + CLI. Additive (default giữ hành vi cũ).
 Vì sao: motion-gate "chỉ chạy khi có motion" có LỖ: cảnh tĩnh lâu → detector không chạy suốt → vật đứng-yên/xuất-hiện-chậm bị bỏ sót. Bounded-skip ép detector chạy định kỳ = fix bản chất độ-tin-cậy (thà chạy thừa định kỳ hơn bỏ sót). Theo-frame (không theo-giây) = xác định, test được.
+
+### D-066 — 2026-07-09 — Mở spec `motion-gate-roi` (ROI-mask + bền-illumination) — DESIGN-FIRST, đóng K-063 tận gốc
+Status: 🔵 design-only (0 diagnostic — CHƯA code, chờ user valid + video thật để tune)
+Scope: `.kiro/specs/motion-gate-roi/{requirements,design}.md` (mở rộng `domain/motion.py::changed_ratio` + `roi_mask` mới + `MotionGateStage` param + config/CLI — thiết kế, chưa hiện thực)
+Nguồn: LOG Entry #270 · đóng K-063 (motion-gate v1 full-frame NHẠY đổi-sáng-đều toàn cục → gate mở nhầm → phí GPU) + Non-Goal v1 spec `motion-gate`
+Evidence: `get_diagnostics` design.md + requirements.md = **No diagnostics found** (cả 2, sau khi thêm `## Architecture`/`## Data Models`/`## Error Handling` + đổi `## Testing Strategy` + heading `# Requirements Document`)
+Links: D-064/D-065 (motion-gate), K-063, T-025 (metric numpy vs MOG2)
+Nội dung: 2 cải tiến ĐỘC LẬP opt-in default TẮT (backward-compat tuyệt đối): (a) **ROI-mask** chữ-nhật-chuẩn-hoá [0,1] → chỉ đo chuyển động trong vùng quan tâm; (b) **bền-illumination** = mean-subtraction numpy thuần → triệt đổi-sáng-ĐỀU (`curr=prev+c`→d=0) mà giữ chuyển động cục bộ. Cả 2 ở `domain` (numpy thuần, KHÔNG cv2). `changed_ratio` mở rộng bằng keyword-only optional (`mask`, `illumination_robust`) giữ chữ ký cũ. 6 Correctness Property map Requirements + doubt-driven review (forces + "khi nào KHÔNG dùng").
+Vì sao: đổi-sáng-đều toàn cục làm MỌI pixel dịch ~hằng số → v1 coi là "chuyển động" → chạy detector oan = ĐÚNG thứ gate sinh ra để tránh. Fix BẢN CHẤT = làm metric bất-biến với uniform-shift (mean-subtraction, chứng minh được bằng đại số) chứ không vá ngưỡng (fix ngọn, vỡ khi Δ-sáng đổi). Numpy thuần giữ domain sạch + test xác định no-GPU. MOG2 (cv2) mạnh hơn nhưng thuộc adapters → sub-spec sau (không over-engineer domain).
+
+### D-067 — 2026-07-09 — PHA2 code TDD `motion-gate-roi` HOÀN TẤT (ROI-mask + bền-illumination) — additive, verify 546/1·5/0
+Status: ✅ code lõi (verify no-GPU) · 🟡 ngưỡng mặc định chưa tune trên cảnh thật (chờ GPU+RTSP)
+Scope: `domain/motion.py` (changed_ratio +mask/illumination_robust · validate_roi · roi_mask) · `runtime/stages/motion_gate_stage.py` (+roi/illumination_robust, validate __init__, mask lazy) · `profiles/pipeline_factory.py` (_parse_roi + allowed_params) · `profiles/vision_slice_app.py` (--motion-gate-roi/--motion-gate-illum-robust) · `tests/test_motion_gate_roi.py` (25 test)
+Nguồn: LOG Entry #272 · hiện thực design D-066 (đã hardened #271)
+Evidence: `pytest tests/test_motion_gate_roi.py` 25 passed; full `pytest -q` **546 passed/1 skipped** (521→546 additive); `scripts\vp.cmd lint` **5 kept/0 broken**; `nvidia-smi` RTX 2060 6GB (GPU thật, torch chưa cài)
+Links: D-066 (design), T-025, K-063, K-065
+Nội dung: Code đúng design hardened — `changed_ratio` THU MASK trước rồi mean-subtraction (guard a.size==0 trước mean chống nan); `validate_roi` thuần-số (config-time fail-fast) + `roi_mask` cần-shape (runtime); stage validate ROI lúc `__init__` + mask lazy frame đầu + reset teardown; builder `_parse_roi`→ConfigError sớm; CLI 2 cờ giữ prefix `--motion-gate-*`. Test THỨ TỰ (`test_roi_x_illum_order`) là regression-guard cho Property 7. Backward-compat BIT-KHỚP v1 (test property-based). `_ROI_EPS=1e-9` chống false-reject fp khi x+w=1.
+Vì sao: GPU verified thật (RTX 2060) nhưng torch chưa cài → tách code-lõi-no-GPU (kiểm-chứng-được bằng numpy+đại số xác định) khỏi tune-ngưỡng-GPU/RTSP (bước nặng 2.5GB + secret, chờ user). Đúng triết lý "chính xác kiểm-chứng-được rồi mới triển khai" + "fix bản chất" (metric bất-biến uniform-shift, không vá ngưỡng).
+
+### D-068 — 2026-07-10 — Mở spec `pipeline-observability` (PHA1 design-first) — quan sát vận hành no-GPU (đóng K-017/C1)
+Status: 🔵 design-only (0 diagnostic — CHƯA code, chờ user valid)
+Scope: `.kiro/specs/pipeline-observability/{requirements,design}.md` (thiết kế: port `kernel` + wire `PipelineRunner` + impl runtime — chưa hiện thực)
+Nguồn: LOG Entry #274 · đóng K-017 (metrics chưa wire observability) + K-040 C1 (phần no-GPU)
+Evidence: `get_diagnostics` requirements.md + design.md = No diagnostics found; bám code thật (RunStats/InMemoryMetrics/PipelineRunner.run/source_id/motion SKIPPED)
+Links: K-017, K-040(C1), K-018, K-019, D-025 (InMemoryMetrics/#08), D-041 (PipelineRunner/RunStats)
+Nội dung: Quan sát vận hành ĐỊNH KỲ theo camera (fps/skip_rate/processed/errors) phát TRONG lúc run() qua PORT tiêm — `IPipelineObserver` (Protocol) + `PipelineSnapshot` (frozen DTO) ở kernel; `PipelineRunner` DI observer default `_NoopObserver` (backward-compat); emit theo nhịp (emit_every_n/emit_interval_s) + emit cuối trong finally; isolation lỗi observer (bọc+log). Impl v1 tái dùng InMemoryMetrics/structlog (no dep mới). 6 Correctness Property + doubt-driven review. Additive tuyệt đối (RunStats không đổi, baseline 546/1 giữ).
+Vì sao: ~100 cam thương mại KHÔNG thể "bay mù" — RunStats chỉ có lúc-kết-thúc → RTSP vô hạn = không thấy gì. Fix bản chất = kênh quan sát SONG SONG, live, per-camera, qua port (backend cắm sau). Chọn observability vì đóng lỗ đã-ghi + kiểm-chứng-được KHÔNG cần GPU/mạng (đang chờ torch). Prometheus/cross-process = Non-Goal (tầng adapters/cụm sau, tránh over-engineer).
+
+### D-069 — 2026-07-10 — PHA2 code TDD `pipeline-observability` HOÀN TẤT — quan sát vận hành live per-camera, additive
+Status: ✅ code lõi+port+test (verify 556/1·5/0) · 🟡 chưa wire CLI/config end-to-end
+Scope: `kernel/observability_port.py` (PipelineSnapshot DTO + IPipelineObserver Protocol) · `runtime/observers.py` (Noop/Collecting/Logging/MetricsObserver) · `runtime/pipeline_runner.py` (DI observer + emit đầu-loop/frame/cuối + interval-fps + isolation) · `tests/test_pipeline_observability.py` (10 test)
+Nguồn: LOG Entry #276 · hiện thực design D-068 (hardened #275) · đóng K-017 phần wire-qua-port
+Evidence: `pytest tests/test_pipeline_observability.py` 10 passed; full `pytest -q` **556 passed/1 skipped** (546→556 additive); `scripts\vp.cmd lint` **5 kept/0 broken**
+Links: D-068 (design), K-017, K-040(C1), K-067 (review), D-025 (InMemoryMetrics)
+Nội dung: Port kernel thuần (Protocol+DTO) + PipelineRunner DI observer default NoopObserver (backward-compat) + emit-theo-giờ ĐẦU-loop (chống mù-lúc-outage) + emit-theo-frame + emit-cuối trong finally (luôn phát kể cả raise) + interval-fps + isolation lỗi observer (đếm+log, không sập). Impl v1 tái dùng InMemoryMetrics/structlog (no dep). Test fps theo SEMANTIC (>0 khi chảy, =0 khi idle) thay vì số-cứng brittle. Bounded cardinality (nhãn chỉ source).
+Vì sao: ~100 cam thương mại không thể bay mù; RunStats chỉ có lúc-kết-thúc → RTSP vô hạn = không thấy gì. Kênh quan sát live per-camera qua PORT (backend Prometheus cắm sau không sửa runner) = fix bản chất. Kiểm-chứng-được KHÔNG cần GPU (clock tiêm + observer spy). Prometheus/cross-process/wire-CLI = Non-Goal/bước-sau (tránh over-engineer).

@@ -255,3 +255,12 @@ Chọn: **windows-latest**.
 - Cái mất: Actions-minutes đắt hơn ubuntu (~2×); khởi động runner chậm hơn.
 - Phương án B (bác) — ubuntu-latest: rẻ + nhanh, NHƯNG baseline 465/1 gồm test cross-process guard `sys.platform=='win32'` → trên ubuntu chúng SKIP → cổng CI KHÔNG phủ đúng phần đã dev/verify trên Windows = cổng yếu hơn thực tế.
 - Vì sao chấp nhận A (bản chất): mục tiêu CI = chặn regression ĐÚNG cái baseline đang bảo vệ (465/1 gồm win32). Chạy môi trường khác baseline = tự lừa mình (xanh CI nhưng bỏ sót path). Parity > tiết kiệm minutes. Nếu ngân sách minutes ép buộc → ubuntu + ghi rõ "win32 tests skip" (chưa cần).
+
+### T-025 — 2026-07-09 — Metric bền-illumination: mean-subtraction (numpy@domain) vs background-model MOG2 (cv2@adapters)
+Status: ✅ chốt cho v1 (design)
+Nguồn: LOG Entry #270 · D-066
+Links: D-066, K-063
+Chọn: **mean-subtraction (numpy thuần, ở `domain`)** cho v1.
+- Cái mất: chỉ triệt đổi-sáng ĐỀU (uniform-shift); KHÔNG xử-lý đổi-sáng-KHÔNG-đều (mây loang, đèn quét), bóng-đổ, camera rung. Ghi rõ R2.5 + Non-Goal (không over-claim).
+- Phương án B (bác cho v1) — MOG2/KNN background-subtraction (cv2): mô hình nền thích nghi mạnh hơn (xử được đổi-sáng dần + đa-modal), NHƯNG cần `cv2` → thuộc `adapters` (KHÔNG được vào `domain` theo luật 6-layer) + nặng hơn + khó test xác định no-GPU.
+- Vì sao chấp nhận A (bản chất): đổi-sáng-đều là NGUYÊN NHÂN GỐC của K-063 và mean-subtraction TRIỆT nó CHỨNG-MINH-ĐƯỢC bằng đại số (`curr=prev+c` → mean-sub → d=0), test numpy xác định no-GPU, giữ domain sạch (numpy). MOG2 mạnh hơn nhưng là bài toán KHÁC (đổi-sáng-không-đều) → tách sub-spec cv2/adapters khi thật cần (YAGNI, không kéo cv2 vào domain sớm). Trừu tượng đúng chỗ = tham số metric (raw vs mean-sub), không phải class-hierarchy.

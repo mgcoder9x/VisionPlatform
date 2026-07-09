@@ -1,7 +1,71 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
-## Trạng thái hiện tại (2026-07-09)
-**Cập nhật lúc:** 2026-07-09T20:55:00+07:00.
+## Trạng thái hiện tại (2026-07-10)
+**Cập nhật lúc:** 2026-07-10T03:10:00+07:00.
+**[✅ #277 — Wire observability vào CLI `vision_slice_app` (`--observe`) — quan sát end-to-end — máy `toann`, verify 557/1·5/0]**
+- Hoàn tất phần wire của D-069: 3 cờ `--observe`/`--observe-interval`/`--observe-every`; default thông minh (bật --observe không set nhịp → 5s/snapshot, thấy sức khỏe cả khi camera mất kết nối). Dùng `LoggingObserver` (log JSON) cho đường demo/dev.
+- **VERIFY THẬT:** +`test_cli_observe_smoke` (main --observe --observe-every 2 → rc0); full **557/1** (556→557 +1 additive); `vp lint` **5/0**.
+- **Ghi sổ:** LOG #277 · D-069→✅ code+wire CLI · INDEX #277/tổng 181. Drift-check cuối = PASS.
+- **Trạng thái sản phẩm (no-GPU, deploy-by-config đầy đủ trục + quan sát):** source→[motion_gate ROI+illum]→detect→track→line_crossing→count; sink JSONL/SQLite; +observability live per-camera (CLI `--observe`).
+- **Bước kế (chờ user):** (a) wire observer vào đường CONFIG-declarative (deploy nhiều-cam qua TOML) · (b) adapter Prometheus (adapters sub-spec) · (c) cài torch (mirror/mạng) → tune motion-gate-roi RTSP thật · (d) server-DB sink · (e) dừng mốc sạch.
+---
+**[✅ #276 — PHA2 CODE TDD `pipeline-observability` HOÀN TẤT — quan sát vận hành live per-camera — máy `toann`, verify 556/1·5/0]**
+- Hiện thực design đã hardened 2 vòng (#274 mở + #275 review fix 3 lỗ). Đọc API thật (`InMemoryMetrics.gauge`, `RunStats`, `PipelineRunner.run`) trước khi code.
+- **Code (4 file, additive):** `kernel/observability_port.py` (PipelineSnapshot DTO + IPipelineObserver Protocol, THUẦN) · `runtime/observers.py` (Noop/Collecting/Logging/MetricsObserver, tái dùng InMemoryMetrics, no dep) · `runtime/pipeline_runner.py` (DI observer default Noop + emit đầu-loop THEO-GIỜ chống mù-outage + emit THEO-FRAME + emit-CUỐI trong finally + interval-fps + isolation lỗi observer đếm+log) · `tests/test_pipeline_observability.py` 10 test.
+- **VERIFY THẬT:** 10 test mới pass (P7 outage: phát dù no-data + fps=0 idle · P4 isolation: RunStats==baseline + observer_errors>0 · P5 backward-compat: no-op==no-observer); full **556/1** (546→556 +10 additive); `vp lint` **5/0** (kernel port thuần, layer giữ). Test fps theo SEMANTIC (>0 chảy/=0 idle) thay số-cứng brittle.
+- **Ghi sổ:** LOG #276 · +D-069 (✅ code) · D-068→✅ · K-017→✅(pipeline)/🟡(backpressure) · INDEX #276/tổng 181. Drift-check cuối = PASS.
+- **Trạng thái sản phẩm:** hệ giám sát no-GPU giờ có quan sát vận hành live per-camera (fps/skip_rate/errors qua port, backend Prometheus cắm sau). Chuỗi: source→[motion_gate ROI+illum]→detect→track→line_crossing→count; sink JSONL/SQLite; +observability.
+- **Bước kế (chờ user):** (a) wire observer vào CLI/config `vision_slice_app` (quan sát end-to-end trong app, no-GPU) · (b) adapter Prometheus (adapters, sub-spec) · (c) cài torch (mirror/mạng) → tune motion-gate-roi RTSP thật · (d) server-DB sink · (e) dừng mốc sạch.
+---
+**[🔵 #275 — REVIEW đối kháng design `pipeline-observability` → fix 3 lỗ THIẾT KẾ trước khi code — máy `toann`]**
+- **Áp pattern #271** (đọc-lại-valid TRƯỚC code): tự phản biện design #274 + đối chiếu vòng lặp `PipelineRunner.run` thật. Tìm 3 lỗ:
+- **Lỗ-A (bản chất):** emit-theo-giờ đặt SAU `frames_read++` → camera reconnecting (read→no-data→continue) KHÔNG bao giờ emit = **mù đúng lúc cần quan sát**. FIX: kiểm-nhịp-theo-giờ ở ĐẦU vòng lặp (mọi iteration). +Property 7 + test P7.
+- **Lỗ-B:** "emit-cuối chỉ khi khác no-op" = isinstance coupling → LUÔN emit cuối (noop là guard).
+- **Lỗ-C:** fps tích-luỹ che sự cố gần đây → INTERVAL-fps `(frames_read-last_emit_frames)/Δt`. + ràng buộc observer non-blocking (chạy trong thread run()).
+- **Verify:** `get_diagnostics` 2 file = No diagnostics (sau sửa). Ghi sổ: LOG #275 · +K-067 (review phải TRACE luồng thật gồm nhánh no-data/raise — 0-diag không bắt lỗi logic) · INDEX #275/tổng 180. Drift-check cuối = PASS.
+- **VẪN CHƯA code** (PHA1). **Bước kế (chờ user valid design đã-hardened):** PHA2 code TDD (port `kernel` + wire runner emit-đầu-loop + interval-fps + impl runtime + test xác định clock-tiêm gồm test outage P7), kỳ vọng >546·5/0. Hoặc: cài torch (mirror) → tune motion-gate-roi RTSP · server-DB sink · dừng mốc sạch.
+---
+**[🔵 #274 — Mở spec `pipeline-observability` (PHA1 design-first) — quan sát vận hành no-GPU, đóng K-017/C1 — máy `toann`]**
+- **Chọn hướng không bị chặn GPU/mạng** (torch hoãn #273): observability cho analytics pipeline — ~100 cam thương mại cần thấy sức khỏe runtime SỐNG, không "bay mù". Đọc CODE THẬT trước (K-065): RunStats/InMemoryMetrics/PipelineRunner.run/source_id/motion SKIPPED.
+- **Thiết kế:** port `IPipelineObserver`(Protocol) + `PipelineSnapshot`(frozen DTO) @kernel; `PipelineRunner` DI observer default `_NoopObserver` (backward-compat); emit ĐỊNH KỲ (emit_every_n/emit_interval_s) trong run + emit CUỐI trong finally (giải "RunStats chỉ có lúc kết thúc → RTSP vô hạn = mù"); isolation lỗi observer (bọc+log, không nuốt). Impl v1 tái dùng InMemoryMetrics/structlog (no dep mới). Per-camera fps/skip_rate. Prometheus/cross-process = Non-Goal.
+- **Verify:** `get_diagnostics` 2 file spec = No diagnostics. Ghi sổ: LOG #274 · +D-068 (🔵) · INDEX #274/tổng 179. Drift-check cuối = PASS.
+- **CHƯA code** (PHA1). Con số fps/skip_rate là dẫn xuất + clock tiêm → test xác định PHA2. **Bước kế (chờ user):** (a) valid design pipeline-observability → PHA2 code TDD (port+DTO+wire+impl+test, kỳ vọng >546·5/0) · (b) cài torch CUDA khi mạng/mirror OK → tune motion-gate-roi RTSP thật · (c) server-DB sink · (d) dừng mốc sạch.
+---
+**[🟡 #273 — Thử cài torch CUDA (RTX 2060): fix bẫy CPU-wheel + CDN chậm → HOÃN GPU, CHỐT MỐC SẠCH — máy `toann`]**
+- **Bối cảnh:** user đồng ý cài torch (đã kiểm "có sẵn chưa" — không có). Mục tiêu: GPU cho detector YOLO + tune motion-gate-roi trên RTSP thật.
+- **2 fix gốc trong lúc cài:** (1) **bẫy CPU-wheel** — `--extra-index-url pypi` không pin → pip lấy nhầm torch 2.13.0 CPU-only 122MB (torch CUDA phải ~2.5GB); FIX: PIN `torch==2.6.0+cu124` (local-version chỉ có ở pytorch index). (2) **CDN pytorch chậm** 11–615 kB/s (eta tới 61h) → network-bound, KHÔNG khả dụng.
+- **Quyết định:** HOÃN GPU (mirror = bên thứ ba, chờ user duyệt; hoặc chờ mạng tốt) + **CHỐT MỐC SẠCH**. Verify venv sau hủy-cài NGUYÊN VẸN: python 3.13.12/numpy 2.5.1/opencv 5.0.0/torch chưa cài + **`pytest -q` 546/1** (pip tải hết TRƯỚC khi install → hủy giữa tải không trôi gói, loại trừ K-049).
+- **Ghi sổ:** LOG #273 · +K-066 (lệnh cài đúng + bẫy CPU-wheel + CDN chậm — cho phiên sau retry không lặp công) · INDEX #273/tổng 178. Drift-check cuối = PASS.
+- **Trạng thái sản phẩm:** motion-gate-roi (ROI-mask + bền-illumination) core XONG+verify+ghi sổ, độc lập torch. Hệ giám sát no-GPU deploy-by-config đầy đủ trục (motion_gate→detect→track→line_crossing→count; sink JSONL/SQLite).
+- **Bước kế (chờ user):** (a) **cài torch CUDA** khi có mirror-user-duyệt / mạng tốt → verify `cuda.is_available()` + re-baseline → **tune ngưỡng motion-gate-roi trên RTSP thật** (secret K-031 cẩn trọng) · (b) server-DB sink · (c) classify/ALPR · (d) CI run đầu (#257)/PAT rotate (#256) · (e) dừng mốc sạch.
+---
+**[✅ #272 — PHA2 CODE TDD `motion-gate-roi` HOÀN TẤT (ROI-mask + bền-illumination) — máy `toann`, verify 546/1·5/0]**
+- **GPU verified THẬT (§5, không tin claim mù):** `nvidia-smi` = RTX 2060 6GB driver 591.86 (GPU thật) NHƯNG venv KHÔNG có torch → detector GPU cần CUDA wheel ~2.5GB (K-049, chưa cài — bước nặng, chờ user duyệt). Phần LÕI motion-gate-roi = numpy@domain → code+verify được NGAY không cần GPU.
+- **Code PHA2 (5 file, additive):** `domain/motion.py` (`changed_ratio` +mask/illumination_robust mask-TRƯỚC-mean + guard nan · `validate_roi` config-time · `roi_mask` runtime) · `MotionGateStage` (+roi/illumination_robust, validate `__init__`, mask lazy, reset teardown) · `pipeline_factory._parse_roi`+allowed_params · CLI `--motion-gate-roi`/`--motion-gate-illum-robust` · `tests/test_motion_gate_roi.py` 25 test.
+- **VERIFY THẬT:** `pytest tests/test_motion_gate_roi.py` 25 passed; full **546/1** (521→546 +25 additive, test cũ không vỡ); `vp lint` **5/0** (domain vẫn numpy thuần). Test THỨ TỰ `test_roi_x_illum_order` = regression-guard Property 7. Backward-compat BIT-KHỚP v1.
+- **Ghi sổ:** LOG #272 · +D-067 (✅ code) · D-066→✅ · K-063→✅(giảm-thiểu) · INDEX #272/tổng 177 (D67·C20·T25·K65). Drift-check cuối = PASS.
+- **Bước kế (chờ user duyệt — có tiền đề rõ):** (a) **[bước nặng, HỎI trước] cài `.[pt]` CUDA (~2.5GB) → chạy RTSP thật + tune ngưỡng** motion-gate-roi trên cảnh thật (GPU đã có) — secret RTSP K-031 cần cẩn trọng · (b) server-DB sink · (c) classify/ALPR tầng-2 (GPU) · (d) CI run đầu (#257)/PAT rotate (#256) · (e) dừng mốc sạch.
+---
+**[🔵 #271 — REVIEW đối kháng (đọc-lại-valid) design `motion-gate-roi` → fix 3 lỗ THIẾT KẾ trước khi code — máy `toann`]**
+- **Đúng triết lý user** (thiết kế rõ → đọc-lại-valid kiểm-chứng-được → RỒI mới code): trước PHA2 code, tự phản biện design + ĐỌC CODE THẬT nền tảng (`domain/motion.py` 3 param · `MotionGateStage.__init__` · `pipeline_factory._stage_motion_gate.allowed_params={pixel_diff_threshold,min_area_ratio,max_consecutive_skip}` · CLI `--motion-gate`/`--motion-gate-max-skip`) rồi đối chiếu.
+- **3 lỗ THIẾT KẾ tìm ra + fix tận gốc:** (1) mâu thuẫn thứ-tự mask/mean trong `changed_ratio` → mask-TRƯỚC-rồi-mean-sub (mean trong vùng xét, tránh đổi-sáng-ngoài-ROI tạo motion giả) + Property 7; (2) khoảng hở fail-fast → tách `validate_roi` thuần-số (config-time, ConfigError sớm) ⟂ `roi_mask` rỗng-pixel (runtime cần shape); (3) CLI đổi `--motion-gate-roi`/`--motion-gate-illum-robust` (nhất quán prefix).
+- **Verify:** `get_diagnostics` design.md + requirements.md = No diagnostics (sau sửa). Ghi sổ: LOG #271 · +K-065 (0-diag chỉ chứng nhận cấu-trúc không chứng nhận đúng-bản-chất) · INDEX #271/tổng 176 (D66·C20·T25·K65). Drift-check cuối = PASS.
+- **VẪN CHƯA code** (PHA1). Toán mean-trong-ROI chứng-minh-đại-số nhưng chưa test numpy → verify PHA2. **Bước kế (chờ user):** (a) valid design đã-hardened → PHA2 code TDD (test được no-GPU: numpy dựng tay + đại số; ngưỡng mặc định cần video tune) · (b) server-DB sink · (c) classify/ALPR (GPU) · (d) chạy chuỗi video/pt thật · (e) CI run đầu (#257)/PAT rotate (#256) · (f) dừng mốc sạch.
+---
+**[🔵 #270 — Mở spec `motion-gate-roi` (PHA1 design-first) + đóng diagnostic Kiro Spec Format — máy `toann`]**
+- **§0 làm đúng lần này (bài học K-064):** TỰ chạy `python tests/drift_check.py` đầu phiên = PASS (#269, 173 entry) — KHÔNG tin output dán. Đọc con trỏ gốc-repo thật (không phải bản KIT placeholder — K-008).
+- **Việc:** spec `motion-gate-roi` (đóng K-063 tận gốc: motion-gate v1 full-frame nhạy đổi-sáng-đều → gate mở nhầm → phí GPU). File `requirements.md`+`design.md` tạo phiên trước nhưng CHƯA log + còn DIAGNOSTIC. Lượt này: thêm `## Architecture`/`## Data Models`/`## Error Handling` + đổi `## Testing Strategy` + heading `# Requirements Document` → **get_diagnostics 2 file = No diagnostics found**.
+- **Thiết kế (2 cải tiến ĐỘC LẬP, opt-in, default TẮT = v1 nguyên vẹn):** (a) ROI-mask chuẩn-hoá [0,1] (chỉ đo vùng quan tâm); (b) bền-illumination = mean-subtraction numpy@domain (triệt đổi-sáng-đều `curr=prev+c`→d=0, chứng-minh-đại-số). MOG2(cv2)=Non-Goal→adapters. `changed_ratio` mở rộng keyword-only optional (giữ chữ ký cũ).
+- **Ghi sổ:** LOG #270 · journal +D-066 (🔵 design-only) +T-025 (mean-sub vs MOG2) · INDEX header #270/tổng 175 (D66·C20·T25·K64). Drift-check cuối phiên = PASS.
+- **CHƯA code** (PHA1 design) — cần user duyệt design + video thật để tune ngưỡng. **Bước kế (chờ user):** (a) valid design motion-gate-roi → PHA2 code TDD (khi có video) · (b) server-DB sink · (c) classify/ALPR (cần GPU) · (d) chạy chuỗi video/pt thật · (e) CI run đầu (#257) / PAT rotate (#256) · (f) dừng mốc sạch.
+---
+**[⚠️→✅ #269 — SỰ CỐ DRIFT tự-gây + tự-sửa; RE-VERIFY frontier #268 trên máy `toann`]**
+- **Sự cố (K-064):** lượt này tin output drift-check user DÁN (#253, snapshot CŨ) → append entry #254 TRÙNG (repo thật đã sync đè lên **#268** từ máy `k.nguyen.manh.toan`). Anti-drift TỰ BẮT (đọc INDEX thấy #268≠#253) → xoá #254 trùng → PASS. Bài học: §0 TỰ chạy `py tests/drift_check.py` đầu phiên, KHÔNG tin output dán.
+- **RE-VERIFY THẬT máy `toann` (K-052):** `pytest -q` = **521 passed/1 skipped** · lint **5 kept/0 broken** · drift-check PASS (#269, 173 entry) — code sản phẩm #254–#268 (sync từ máy kia) CHẠY ĐÚNG ở đây.
+- **Frontier canonical = #269** (merge 2 máy). end.md (~#242) STALE. Log #269 · +K-064 (tổng 173).
+- **Trạng thái sản phẩm (từ #268):** hệ giám sát no-GPU deploy-by-config: source→[motion_gate]→detect→track→line_crossing→count; sink JSONL/SQLite. Tracking stateful (đóng Lỗ 3/K-042) + line-crossing + event-log + motion-gate(+min-interval).
+- **Bước kế (chờ user, no-GPU trước — từ #268):** (a) ROI-mask motion-gate · (b) server-DB sink · (c) classify/ALPR (cần GPU) · (d) chạy chuỗi video/pt thật · (e) CI run đầu (#257) / PAT rotate (#256) · (f) dừng mốc sạch.
+---
 **[✅ #268 — Motion-gate min-frame-interval (`max_consecutive_skip`) — chống bỏ sót khi tĩnh lâu]**
 - Đóng lỗ K-063: cảnh tĩnh lâu → motion-gate skip mãi → detector không chạy → bỏ sót vật đứng-yên. Thêm `max_consecutive_skip` (0=không giới hạn/gốc; N>0=sau N skip ép 1 frame đi tiếp, artifact `motion_forced`). Cắm config + CLI `--motion-gate-max-skip`. Additive (default giữ hành vi #267).
 - **VERIFY THẬT:** `pytest tests/test_motion_gate.py` = 10 passed (default-unlimited giữ hành vi cũ + pattern skip,skip,ÉP-pass,skip,skip). `scripts\vp.cmd verify` = **521 passed/1 skipped · lint 5/0 · drift PASS** (519→521). Journal +D-065 (tổng 172). Log #268.

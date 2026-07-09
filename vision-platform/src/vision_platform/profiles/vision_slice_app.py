@@ -179,6 +179,10 @@ def main(argv=None) -> int:
                         help="bật MotionGateStage (chặn frame tĩnh TRƯỚC detector → giảm tải GPU)")
     parser.add_argument("--motion-gate-max-skip", type=int, default=0,
                         help="ép chạy 1 frame sau N skip liên tiếp (0=không giới hạn) — chống bỏ sót khi tĩnh lâu")
+    parser.add_argument("--motion-gate-roi", default=None,
+                        help="ROI 'x,y,w,h' chuẩn-hoá [0,1] — motion-gate chỉ đo TRONG vùng này (bỏ trời/cây)")
+    parser.add_argument("--motion-gate-illum-robust", action="store_true",
+                        help="motion-gate bền đổi-sáng-ĐỀU (mean-subtraction) — chống trigger oan khi đèn/mây đổi sáng toàn cục")
     parser.add_argument("--track", action="store_true",
                         help="bật TrackingStage (theo dõi + đếm-không-trùng) sau CountStage")
     parser.add_argument("--track-iou", type=float, default=0.3, help="ngưỡng IoU association (khi --track)")
@@ -189,6 +193,12 @@ def main(argv=None) -> int:
                         help="path .jsonl ghi CrossingEvent mỗi lượt qua vạch — cần --line")
     parser.add_argument("--crossing-db", default=None,
                         help="path .sqlite ghi CrossingEvent vào SQLite (queryable) — cần --line")
+    parser.add_argument("--observe", action="store_true",
+                        help="bật quan sát vận hành (log snapshot fps/skip_rate/errors định kỳ) — thấy sức khỏe live")
+    parser.add_argument("--observe-interval", type=float, default=0.0,
+                        help="giây giữa 2 snapshot (0=tắt theo-giờ). Bật --observe mà không set nhịp → mặc định 5s")
+    parser.add_argument("--observe-every", type=int, default=0,
+                        help="số frame giữa 2 snapshot (0=tắt theo-frame)")
     args = parser.parse_args(argv)
 
     if args.validate and not args.config:
@@ -206,7 +216,20 @@ def main(argv=None) -> int:
     stages = []
     if args.motion_gate:
         from vision_platform.runtime.stages.motion_gate_stage import MotionGateStage
-        stages.append(MotionGateStage(max_consecutive_skip=args.motion_gate_max_skip))  # ĐẦU chuỗi: chặn frame tĩnh trước detect
+        roi = None
+        if args.motion_gate_roi:
+            parts = args.motion_gate_roi.split(",")
+            if len(parts) != 4:
+                parser.error("--motion-gate-roi cần 'x,y,w,h' (4 số)")
+            try:
+                roi = tuple(float(p) for p in parts)
+            except ValueError:
+                parser.error("--motion-gate-roi: 4 giá trị phải là số")
+        stages.append(MotionGateStage(   # ĐẦU chuỗi: chặn frame tĩnh trước detect
+            max_consecutive_skip=args.motion_gate_max_skip,
+            roi=roi,
+            illumination_robust=args.motion_gate_illum_robust,
+        ))
     stages.append(DetectStage(detector))
     stages.append(CountStage())
     track_summary = None
@@ -235,7 +258,16 @@ def main(argv=None) -> int:
         sinks.append(track_summary)
     sink = CompositeSink(sinks)
 
-    runner = PipelineRunner(source, executor, sink)
+    observer = None
+    emit_every = args.observe_every
+    emit_interval = args.observe_interval
+    if args.observe:
+        from vision_platform.runtime.observers import LoggingObserver
+        observer = LoggingObserver()
+        if emit_every == 0 and emit_interval == 0.0:
+            emit_interval = 5.0   # mặc định: snapshot mỗi 5s (thấy sức khỏe cả khi camera mất kết nối)
+    runner = PipelineRunner(source, executor, sink, observer=observer,
+                            emit_every_n=emit_every, emit_interval_s=emit_interval)
     stats = runner.run(max_frames=args.max_frames)
 
     print("=== vision_slice summary ===", file=sys.stderr)
