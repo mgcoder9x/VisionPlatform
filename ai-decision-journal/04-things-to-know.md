@@ -643,3 +643,13 @@ Evidence: `vp verify` 494/1 · 14 test line-crossing pass (qua/không/hướng/e
 Đóng khi: (giới hạn — đóng nếu nâng cấp: giữ history có max_age / đa-vạch / CrossingEvent)
 Nội dung: (a) prune id vắng mỗi frame → bounded memory 24/7, ĐỔI LẠI track nhấp-nháy (vắng 1 frame) reset mốc → có thể SÓT 1 lượt. (b) collinear (đi DỌC vạch) = không cắt (đúng nghĩa "đi dọc ≠ qua"). (c) 1 vạch/1 instance/1 camera (đa-vạch = nhiều LineCrossingStage). (d) quy ước in/out PHỤ THUỘC thứ tự (A,B) — đảo A,B đảo in/out → cấu hình đúng chiều. (e) `--line` cần `--track`; đường sync (hợp video/synthetic, không real-time RTSP). (f) chưa có CrossingEvent DTO (log lúc-nào-ai-qua) — Non-Goal v1.
 Vì sao ghi: chống kỳ vọng sai + chỉ điểm nâng cấp; các giới hạn là đánh đổi CÓ CHỦ ĐÍCH (bounded memory > chính xác nhấp-nháy) đúng cho sản phẩm 24/7.
+
+
+### K-062 — 🟡 (2026-07-09) CrossingEventJsonlSink / event-log v1: giới hạn + cách dùng
+Status: 🟡 (giới hạn thiết kế đã-biết, KHÔNG bug)
+Scope: `kernel/crossing_event.py` · `adapters/crossing_event_sink.py` · `LineCrossingStage` (clock/crossing_events) · wire `--crossing-out`
+Nguồn: LOG Entry #264 · design `crossing-event-log`
+Evidence: `vp verify` 501/1 · 7 test crossing-event pass
+Đóng khi: (giới hạn — đóng nếu thêm DB sink / dedupe / schema-version)
+Nội dung: (a) chỉ JSONL (DB/queue = impl ISink khác sau — Non-Goal v1). (b) KHÔNG dedupe qua restart: sink mở "a" (append) → chạy lại ghi TIẾP (trùng nếu re-process cùng frame); dedupe/idempotency là bước sau. (c) `event_ts` wall-clock UTC "Z" (giờ thật, không monotonic); flush mỗi dòng → crash cứng mất tối đa 1 event (đánh đổi durability/tốc độ). (d) `--crossing-out` cần `--line` (cần `--track`); đường sync. (e) clock TIÊM được cho test xác định.
+Vì sao ghi: rõ ranh giới dùng (append→có thể trùng khi re-run) + điểm nâng cấp (DB/dedupe) — tránh kỳ vọng "exactly-once" mà v1 chưa có.

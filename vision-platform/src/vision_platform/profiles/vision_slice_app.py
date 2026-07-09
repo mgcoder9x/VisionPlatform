@@ -96,6 +96,8 @@ def _validate(args, parser):
             [float(p) for p in parts]
         except ValueError:
             parser.error("--line: cần 4 số 'ax,ay,bx,by'")
+    if args.crossing_out and not args.line:
+        parser.error("--crossing-out cần --line (ghi sự kiện qua vạch)")
 
 
 def _validate_config_only(path: str) -> int:
@@ -177,6 +179,8 @@ def main(argv=None) -> int:
     parser.add_argument("--track-max-age", type=int, default=30, help="số frame giữ track khi mất dấu (khi --track)")
     parser.add_argument("--line", default=None,
                         help="vạch đếm-qua dạng 'ax,ay,bx,by' (ORIGINAL_FRAME) — cần --track")
+    parser.add_argument("--crossing-out", default=None,
+                        help="path .jsonl ghi CrossingEvent mỗi lượt qua vạch — cần --line")
     args = parser.parse_args(argv)
 
     if args.validate and not args.config:
@@ -208,6 +212,9 @@ def main(argv=None) -> int:
     if args.out:
         from vision_platform.adapters.jsonl_event_sink import JsonlEventSink
         sinks.append(JsonlEventSink(args.out))
+    if args.crossing_out:
+        from vision_platform.adapters.crossing_event_sink import CrossingEventJsonlSink
+        sinks.append(CrossingEventJsonlSink(args.crossing_out))
     if track_summary is not None:
         sinks.append(track_summary)
     sink = CompositeSink(sinks)
@@ -229,6 +236,8 @@ def main(argv=None) -> int:
         print(f"  crossings_in : {track_summary.cross_in}", file=sys.stderr)
         print(f"  crossings_out: {track_summary.cross_out}", file=sys.stderr)
         print(f"  crossings_tot: {track_summary.cross_total}", file=sys.stderr)
+    if args.crossing_out:
+        print(f"  crossing events → {args.crossing_out}", file=sys.stderr)
     if args.out:
         print(f"  events → {args.out}", file=sys.stderr)
     return 0

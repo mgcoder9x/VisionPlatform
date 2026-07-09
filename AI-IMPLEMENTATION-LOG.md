@@ -5351,3 +5351,22 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Non-Goal v1: DB/queue sink · dedupe qua restart · event count/classify · schema-version (đều sub-spec sau).
 
 **Đã verify:** `get_diagnostics` 2 file = **0 diagnostic**; API tham chiếu (`JsonlEventSink` mẫu, `LineCrossingStage._do_process` chỗ chèn, `Track`, `ISink`) đã đọc code thật. · **Chưa verify:** runtime (chưa code — PHA2); verify bằng test TDD (clock tiêm + tmp_path) sau khi user valid.
+
+
+### Entry #264 — 2026-07-09 — PHA2 code TDD `crossing-event-log` HOÀN TẤT + wire `--crossing-out` — Kiro-Opus
+
+**Bối cảnh:** User "tiếp tục" sau design #263. Code TDD: biến đếm-qua-vạch → sự kiện JSONL bền vững.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- `kernel/crossing_event.py::CrossingEvent` (frozen DTO: track_id/label/direction/source_id/cx,cy/event_ts).
+- Sửa ADDITIVE `LineCrossingStage`: thêm `clock` kwarg (default now-UTC) + phát `artifacts["crossing_events"]` (dùng CHUNG biến `direction` với nhánh đếm → 1 nguồn). counts + test #262 KHÔNG đổi.
+- `adapters/crossing_event_sink.py::CrossingEventJsonlSink` (theo mẫu JsonlEventSink: mkdir/append/flush, chỉ SUCCESS, `.get("crossing_events",())` backward-compat).
+- Wire `--crossing-out <path>` (cần `--line`, validate fail-fast).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** LineCrossingStage sửa ADDITIVE (clock default + artifact) — 14 test #262 vẫn pass (không kiểm crossing_events).
+
+**3. Trade-off đã cân nhắc (design QĐ-1..5 #263):** event-trong-stage (nguồn sự thật) · clock-tiêm (xác định + wall-clock) · sink RIÊNG (SRP) · DTO chỉ tâm cx,cy (json tối giản).
+
+**4. Điều bạn nên biết (K-062):** Non-Goal v1: DB/queue sink (chỉ JSONL — DB là ISink khác sau) · KHÔNG dedupe qua restart (append thuần → restart ghi tiếp) · KHÔNG event cho count-per-frame · KHÔNG schema-version. `--crossing-out` v1 sync (như `--track/--line`).
+
+**Đã verify (CHẠY THẬT):** `pytest tests/test_crossing_event.py` = **7 passed** (stage phát event clock-tiêm + không-qua→() + clock mặc định "Z" + sink ghi N dòng JSON đúng field + skip non-SUCCESS/no-event + 2 wiring `--crossing-out`); `scripts\vp.cmd verify` = **501 passed/1 skipped · lint 5/0 · drift PASS · EXIT 0** (494→501, additive, không flaky). · **Chưa verify:** `--crossing-out` trên video/pt THẬT (mode ngoài CI); durability khi crash cứng (flush mỗi dòng → mất tối đa 1 event, thiết kế chấp nhận).

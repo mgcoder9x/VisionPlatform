@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-09)
-**Cập nhật lúc:** 2026-07-09T17:40:00+07:00.
+**Cập nhật lúc:** 2026-07-09T18:20:00+07:00.
+**[✅ #264 — `crossing-event-log` HOÀN TẤT (code TDD + wire `--crossing-out`) — sự-kiện qua-vạch → JSONL bền vững]**
+- Code PHA2 (sau design #263): `kernel/crossing_event.py::CrossingEvent` + sửa ADDITIVE `LineCrossingStage` (clock tiêm + phát `crossing_events`) + `adapters/crossing_event_sink.py::CrossingEventJsonlSink` (mẫu JsonlEventSink) + wire `--crossing-out` + `tests/test_crossing_event.py` (7 test).
+- **VERIFY THẬT:** `pytest tests/test_crossing_event.py` = 7 passed; `scripts\vp.cmd verify` = **501 passed/1 skipped · lint 5/0 · drift PASS · EXIT 0** (494→501, additive; test #262 vẫn pass). Journal D-061 ✅ +K-062 (tổng 167). Log #264.
+- **Chuỗi sản phẩm end-to-end giờ:** source → Detect → Track(`--track`) → LineCrossing(`--line`) → sink + CrossingEventJsonlSink(`--crossing-out`). 3 nghiệp vụ: đếm-không-trùng + đếm-qua-vạch + LOG-sự-kiện-bền-vững. Hệ đã SINH DỮ LIỆU dùng được (audit/tích hợp).
+- **Bước kế (chờ user):** (a) classify tầng-2 (cần model/GPU) · (b) DB/queue sink (thay JSONL) · (c) đa-vạch/zone · (d) config-declarative gồm track/line/crossing · (e) chạy trên video/pt thật · (f) A1 batching (GPU) · (g) dừng mốc sạch.
+- Song song chờ: CI run đầu (#257) · PAT rotate (#256).
+---
 **[🔵 #263 — Mở spec `crossing-event-log` PHA1 design-first (đếm→sự-kiện JSONL bền vững) — chờ user valid]**
 - Bước sản phẩm kế (khuyến nghị #1 sau line-crossing): biến `crossings_*` (aggregate RAM) → bản-ghi TỪNG SỰ KIỆN JSONL (audit/tích hợp downstream) — làm hệ thống sinh dữ liệu dùng được, no-GPU.
 - Tạo `.kiro/specs/crossing-event-log/{requirements,design}.md` — **0 diagnostic**, CHƯA code.

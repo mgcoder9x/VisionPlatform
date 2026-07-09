@@ -6,10 +6,12 @@ với đoạn vạch [A,B] → nếu cắt: +1 lượt theo hướng. Ghi artifa
 STATEFUL (nhớ center_prev/track_id). Camera-affinity (K-042): 1 instance/1 camera/1 vạch — source lạ → fail-fast.
 Bounded memory (R3.4): chỉ giữ center_prev cho track CÓ MẶT frame này (prune id vắng) → RAM ~ track sống.
 """
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Callable, Optional
 
 from vision_platform.domain.bbox import CoordinateSpace
 from vision_platform.domain.geometry import orient, segments_intersect
+from vision_platform.kernel.crossing_event import CrossingEvent
 from vision_platform.kernel.media_packet import MediaPacket
 from vision_platform.runtime.base_stage import BaseStage
 
@@ -20,11 +22,14 @@ class LineCrossingStage(BaseStage):
         ax: float, ay: float, bx: float, by: float,
         *,
         space: CoordinateSpace = CoordinateSpace.ORIGINAL_FRAME,
+        clock: Optional[Callable[[], datetime]] = None,
     ):
         super().__init__("line_crossing")
         self._a = (float(ax), float(ay))
         self._b = (float(bx), float(by))
         self._space = space
+        # clock TIÊM (sub-spec crossing-event-log): mặc định wall-clock UTC; test tiêm giờ cố định → xác định.
+        self._clock = clock or (lambda: datetime.now(timezone.utc))
         self._last_center: dict[int, tuple[float, float]] = {}
         self._in = 0
         self._out = 0
@@ -48,6 +53,7 @@ class LineCrossingStage(BaseStage):
         ax, ay = self._a
         bx, by = self._b
         seen: set[int] = set()
+        events: list[CrossingEvent] = []
         for tr in tracks:
             if tr.box.space != self._space:
                 raise ValueError(
@@ -61,10 +67,17 @@ class LineCrossingStage(BaseStage):
             prev = self._last_center.get(tr.track_id)
             if prev is not None and segments_intersect(prev, curr, self._a, self._b):
                 # Hướng: dấu phía của tâm HIỆN TẠI so với vạch A→B (quy ước theo thứ tự A,B — R2.1/2.3).
-                if orient(ax, ay, bx, by, cx, cy) > 0:
+                direction = "in" if orient(ax, ay, bx, by, cx, cy) > 0 else "out"
+                if direction == "in":
                     self._in += 1
                 else:
                     self._out += 1
+                # Phát sự kiện (sub-spec crossing-event-log): dùng CHUNG `direction` với đếm (1 nguồn, không lệch).
+                ts = self._clock().isoformat().replace("+00:00", "Z")
+                events.append(CrossingEvent(
+                    track_id=tr.track_id, label=tr.label, direction=direction,
+                    source_id=self._source_id, cx=cx, cy=cy, event_ts=ts,
+                ))
             self._last_center[tr.track_id] = curr
 
         # Prune (R3.4 bounded memory): bỏ center_prev của track KHÔNG có mặt frame này.
@@ -76,6 +89,7 @@ class LineCrossingStage(BaseStage):
             .with_artifact("crossings_in", self._in)
             .with_artifact("crossings_out", self._out)
             .with_artifact("crossings_total", self._in + self._out)
+            .with_artifact("crossing_events", tuple(events))
         )
 
     def teardown(self) -> None:

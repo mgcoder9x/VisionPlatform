@@ -742,8 +742,8 @@ Nội dung: Thiết kế đếm vật băng qua vạch `[A,B]` theo hướng (in
 Vì sao: "đếm qua cửa" = nghiệp vụ phổ biến + là bước kế tự nhiên trên tracking (cần track_id để biết cùng vật). Design-first: valid geometry/quy-ước-hướng trước khi code (subsystem có hình học dễ sai). Nhánh scale (A1) vẫn chặn GPU.
 
 
-### D-061 — 2026-07-09 — Mở spec `crossing-event-log` (PHA1 design-first) — biến đếm-qua-vạch thành SỰ KIỆN JSONL bền vững
-Status: 🔵 (design-first 0-diag · CHƯA code · chờ user valid → PHA2 TDD)
+### D-061 — 2026-07-09 — Spec + code `crossing-event-log` — biến đếm-qua-vạch thành SỰ KIỆN JSONL bền vững
+Status: ✅ (PHA1 design 0-diag + PHA2 code TDD + wire `--crossing-out` HOÀN TẤT — verify **501/1 · lint 5/0**)
 Scope: `.kiro/specs/crossing-event-log/{requirements,design}.md` (2 file, 0 code)
 Nguồn: LOG Entry #263 · user "cực sâu tiếp tục" · xây trên D-060 (line-crossing) · tái dùng mẫu JsonlEventSink
 Evidence: `get_diagnostics` 2 file = 0 diagnostic; API bám thật (`JsonlEventSink`, `LineCrossingStage._do_process`, `Track`, `ISink`)
