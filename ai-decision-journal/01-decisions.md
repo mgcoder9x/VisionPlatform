@@ -730,3 +730,13 @@ Evidence: `get_diagnostics` 2 file = 0 diagnostic; API bám code thật (`domain
 Links: K-042 (stateful+camera-affinity), D-041 (slice stateless), T-011 (slice-trước), D-039 (pipeline-runner)
 Nội dung: Thiết kế analytics STATEFUL đầu tiên (tracking + đếm-không-trùng) — 3 lớp: `domain/tracking.py::greedy_associate` (thuần, index-based, tái dùng iou) + `kernel` `Track` DTO/`ITracker` port + `runtime` `IouTracker`(giữ state)/`TrackingStage`(BaseStage, camera-affinity fail-fast). Additive: KHÔNG sửa CountStage (fan-out chung `detections`). 6 Correctness Property + testing no-GPU (chuỗi Detection dựng tay). IoU-greedy (không ML/GPU) → xác định.
 Vì sao: bước nghiệp vụ kế của sản phẩm + là nền cho mọi analytics (không trùng đếm). Nhánh scale (A1) bị chặn GPU (R6.1) → chọn nghiệp vụ làm+test được không-GPU. Design-first (user preference): valid design rồi mới code.
+
+
+### D-060 — 2026-07-09 — Mở spec `line-crossing-count` (PHA1 design-first) — đếm vật qua vạch, analytics tầng-2 trên tracking
+Status: 🔵 (design-first 0-diag · CHƯA code · chờ user valid → PHA2 TDD)
+Scope: `.kiro/specs/line-crossing-count/{requirements,design}.md` (2 file, 0 code)
+Nguồn: LOG Entry #261 · user "cực sâu tiếp tục" · xây trên D-059 (tracking) · roadmap R3.3
+Evidence: `get_diagnostics` 2 file = 0 diagnostic; API bám thật (`Track.box`, `BaseStage._do_process`, `with_artifact`)
+Links: D-059 (tracking — cung cấp track_id), K-042 (camera-affinity), K-060 (giới hạn tracking)
+Nội dung: Thiết kế đếm vật băng qua vạch `[A,B]` theo hướng (in/out/total) — geometry thuần `domain/geometry.py` (orientation/cross-product + segments_intersect) + `LineCrossingStage`@runtime (stateful, đọc artifacts["tracks"], camera-affinity fail-fast, prune-bounded-memory). Additive (không sửa TrackingStage/lõi). 6 Property + test no-GPU (Track dựng tay).
+Vì sao: "đếm qua cửa" = nghiệp vụ phổ biến + là bước kế tự nhiên trên tracking (cần track_id để biết cùng vật). Design-first: valid geometry/quy-ước-hướng trước khi code (subsystem có hình học dễ sai). Nhánh scale (A1) vẫn chặn GPU.

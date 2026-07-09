@@ -5286,3 +5286,28 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - K-060 cập nhật: "CHƯA wire --track" → ĐÃ wire.
 
 **Đã verify (CHẠY THẬT):** `pytest tests/test_object_tracking.py` = **15 passed** (thêm `test_slice_app_track_wiring`: `main(["--source","fake","--frames","5","--track"])`→rc0 + stderr "unique_tracks: 1"); full `pytest -q` = **480 passed/1 skipped** (sạch, sau khi xác nhận flake K-035); lint 5/0; drift PASS. · **Chưa verify:** `--track` trên video/RTSP/pt THẬT (mode ngoài CI); real-time latency (sync limit).
+
+
+### Entry #261 — 2026-07-09 — Mở spec `line-crossing-count` (PHA1 design-first) — analytics tầng-2 trên tracking — Kiro-Opus
+
+**Bối cảnh:** User "cực sâu tiếp tục". Bước sản phẩm kế (khuyến nghị #1 sau tracking): đếm vật QUA VẠCH (people/vehicle counting) — nghiệp vụ thương mại phổ biến, xây TRÊN tracking (#259), làm+test không-GPU.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Mở spec `line-crossing-count` design-first: `requirements.md` (5 Req EARS) + `design.md` (geometry thuần `domain` + `LineCrossingStage` `runtime` stateful; thuật toán cắt-đoạn-thẳng orientation/cross-product; hướng in/out theo dấu phía; bounded-memory prune; camera-affinity; 6 Property; test no-GPU). CẢ HAI **0 diagnostic**. CHƯA CODE.
+- Geometry nhận `(x,y)` rời (KHÔNG BBox) → domain thuần nhất, tái dùng cho zone sau.
+- strict `d>0` (điểm trên vạch = chưa qua) → chỉ đếm khi QUA HẲN (chống đếm rung mép).
+- prune center_prev của track vắng mỗi frame → bounded memory 24/7.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không (additive — build TRÊN artifacts["tracks"], KHÔNG sửa TrackingStage/lõi).
+
+**3. Trade-off đã cân nhắc (chi tiết design QĐ-1..6):**
+- geometry (x,y) rời vs nhận BBox → rời (thuần, tái dùng zone).
+- prune-id-vắng (bounded) vs giữ-hết (chính xác nhấp-nháy) → prune (RAM 24/7 quan trọng hơn; sót-1-lượt-khi-nhấp-nháy chấp nhận + tài liệu).
+- build trên tracks vs tự-track trong stage → trên tracks (SRP + fan-out).
+
+**4. Điều bạn nên biết:**
+- PHA thiết kế: CHỜ user valid → PHA2 code TDD (geometry + LineCrossingStage + test, kỳ vọng >480, lint 5/0). Chưa 1 dòng code.
+- Giới hạn v1 (design self-review): track nhấp-nháy reset mốc (sót 1 lượt); collinear-chồng-vạch coi không cắt; 1 vạch/instance (đa-vạch = nhiều instance); chưa CrossingEvent DTO.
+- Quy ước hướng phụ thuộc thứ tự (A,B) — phải cấu hình đúng để in/out đúng nghĩa.
+
+**Đã verify:** `get_diagnostics` 2 file spec = **0 diagnostic** (sau khi bổ sung User Story R4/R5 mà checker bắt thiếu); API tham chiếu (`Track.box`, `BaseStage`, `with_artifact`) đã đọc code thật (#259). · **Chưa verify:** hành vi runtime (chưa code — PHA2); thuật toán cắt-đoạn-thẳng sẽ verify bằng test TDD sau khi user valid.

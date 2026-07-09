@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-09)
-**Cập nhật lúc:** 2026-07-09T15:45:00+07:00.
+**Cập nhật lúc:** 2026-07-09T16:20:00+07:00.
+**[🔵 #261 — Mở spec `line-crossing-count` PHA1 design-first (đếm qua vạch trên nền tracking) — chờ user valid]**
+- Bước sản phẩm kế (khuyến nghị #1 sau tracking): đếm vật QUA VẠCH (people/vehicle counting) — xây trên tracks (#259), no-GPU.
+- Tạo `.kiro/specs/line-crossing-count/{requirements,design}.md` — **0 diagnostic** (đã bổ sung User Story R4/R5 checker bắt), CHƯA code.
+- **Thiết kế:** geometry thuần `domain/geometry.py` (_orient cross-product + segments_intersect) + `LineCrossingStage`@runtime (stateful: _last_center/track_id, camera-affinity fail-fast, prune-bounded-memory, hướng in/out theo dấu phía, strict d>0 chống đếm rung). Additive (đọc artifacts["tracks"], không sửa TrackingStage). 6 Property + test no-GPU. Journal +D-060. Log #261.
+- **Bước kế (CHỜ user valid design):** → PHA2 code TDD (geometry + LineCrossingStage + test + tuỳ chọn wire `--line`), kỳ vọng >480 · lint 5/0. Nếu muốn feature khác → đổi hướng.
+- Song song chờ: CI run đầu (#257) · A1 cần GPU · PAT rotate (#256).
+---
 **[✅ #260 — Wire `--track` vào `vision_slice_app`: tracking chạy END-TO-END trong app]**
 - Cờ `--track`/`--track-iou`/`--track-max-age` → append `TrackingStage(IouTracker)` sau CountStage. `_TrackSummarySink` in `unique_count`/`active_count` đọc từ ARTIFACTS (không đọc tracker sau run — vì `run()` teardown→reset→0; verify bằng đọc code runner).
 - **VERIFY THẬT:** `test_object_tracking.py` = 15 passed (thêm smoke `main(--source fake --frames 5 --track)`→rc0 + "unique_tracks: 1"); full `pytest -q` = **480 passed/1 skipped** (SẠCH sau khi xác nhận flake K-035 không hồi quy: shutdown chạy riêng 6/6, 0 orphan, fail rơi test khác nhau); lint 5/0; drift PASS. Log #260, K-060 cập nhật (đã wire).
