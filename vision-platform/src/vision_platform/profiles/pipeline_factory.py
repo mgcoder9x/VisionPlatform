@@ -133,19 +133,6 @@ _stage_count.allowed_params = frozenset()
 _stage_motion_gate.allowed_params = frozenset({"pixel_diff_threshold", "min_area_ratio", "max_consecutive_skip"})
 _stage_track.allowed_params = frozenset({"iou_threshold", "max_age"})
 _stage_line_crossing.allowed_params = frozenset({"ax", "ay", "bx", "by"})
-
-# --- Hợp đồng artifact (requires/produces) để validate THỨ TỰ stage lúc config (fail-fast, không đợi runtime) ---
-# `requires` = artifact stage ĐỌC (phải do stage TRƯỚC tạo); `produces` = artifact stage GHI. Builder chưa khai → lenient.
-_stage_motion_gate.requires = frozenset()
-_stage_motion_gate.produces = frozenset({"motion_ratio"})
-_stage_detect.requires = frozenset()
-_stage_detect.produces = frozenset({"detections"})
-_stage_count.requires = frozenset({"detections"})
-_stage_count.produces = frozenset({"count", "count_by_label"})
-_stage_track.requires = frozenset({"detections"})
-_stage_track.produces = frozenset({"tracks", "unique_count", "active_count"})
-_stage_line_crossing.requires = frozenset({"tracks"})
-_stage_line_crossing.produces = frozenset({"crossings_in", "crossings_out", "crossings_total", "crossing_events"})
 _sink_jsonl.allowed_params = frozenset({"path"})
 _sink_crossing_events.allowed_params = frozenset({"path"})
 _sink_crossing_events_sqlite.allowed_params = frozenset({"path"})
@@ -184,25 +171,6 @@ def _lookup(registry: Mapping, section: str, type_: str):
     return table[type_]
 
 
-def _check_stage_deps(stages: Sequence, registry: Mapping) -> None:
-    """Kiểm PHỤ THUỘC ARTIFACT theo thứ tự stage (fail-fast lúc config, không đợi runtime — K-046-style cho thứ tự).
-
-    Duyệt stages theo thứ tự, giữ tập `available` (artifact đã được tạo). Stage `requires` artifact chưa có →
-    `ConfigError` (nêu rõ thiếu gì). Builder chưa khai `requires`/`produces` (bên thứ 3) → lenient (bỏ qua).
-    """
-    available: set[str] = set()
-    for st in stages:
-        builder = _lookup(registry, "stages", st.type)
-        requires = getattr(builder, "requires", frozenset())
-        missing = set(requires) - available
-        if missing:
-            raise ConfigError(
-                f"stage '{st.type}' cần artifact {sorted(missing)} nhưng chưa stage nào TRƯỚC nó tạo ra "
-                f"(vd cần 'detect'→detections, 'track'→tracks). Kiểm THỨ TỰ stages."
-            )
-        available |= set(getattr(builder, "produces", frozenset()))
-
-
 def validate_config(app, *, registry: Mapping = DEFAULT_REGISTRY) -> None:
     """Kiểm config HỢP LỆ mà KHÔNG dựng object (no-GPU/no-torch): mọi `type` ∈ registry + detect-có-detector.
 
@@ -222,16 +190,12 @@ def validate_config(app, *, registry: Mapping = DEFAULT_REGISTRY) -> None:
                               f"detector '{p.detector.type}'", p.detector.params)
             if any(st.type == "detect" for st in p.stages) and p.detector is None:
                 raise ConfigError("stage 'detect' cần khai báo 'detector'")
-            _check_stage_deps(p.stages, registry)   # thứ tự phụ thuộc artifact (fail-fast)
         except ConfigError as e:
             raise ConfigError(f"pipeline {p.id!r}: {e}") from e
 
 
 def build_runner(pcfg: PipelineConfig, *, registry: Mapping = DEFAULT_REGISTRY) -> PipelineRunner:
     """Dựng `PipelineRunner` từ 1 `PipelineConfig`. Type lạ → `ConfigError` (liệt kê type hợp lệ)."""
-    # Fail-fast thứ tự phụ thuộc artifact TRƯỚC khi dựng (đối xứng validate_config; đường _run_from_config
-    # gọi build_runner KHÔNG qua validate_config nên phải kiểm ở đây nữa — như _check_params).
-    _check_stage_deps(pcfg.stages, registry)
     # _check_params TRƯỚC khi gọi builder → typo bị chặn trước cả lazy-import (torch/cv2) → an toàn máy no-GPU.
     detector = None
     if pcfg.detector is not None:
