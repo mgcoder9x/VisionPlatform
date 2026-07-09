@@ -722,8 +722,8 @@ Nội dung: CI chạy lại ĐÚNG cổng của `vp verify` trên server sau m�
 Vì sao: hook Kiro + linter là anti-drift PHÍA-DEV (bỏ qua được nếu push từ máy/tool khác). CI = anti-drift PHÍA-SERVER, vô điều kiện → mạnh nhất + chuẩn thương mại. Tái dùng cổng đã có = rủi ro thấp, không logic mới.
 
 
-### D-059 — 2026-07-09 — Mở spec `object-tracking-count` (PHA1 design-first) — analytics stateful đầu tiên, đóng hướng Lỗ 3/K-042
-Status: 🔵 (design-first 0-diag · CHƯA code · chờ user valid → PHA2 TDD)
+### D-059 — 2026-07-09 — Spec + code `object-tracking-count` — analytics stateful đầu tiên, đóng Lỗ 3/K-042
+Status: ✅ (PHA1 design 0-diag + PHA2 code TDD HOÀN TẤT — verify **479/1 · lint 5/0** máy `k.nguyen.manh.toan`)
 Scope: `.kiro/specs/object-tracking-count/{requirements,design}.md` (2 file, 0 code)
 Nguồn: LOG Entry #258 · yêu cầu user "quay lại dự án cho xong" · `vision-vertical-slice/design.md` (sub-spec kế) · roadmap `scale-architecture` R3.3 · K-042
 Evidence: `get_diagnostics` 2 file = 0 diagnostic; API bám code thật (`domain.iou`, `BaseStage._do_process→MediaPacket`, `with_artifact`, `Detection/BBox`, `ISink` — đã đọc)

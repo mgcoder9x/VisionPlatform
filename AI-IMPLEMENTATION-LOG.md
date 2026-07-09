@@ -5245,3 +5245,23 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Nhánh SCALE (A1 batching) vẫn chờ máy GPU để benchmark (R6.1) — không làm được đúng ở máy này.
 
 **Đã verify:** `get_diagnostics` 2 file spec = **0 diagnostic**; API tham chiếu (iou/BaseStage/with_artifact/Detection/BBox/ISink) đã ĐỌC code thật trước khi thiết kế (trích trong design "Nền đã đọc code thật"). · **Chưa verify:** hành vi runtime (chưa code — PHA2); tính đúng thuật toán association (sẽ verify bằng test TDD sau khi user valid design).
+
+
+### Entry #259 — 2026-07-09 — PHA2 code TDD `object-tracking-count` HOÀN TẤT (analytics stateful đầu tiên) — Kiro-Opus
+
+**Bối cảnh:** User "tiếp tục" (duyệt-theo-khuyến-nghị) sau design #258 (0-diag). Code TDD 5 file + test, đóng Lỗ 3/K-042.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- 5 file bám đúng design + layer: `domain/tracking.py::greedy_associate` (thuần, tái dùng `domain.iou`, tie-break `(-iou,new_i,prev_i)` xác định) · `kernel/tracking_protocol.py::Track` (frozen) · `kernel/ports/tracker.py::ITracker` (Protocol) · `runtime/iou_tracker.py::IouTracker` (giữ state `_tracks`/`_next_id`, `_TrackState` mutable nội bộ) · `runtime/stages/tracking_stage.py::TrackingStage` (BaseStage, camera-affinity fail-fast, teardown→reset).
+- `IouTracker.update`: age++ mọi track → associate → cập nhật khớp (age=0,hits+1) → tạo mới (id đơn điệu) → retire `age>max_age` → trả 1 Track/detection. `unique_count=_next_id`, `active_count=len(_tracks)`.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không (ADDITIVE tuyệt đối — KHÔNG sửa CountStage/DetectStage/PipelineRunner/BaseStage; TrackingStage đọc chung `detections` = fan-out).
+
+**3. Trade-off đã cân nhắc:** (đã chốt ở design QĐ-1..7 #258) greedy IoU (xác định, no-GPU) vs ML; ITracker port swap-ready; state trong tracker không trong stage; camera-affinity fail-fast.
+
+**4. Điều bạn nên biết:**
+- Giới hạn THẬT (K-060, từ design self-review Lỗ 5): greedy ≠ tối ưu toàn cục → 2 vật giao nhau (cross-over) có thể HOÁN id; chấp nhận v1, nâng cấp bằng ML tracker qua `ITracker` port sau (không đụng Stage). KHÔNG line/zone-crossing, KHÔNG cross-process state (Non-Goal).
+- Camera-affinity: 1 `TrackingStage`/`IouTracker` instance = 1 camera; trộn source_id → StageResult.ERROR.
+- CHƯA wire vào profile `--track` (giữ phạm vi v1 = lõi + test; wire vào `vision_slice_app` là bước tuỳ chọn sau).
+
+**Đã verify (CHẠY THẬT + đọc output):** `pytest tests/test_object_tracking.py -q` = **14 passed**; `scripts\vp.cmd verify` = **479 passed/1 skipped · lint 5 kept/0 broken · drift-check PASS · EXIT 0** (baseline 465→479, +14; layering domain/kernel/runtime giữ 5 contract). · **Chưa verify:** hành vi trên detector/camera THẬT (test bằng Detection dựng tay — đủ phủ logic; chạy thật là mode ngoài CI); cross-over id-swap (giới hạn đã-biết K-060, không test vì là hành vi chấp nhận).

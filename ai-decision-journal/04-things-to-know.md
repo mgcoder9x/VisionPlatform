@@ -621,3 +621,13 @@ Evidence: file tạo tại chỗ; CHƯA có run CI nào (không chạy Actions c
 Đóng khi: CI chạy xanh lần đầu (xem tab Actions / dán log)
 Nội dung: (a) KHÔNG verify được CI cục bộ → chỉ biết xanh/đỏ khi push kích hoạt (giống cách hook được verify qua output dán). (b) Rủi ro flaky trên CI (K-035: cross-process/shutdown nhạy tải) → đỏ-do-flaky ≠ regression. (c) `actions/checkout@v4`+`actions/setup-python@v5` [chưa kiểm trên chính CI này]. (d) Token PAT nhúng URL origin KHÔNG ảnh hưởng Actions (dùng GITHUB_TOKEN). (e) CI = cùng cổng `vp verify`, chỉ khác chạy server-side.
 Vì sao ghi: đánh dấu rõ đây là hạng mục "verify-khi-chạy", tránh tự nhận "CI xong" khi chưa có 1 run xanh thật.
+
+
+### K-060 — 🟡 (2026-07-09) IouTracker v1 = greedy IoU: giới hạn cross-over + phạm vi (biết để dùng đúng)
+Status: 🟡 (giới hạn thiết kế đã-biết, KHÔNG phải bug — nâng cấp qua port khi cần)
+Scope: `runtime/iou_tracker.py` · `domain/tracking.py` · `runtime/stages/tracking_stage.py`
+Nguồn: LOG Entry #259 · design `object-tracking-count` self-review Lỗ 5
+Evidence: `vp verify` 479/1 · 14 test tracking pass (giữ-id/id-mới/retire/deterministic/edge)
+Đóng khi: (giới hạn — đóng nếu thay ML tracker qua ITracker)
+Nội dung: (a) greedy IoU ≠ tối ưu toàn cục → 2 vật ĐI QUA NHAU (box giao) có thể HOÁN track_id — chấp nhận v1. Nâng cấp = impl `ITracker` khác (Kalman/DeepSORT) KHÔNG đụng TrackingStage. (b) camera-affinity: 1 instance/1 camera; trộn source_id → ERROR (fail-fast). (c) unique_count đơn điệu (đã-thấy = đã-đếm, không giảm khi retire); active_count = hiện tại. (d) Non-Goal v1: line/zone-crossing count, cross-process state, re-ID. (e) CHƯA wire profile `--track` (lõi+test xong; wire là bước tuỳ chọn sau).
+Vì sao ghi: chống kỳ vọng sai ("tracker hoàn hảo") + chỉ rõ điểm nâng cấp (port) — đúng bản chất, không cần rebuild.

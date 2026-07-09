@@ -1,7 +1,13 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-09)
-**Cập nhật lúc:** 2026-07-09T14:30:00+07:00.
+**Cập nhật lúc:** 2026-07-09T15:10:00+07:00.
+**[✅ #259 — SẢN PHẨM: `object-tracking-count` HOÀN TẤT (code TDD) — analytics stateful đầu tiên, đóng Lỗ 3/K-042]**
+- Code PHA2 (sau design #258 0-diag): 5 file bám design + layer — `domain/tracking.py::greedy_associate` (thuần, tái dùng iou, tie-break xác định) · `kernel` `Track`/`ITracker` · `runtime` `IouTracker`(state)/`TrackingStage`(camera-affinity fail-fast, teardown→reset) + `tests/test_object_tracking.py` (14 test).
+- **VERIFY THẬT:** `pytest tests/test_object_tracking.py` = 14 passed; `scripts\vp.cmd verify` = **479 passed/1 skipped · lint 5/0 · drift PASS · EXIT 0** (baseline 465→479, ADDITIVE — không sửa CountStage/DetectStage/PipelineRunner). Journal D-059 ✅ +K-060 (tổng 163). Log #259.
+- **Giới hạn đã-biết (K-060):** greedy ≠ tối ưu → cross-over có thể hoán id (nâng cấp ML qua ITracker port); chưa wire profile `--track`; Non-Goal line-crossing/cross-process/re-ID.
+- **Bước kế (chờ user chọn):** (a) wire `--track` vào `vision_slice_app` (chạy demo tracking end-to-end) · (b) analytics tầng 2 (classify/ALPR-OCR — OCR cần model) · (c) line/zone-crossing count · (d) A1 batching (cần GPU) · (e) dừng mốc sạch.
+---
 **[🔵 #258 — QUAY LẠI SẢN PHẨM: spec `object-tracking-count` PHA1 design-first (đóng Lỗ 3/K-042) — chờ user valid]**
 - User "quay lại dự án cho xong". Nhánh SCALE (A1 batching) CHẶN bởi R6.1 (benchmark cần GPU — máy no-GPU, không bịa). → chọn nhánh NGHIỆP VỤ làm+test được không-GPU.
 - **Bước sản phẩm kế:** tracking + đếm-không-trùng (analytics STATEFUL đầu tiên; slice design đã liệt kê là sub-spec kế; nền cho ALPR/face/đếm). Tạo `.kiro/specs/object-tracking-count/{requirements,design}.md` — **0 diagnostic**, CHƯA code.
