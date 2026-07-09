@@ -160,3 +160,18 @@ def test_stage_teardown_resets_tracker():
     assert tracker.active_count == 1
     stage.teardown()
     assert tracker.active_count == 0 and tracker.unique_count == 0
+
+
+# ================= wiring vào vision_slice_app (--track) =================
+
+def test_slice_app_track_wiring(capsys):
+    """--track chạy end-to-end: FakeDetector trả box CỐ ĐỊNH mỗi frame → 1 track distinct.
+
+    `unique_tracks` đọc từ ARTIFACTS pipeline (không phải tracker sau teardown) → phải = 1 dù nhiều frame.
+    """
+    from vision_platform.profiles.vision_slice_app import main
+    rc = main(["--source", "fake", "--frames", "5", "--track"])
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert "unique_tracks: 1" in err   # 1 vật (box cố định) qua 5 frame → đếm-không-trùng = 1
+    assert "active_tracks: 1" in err

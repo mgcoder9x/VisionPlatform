@@ -5265,3 +5265,24 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - CHƯA wire vào profile `--track` (giữ phạm vi v1 = lõi + test; wire vào `vision_slice_app` là bước tuỳ chọn sau).
 
 **Đã verify (CHẠY THẬT + đọc output):** `pytest tests/test_object_tracking.py -q` = **14 passed**; `scripts\vp.cmd verify` = **479 passed/1 skipped · lint 5 kept/0 broken · drift-check PASS · EXIT 0** (baseline 465→479, +14; layering domain/kernel/runtime giữ 5 contract). · **Chưa verify:** hành vi trên detector/camera THẬT (test bằng Detection dựng tay — đủ phủ logic; chạy thật là mode ngoài CI); cross-over id-swap (giới hạn đã-biết K-060, không test vì là hành vi chấp nhận).
+
+
+### Entry #260 — 2026-07-09 — Wire `--track` vào `vision_slice_app` (tracking chạy end-to-end trong app) — Kiro-Opus
+
+**Bối cảnh:** Sau #259 (tracking lõi + test), đưa TrackingStage vào composition root để chạy end-to-end (source→detect→count→**track**→sink), đúng khuyến nghị #1.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Cờ `--track` (+ `--track-iou` 0.3, `--track-max-age` 30): append `TrackingStage(IouTracker(...))` sau `CountStage` trong executor (additive; tracking đọc chung `detections`).
+- **`_TrackSummarySink`** (ISink nhỏ trong profile) đọc `unique_count`/`active_count` từ **ARTIFACTS pipeline** để in summary — KHÔNG đọc `tracker.unique_count` sau `run()`.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không (additive — chỉ thêm cờ + nhánh khi `--track`; đường mặc định không đổi).
+
+**3. Trade-off đã cân nhắc:**
+- In `unique_count` từ **summary-sink-đọc-artifacts** vs từ `tracker` sau run → chọn sink: vì `PipelineRunner.run()` gọi `executor.teardown_all()` → `TrackingStage.teardown()` → `tracker.reset()` (verify bằng ĐỌC CODE runner) → đọc tracker sau run ra **0** (sai). Artifacts frame SUCCESS là số THẬT (unique_count đơn điệu → frame cuối = tổng). Fix bản chất (đọc nguồn đúng), không ngọn (bỏ reset).
+
+**4. Điều bạn nên biết:**
+- Full-suite gặp 1 flake `test_step_09_shutdown` (K-035, shutdown/process nhạy tải) — CHỨNG MINH không hồi quy: chạy riêng file đó = 6 passed (máy 0 orphan); các lần fail rơi vào test KHÁC nhau (chữ ký flaky); tracking KHÔNG đụng supervisor. Full chạy lại sạch = **480/1**.
+- `--track` v1 dùng đường sync (design §Giới hạn SYNC vs LIVE) — hợp video/synthetic; RTSP real-time cần async sau.
+- K-060 cập nhật: "CHƯA wire --track" → ĐÃ wire.
+
+**Đã verify (CHẠY THẬT):** `pytest tests/test_object_tracking.py` = **15 passed** (thêm `test_slice_app_track_wiring`: `main(["--source","fake","--frames","5","--track"])`→rc0 + stderr "unique_tracks: 1"); full `pytest -q` = **480 passed/1 skipped** (sạch, sau khi xác nhận flake K-035); lint 5/0; drift PASS. · **Chưa verify:** `--track` trên video/RTSP/pt THẬT (mode ngoài CI); real-time latency (sync limit).

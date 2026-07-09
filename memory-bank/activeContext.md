@@ -1,7 +1,12 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-09)
-**Cập nhật lúc:** 2026-07-09T15:10:00+07:00.
+**Cập nhật lúc:** 2026-07-09T15:45:00+07:00.
+**[✅ #260 — Wire `--track` vào `vision_slice_app`: tracking chạy END-TO-END trong app]**
+- Cờ `--track`/`--track-iou`/`--track-max-age` → append `TrackingStage(IouTracker)` sau CountStage. `_TrackSummarySink` in `unique_count`/`active_count` đọc từ ARTIFACTS (không đọc tracker sau run — vì `run()` teardown→reset→0; verify bằng đọc code runner).
+- **VERIFY THẬT:** `test_object_tracking.py` = 15 passed (thêm smoke `main(--source fake --frames 5 --track)`→rc0 + "unique_tracks: 1"); full `pytest -q` = **480 passed/1 skipped** (SẠCH sau khi xác nhận flake K-035 không hồi quy: shutdown chạy riêng 6/6, 0 orphan, fail rơi test khác nhau); lint 5/0; drift PASS. Log #260, K-060 cập nhật (đã wire).
+- **Feature tracking DONE end-to-end** (lõi + test + app). Bước kế (chờ user): (a) line/zone-crossing count (trên nền tracking) · (b) analytics tầng 2 classify/ALPR-OCR (cần model) · (c) A1 batching (cần GPU) · (d) chạy `--track` trên video/pt thật · (e) dừng mốc sạch.
+---
 **[✅ #259 — SẢN PHẨM: `object-tracking-count` HOÀN TẤT (code TDD) — analytics stateful đầu tiên, đóng Lỗ 3/K-042]**
 - Code PHA2 (sau design #258 0-diag): 5 file bám design + layer — `domain/tracking.py::greedy_associate` (thuần, tái dùng iou, tie-break xác định) · `kernel` `Track`/`ITracker` · `runtime` `IouTracker`(state)/`TrackingStage`(camera-affinity fail-fast, teardown→reset) + `tests/test_object_tracking.py` (14 test).
 - **VERIFY THẬT:** `pytest tests/test_object_tracking.py` = 14 passed; `scripts\vp.cmd verify` = **479 passed/1 skipped · lint 5/0 · drift PASS · EXIT 0** (baseline 465→479, ADDITIVE — không sửa CountStage/DetectStage/PipelineRunner). Journal D-059 ✅ +K-060 (tổng 163). Log #259.

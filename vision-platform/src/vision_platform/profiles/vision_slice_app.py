@@ -11,11 +11,33 @@ from __future__ import annotations
 import argparse
 import sys
 
+from vision_platform.kernel.stage_contract import StageStatus
 from vision_platform.runtime.sync_linear_executor import SyncLinearExecutor
 from vision_platform.runtime.pipeline_runner import PipelineRunner
 from vision_platform.runtime.composite_sink import CompositeSink
 from vision_platform.runtime.stages.detect_stage import DetectStage
 from vision_platform.runtime.stages.count_stage import CountStage
+
+
+class _TrackSummarySink:
+    """Sink nhỏ (ISink) đọc `unique_count`/`active_count` từ ARTIFACTS pipeline (nguồn thật).
+
+    Vì sao KHÔNG đọc `tracker.unique_count` sau `run()`: runner gọi `TrackingStage.teardown()` →
+    `tracker.reset()` trong finally → state về 0. Đọc từ artifacts frame SUCCESS mới là số THẬT của lần chạy.
+    `unique_count` đơn điệu → giá trị frame cuối = tổng distinct.
+    """
+    def __init__(self) -> None:
+        self.unique = 0
+        self.active = 0
+
+    def setup(self) -> None: ...
+
+    def handle(self, result) -> None:
+        if result.status == StageStatus.SUCCESS and result.packet is not None:
+            self.unique = result.packet.artifacts.get("unique_count", self.unique)
+            self.active = result.packet.artifacts.get("active_count", self.active)
+
+    def teardown(self) -> None: ...
 
 
 def _build_source(args):
@@ -132,6 +154,10 @@ def main(argv=None) -> int:
     parser.add_argument("--rtsp", default=None)
     parser.add_argument("--max-reconnect", type=int, default=None)
     parser.add_argument("--out", default=None, help="path .jsonl → bật JsonlEventSink (lưu trữ optional)")
+    parser.add_argument("--track", action="store_true",
+                        help="bật TrackingStage (theo dõi + đếm-không-trùng) sau CountStage")
+    parser.add_argument("--track-iou", type=float, default=0.3, help="ngưỡng IoU association (khi --track)")
+    parser.add_argument("--track-max-age", type=int, default=30, help="số frame giữ track khi mất dấu (khi --track)")
     args = parser.parse_args(argv)
 
     if args.validate and not args.config:
@@ -146,12 +172,21 @@ def main(argv=None) -> int:
 
     source = _build_source(args)
     detector = _build_detector(args)
-    executor = SyncLinearExecutor([DetectStage(detector), CountStage()])
+    stages = [DetectStage(detector), CountStage()]
+    track_summary = None
+    if args.track:
+        from vision_platform.runtime.iou_tracker import IouTracker
+        from vision_platform.runtime.stages.tracking_stage import TrackingStage
+        stages.append(TrackingStage(IouTracker(iou_threshold=args.track_iou, max_age=args.track_max_age)))
+        track_summary = _TrackSummarySink()
+    executor = SyncLinearExecutor(stages)
 
     sinks = []
     if args.out:
         from vision_platform.adapters.jsonl_event_sink import JsonlEventSink
         sinks.append(JsonlEventSink(args.out))
+    if track_summary is not None:
+        sinks.append(track_summary)
     sink = CompositeSink(sinks)
 
     runner = PipelineRunner(source, executor, sink)
@@ -164,6 +199,9 @@ def main(argv=None) -> int:
     print(f"  stage_errors: {stats.stage_errors}", file=sys.stderr)
     print(f"  source_errors: {stats.source_errors}", file=sys.stderr)
     print(f"  eof         : {stats.eof}", file=sys.stderr)
+    if track_summary is not None:
+        print(f"  unique_tracks: {track_summary.unique}", file=sys.stderr)
+        print(f"  active_tracks: {track_summary.active}", file=sys.stderr)
     if args.out:
         print(f"  events → {args.out}", file=sys.stderr)
     return 0
