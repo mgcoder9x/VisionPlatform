@@ -29,13 +29,20 @@ class _TrackSummarySink:
     def __init__(self) -> None:
         self.unique = 0
         self.active = 0
+        self.cross_in = 0
+        self.cross_out = 0
+        self.cross_total = 0
 
     def setup(self) -> None: ...
 
     def handle(self, result) -> None:
         if result.status == StageStatus.SUCCESS and result.packet is not None:
-            self.unique = result.packet.artifacts.get("unique_count", self.unique)
-            self.active = result.packet.artifacts.get("active_count", self.active)
+            a = result.packet.artifacts
+            self.unique = a.get("unique_count", self.unique)
+            self.active = a.get("active_count", self.active)
+            self.cross_in = a.get("crossings_in", self.cross_in)
+            self.cross_out = a.get("crossings_out", self.cross_out)
+            self.cross_total = a.get("crossings_total", self.cross_total)
 
     def teardown(self) -> None: ...
 
@@ -79,6 +86,16 @@ def _validate(args, parser):
         parser.error("--source rtsp cần --rtsp <url>")
     if args.detector == "pt" and not args.weights:
         parser.error("--detector pt cần --weights <path.pt>")
+    if args.line:
+        if not args.track:
+            parser.error("--line cần --track (LineCrossingStage đọc artifacts['tracks'])")
+        parts = args.line.split(",")
+        if len(parts) != 4:
+            parser.error("--line dạng 'ax,ay,bx,by'")
+        try:
+            [float(p) for p in parts]
+        except ValueError:
+            parser.error("--line: cần 4 số 'ax,ay,bx,by'")
 
 
 def _validate_config_only(path: str) -> int:
@@ -158,6 +175,8 @@ def main(argv=None) -> int:
                         help="bật TrackingStage (theo dõi + đếm-không-trùng) sau CountStage")
     parser.add_argument("--track-iou", type=float, default=0.3, help="ngưỡng IoU association (khi --track)")
     parser.add_argument("--track-max-age", type=int, default=30, help="số frame giữ track khi mất dấu (khi --track)")
+    parser.add_argument("--line", default=None,
+                        help="vạch đếm-qua dạng 'ax,ay,bx,by' (ORIGINAL_FRAME) — cần --track")
     args = parser.parse_args(argv)
 
     if args.validate and not args.config:
@@ -179,6 +198,10 @@ def main(argv=None) -> int:
         from vision_platform.runtime.stages.tracking_stage import TrackingStage
         stages.append(TrackingStage(IouTracker(iou_threshold=args.track_iou, max_age=args.track_max_age)))
         track_summary = _TrackSummarySink()
+    if args.line:
+        from vision_platform.runtime.stages.line_crossing_stage import LineCrossingStage
+        ax, ay, bx, by = (float(p) for p in args.line.split(","))
+        stages.append(LineCrossingStage(ax, ay, bx, by))
     executor = SyncLinearExecutor(stages)
 
     sinks = []
@@ -202,6 +225,10 @@ def main(argv=None) -> int:
     if track_summary is not None:
         print(f"  unique_tracks: {track_summary.unique}", file=sys.stderr)
         print(f"  active_tracks: {track_summary.active}", file=sys.stderr)
+    if args.line:
+        print(f"  crossings_in : {track_summary.cross_in}", file=sys.stderr)
+        print(f"  crossings_out: {track_summary.cross_out}", file=sys.stderr)
+        print(f"  crossings_tot: {track_summary.cross_total}", file=sys.stderr)
     if args.out:
         print(f"  events → {args.out}", file=sys.stderr)
     return 0

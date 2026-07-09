@@ -732,8 +732,8 @@ Nội dung: Thiết kế analytics STATEFUL đầu tiên (tracking + đếm-khô
 Vì sao: bước nghiệp vụ kế của sản phẩm + là nền cho mọi analytics (không trùng đếm). Nhánh scale (A1) bị chặn GPU (R6.1) → chọn nghiệp vụ làm+test được không-GPU. Design-first (user preference): valid design rồi mới code.
 
 
-### D-060 — 2026-07-09 — Mở spec `line-crossing-count` (PHA1 design-first) — đếm vật qua vạch, analytics tầng-2 trên tracking
-Status: 🔵 (design-first 0-diag · CHƯA code · chờ user valid → PHA2 TDD)
+### D-060 — 2026-07-09 — Spec + code `line-crossing-count` — đếm vật qua vạch, analytics tầng-2 trên tracking
+Status: ✅ (PHA1 design 0-diag + PHA2 code TDD + wire `--line` HOÀN TẤT — verify **494/1 · lint 5/0**)
 Scope: `.kiro/specs/line-crossing-count/{requirements,design}.md` (2 file, 0 code)
 Nguồn: LOG Entry #261 · user "cực sâu tiếp tục" · xây trên D-059 (tracking) · roadmap R3.3
 Evidence: `get_diagnostics` 2 file = 0 diagnostic; API bám thật (`Track.box`, `BaseStage._do_process`, `with_artifact`)

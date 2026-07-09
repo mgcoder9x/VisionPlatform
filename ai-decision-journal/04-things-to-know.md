@@ -633,3 +633,13 @@ Nội dung: (a) greedy IoU ≠ tối ưu toàn cục → 2 vật ĐI QUA NHAU (b
 Vì sao ghi: chống kỳ vọng sai ("tracker hoàn hảo") + chỉ rõ điểm nâng cấp (port) — đúng bản chất, không cần rebuild.
 
 **CẬP NHẬT #260:** ĐÃ wire `--track` vào `vision_slice_app` (append TrackingStage sau CountStage; cờ `--track`/`--track-iou`/`--track-max-age`). `unique_count` in ra đọc từ ARTIFACTS qua `_TrackSummarySink` (KHÔNG đọc tracker sau run — vì `run()` teardown→`reset()` làm về 0). Verify: `main(--source fake --frames 5 --track)` → unique_tracks=1; full 480/1 sạch. Còn lại của K-060 (cross-over id-swap, no line-crossing/cross-process/re-ID) vẫn nguyên.
+
+
+### K-061 — 🟡 (2026-07-09) LineCrossingStage v1: giới hạn + cách dùng (biết để dùng đúng)
+Status: 🟡 (giới hạn thiết kế đã-biết, KHÔNG bug)
+Scope: `runtime/stages/line_crossing_stage.py` · `domain/geometry.py` · wire `--line` trong `vision_slice_app`
+Nguồn: LOG Entry #262 · design `line-crossing-count` self-review
+Evidence: `vp verify` 494/1 · 14 test line-crossing pass (qua/không/hướng/edge/prune/wiring)
+Đóng khi: (giới hạn — đóng nếu nâng cấp: giữ history có max_age / đa-vạch / CrossingEvent)
+Nội dung: (a) prune id vắng mỗi frame → bounded memory 24/7, ĐỔI LẠI track nhấp-nháy (vắng 1 frame) reset mốc → có thể SÓT 1 lượt. (b) collinear (đi DỌC vạch) = không cắt (đúng nghĩa "đi dọc ≠ qua"). (c) 1 vạch/1 instance/1 camera (đa-vạch = nhiều LineCrossingStage). (d) quy ước in/out PHỤ THUỘC thứ tự (A,B) — đảo A,B đảo in/out → cấu hình đúng chiều. (e) `--line` cần `--track`; đường sync (hợp video/synthetic, không real-time RTSP). (f) chưa có CrossingEvent DTO (log lúc-nào-ai-qua) — Non-Goal v1.
+Vì sao ghi: chống kỳ vọng sai + chỉ điểm nâng cấp; các giới hạn là đánh đổi CÓ CHỦ ĐÍCH (bounded memory > chính xác nhấp-nháy) đúng cho sản phẩm 24/7.

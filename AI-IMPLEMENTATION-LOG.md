@@ -5311,3 +5311,23 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Quy ước hướng phụ thuộc thứ tự (A,B) — phải cấu hình đúng để in/out đúng nghĩa.
 
 **Đã verify:** `get_diagnostics` 2 file spec = **0 diagnostic** (sau khi bổ sung User Story R4/R5 mà checker bắt thiếu); API tham chiếu (`Track.box`, `BaseStage`, `with_artifact`) đã đọc code thật (#259). · **Chưa verify:** hành vi runtime (chưa code — PHA2); thuật toán cắt-đoạn-thẳng sẽ verify bằng test TDD sau khi user valid.
+
+
+### Entry #262 — 2026-07-09 — PHA2 code TDD `line-crossing-count` HOÀN TẤT + wire `--line` (đếm qua vạch end-to-end) — Kiro-Opus
+
+**Bối cảnh:** User "tiếp tục" sau design #261 (0-diag). Code TDD + wire vào app: đếm vật qua vạch trên nền tracking.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- `domain/geometry.py`: `orient` (cross-product) + `segments_intersect` (strict `d>0` → collinear/điểm-suy-biến = không cắt). Thuần `(x,y)` float.
+- `runtime/stages/line_crossing_stage.py::LineCrossingStage`: stateful `_last_center`/track_id, so đoạn [prev→curr] × vạch [A,B] → đếm in/out (dấu phía) → **prune id vắng** (bounded memory) → artifacts crossings_in/out/total. Camera-affinity + space fail-fast. `teardown` reset.
+- Wire `--line "ax,ay,bx,by"` vào `vision_slice_app` (yêu cầu `--track`, validate fail-fast); `_TrackSummarySink` mở rộng đọc crossings từ artifacts; summary in in/out/total.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không (ADDITIVE — đọc artifacts["tracks"], KHÔNG sửa TrackingStage/DetectStage/CountStage/PipelineRunner).
+
+**3. Trade-off đã cân nhắc (design QĐ-1..6 #261):** geometry (x,y) rời (thuần/tái dùng) · prune-bounded vs giữ-hết (chọn bounded, sót-lượt-khi-nhấp-nháy chấp nhận) · strict d>0 (chống đếm rung mép) · build-trên-tracks (SRP/fan-out).
+
+**4. Điều bạn nên biết (K-061):**
+- Giới hạn v1: track nhấp-nháy (vắng 1 frame) bị prune → reset mốc → có thể sót 1 lượt; collinear-dọc-vạch = không cắt (đúng ý "đi dọc ≠ qua"); 1 vạch/instance (đa-vạch = nhiều instance); quy ước in/out phụ thuộc thứ tự (A,B).
+- `--line` v1 đường sync (như `--track`) — hợp video/synthetic.
+
+**Đã verify (CHẠY THẬT):** `pytest tests/test_line_crossing.py` = **14 passed** (domain geometry + stage qua/không/hướng/edge/prune + 2 wiring: `main(--track --line)` rc0 "crossings_tot: 0", `--line` thiếu `--track`→SystemExit); `scripts\vp.cmd verify` = **494 passed/1 skipped · lint 5/0 · drift PASS · EXIT 0** (480→494, +14; additive; KHÔNG flaky lần này). · **Chưa verify:** `--line` trên video/pt THẬT (mode ngoài CI); cấu hình vạch cho cảnh thật.

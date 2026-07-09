@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-09)
-**Cập nhật lúc:** 2026-07-09T16:20:00+07:00.
+**Cập nhật lúc:** 2026-07-09T17:00:00+07:00.
+**[✅ #262 — `line-crossing-count` HOÀN TẤT (code TDD + wire `--line`) — đếm vật qua vạch end-to-end]**
+- Code PHA2 (sau design #261): `domain/geometry.py` (orient + segments_intersect thuần) + `runtime/stages/line_crossing_stage.py::LineCrossingStage` (stateful, đọc artifacts["tracks"], đếm in/out/total theo hướng, camera-affinity + space fail-fast, prune bounded-memory) + wire `--line "ax,ay,bx,by"` (cần `--track`) + `tests/test_line_crossing.py` (14 test).
+- **VERIFY THẬT:** `pytest tests/test_line_crossing.py` = 14 passed; `scripts\vp.cmd verify` = **494 passed/1 skipped · lint 5/0 · drift PASS · EXIT 0** (480→494, additive; không flaky). Journal D-060 ✅ +K-061 (tổng 165). Log #262.
+- **Chuỗi analytics giờ chạy end-to-end:** source → DetectStage → TrackingStage(`--track`) → LineCrossingStage(`--line`) → sink. 2 nghiệp vụ (đếm-không-trùng + đếm-qua-vạch) DONE + verified.
+- **Bước kế (chờ user):** (a) analytics tầng-2 classify/ALPR-OCR (cần model/GPU) · (b) CrossingEvent DTO (log lúc-nào-ai-qua) · (c) đa-vạch/zone · (d) chạy `--track`/`--line` trên video/pt thật · (e) A1 batching (cần GPU) · (f) dừng mốc sạch.
+- Song song chờ: CI run đầu (#257) · PAT rotate (#256).
+---
 **[🔵 #261 — Mở spec `line-crossing-count` PHA1 design-first (đếm qua vạch trên nền tracking) — chờ user valid]**
 - Bước sản phẩm kế (khuyến nghị #1 sau tracking): đếm vật QUA VẠCH (people/vehicle counting) — xây trên tracks (#259), no-GPU.
 - Tạo `.kiro/specs/line-crossing-count/{requirements,design}.md` — **0 diagnostic** (đã bổ sung User Story R4/R5 checker bắt), CHƯA code.
