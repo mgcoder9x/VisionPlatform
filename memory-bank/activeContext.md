@@ -1,7 +1,13 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-09)
-**Cập nhật lúc:** 2026-07-09T20:20:00+07:00.
+**Cập nhật lúc:** 2026-07-09T20:55:00+07:00.
+**[✅ #268 — Motion-gate min-frame-interval (`max_consecutive_skip`) — chống bỏ sót khi tĩnh lâu]**
+- Đóng lỗ K-063: cảnh tĩnh lâu → motion-gate skip mãi → detector không chạy → bỏ sót vật đứng-yên. Thêm `max_consecutive_skip` (0=không giới hạn/gốc; N>0=sau N skip ép 1 frame đi tiếp, artifact `motion_forced`). Cắm config + CLI `--motion-gate-max-skip`. Additive (default giữ hành vi #267).
+- **VERIFY THẬT:** `pytest tests/test_motion_gate.py` = 10 passed (default-unlimited giữ hành vi cũ + pattern skip,skip,ÉP-pass,skip,skip). `scripts\vp.cmd verify` = **521 passed/1 skipped · lint 5/0 · drift PASS** (519→521). Journal +D-065 (tổng 172). Log #268.
+- **Bước kế (chờ user, no-GPU trước):** (a) ROI-mask cho motion-gate · (b) server-DB sink · (c) classify/ALPR (cần GPU+model — khi user có) · (d) chạy chuỗi video/pt thật · (e) dừng mốc sạch.
+- Song song chờ: CI run đầu (#257) · PAT rotate (#256).
+---
 **[✅ #267 — `motion-gate`: chặn frame tĩnh trước detector (giảm tải GPU, R2.4) — CPU/no-GPU]**
 - User: máy không GPU, code chuẩn nhất, GPU sau. Motion-gate = lever #1 giảm tải GPU cho ~100 cam (gate CPU rẻ trước inference đắt) — no-GPU + chuẩn bị cho GPU tương lai.
 - `domain/motion.py::changed_ratio` (numpy, **cast int16 chống uint8 underflow**) + `runtime/stages/motion_gate_stage.py::MotionGateStage` (stateful prev, camera-affinity, raise `SkipFrameSignal` khi tĩnh → detector KHÔNG chạy — cơ chế skip CÓ SẴN, không đập lõi). Config `motion_gate` + CLI `--motion-gate` (đầu chuỗi). Design-first 0-diag rồi code.

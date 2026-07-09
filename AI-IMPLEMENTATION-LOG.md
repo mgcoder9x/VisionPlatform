@@ -5433,3 +5433,22 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết (K-063):** Non-Goal v1: MOG2/background-subtraction (chịu đổi ánh sáng) · optical-flow · ROI-mask · downscale-tối-ưu · min-frame-interval (luôn chạy 1/N kể cả tĩnh chống miss). Motion-diff full-frame nhạy với đổi-ánh-sáng-toàn-cục (đèn bật/tắt → coi là motion) — chấp nhận v1.
 
 **Đã verify (CHẠY THẬT):** `pytest tests/test_motion_gate.py` = **8 passed** (changed_ratio underflow · skip-tĩnh/pass-motion/first/shape/mixed-source · integration PipelineRunner: stage sau CHỈ chạy trên frame không-skip, `stub.calls==processed<frames_read`); full `pytest -q` = **519 passed/1 skipped** (SẠCH sau xác nhận flake K-035 supervisor_liveness: isolated 4/4, motion-gate không đụng supervisor); lint 5/0; drift PASS. · **Chưa verify:** hiệu quả giảm-tải trên detector THẬT + video thật (chờ GPU+video); nhạy đổi-ánh-sáng (giới hạn đã-biết K-063).
+
+
+### Entry #268 — 2026-07-09 — Motion-gate: min-frame-interval (`max_consecutive_skip`) — chống bỏ sót khi cảnh tĩnh lâu — Kiro-Opus
+
+**Bối cảnh:** Đóng lỗ đúng-đắn nêu ở K-063: cảnh tĩnh lâu → motion-gate skip mãi → detector KHÔNG chạy → vật đứng-yên/xuất-hiện-chậm bị BỎ SÓT. Fix bản chất: giới hạn skip liên tiếp → ép chạy detector định kỳ. Additive 1 tham số.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Thêm `max_consecutive_skip: int = 0` vào MotionGateStage (**0 = không giới hạn = hành vi gốc**, backward-compat) + state `_consecutive_skips`. Tĩnh + đã skip ≥ max → ÉP đi tiếp (reset đếm, artifact `motion_forced=True`); có motion → reset đếm.
+- Cắm config (`max_consecutive_skip`) + CLI (`--motion-gate-max-skip`).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không (additive param; default 0 giữ nguyên hành vi + test #267 cũ pass).
+
+**3. Trade-off đã cân nhắc:**
+- Ép-theo-số-frame (`max_consecutive_skip`) vs ép-theo-thời-gian (giây) → theo-frame (đơn giản, xác định, test được; theo-giây cần clock + không xác định). Đủ cho mục tiêu "đừng skip vô hạn".
+- default 0 = unlimited (giữ hành vi cũ) vs default bật → chọn 0 (opt-in; không đổi hành vi hiện có bất ngờ).
+
+**4. Điều bạn nên biết:** `motion_forced=True` phân biệt frame đi tiếp DO hết-hạn-skip (không do chuyển động) — hữu ích cho quan sát/tuning. Ép-theo-frame nghĩa là chu kỳ thực tế phụ thuộc fps nguồn (N frame ≠ N giây); tuning theo fps. K-063 cập nhật: min-frame-interval ĐÃ có (theo frame; theo-giây là mở rộng sau nếu cần).
+
+**Đã verify (CHẠY THẬT):** `pytest tests/test_motion_gate.py` = **10 passed** (thêm: default-unlimited-skip giữ hành vi cũ · max_consecutive_skip=2 → pattern skip,skip,ÉP-pass,skip,skip + `motion_forced=True` đúng frame ép); `scripts\vp.cmd verify` = **521 passed/1 skipped · lint 5/0 · drift PASS · EXIT 0** (519→521, additive). · **Chưa verify:** tuning ngưỡng/interval trên video thật (chờ GPU+video).

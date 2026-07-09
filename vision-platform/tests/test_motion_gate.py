@@ -86,6 +86,27 @@ class _CountStub(BaseStage):
         return packet
 
 
+def test_default_unlimited_skip():  # backward-compat: max_consecutive_skip=0 → skip tự do
+    st = MotionGateStage()
+    st.process(_packet(_frame(100)))
+    for _ in range(4):
+        assert st.process(_packet(_frame(100))).status == StageStatus.SKIPPED
+
+
+def test_max_consecutive_skip_forces_periodic_pass():  # min-interval: chống bỏ sót khi tĩnh lâu
+    st = MotionGateStage(max_consecutive_skip=2)
+    st.process(_packet(_frame(100)))                    # frame đầu → pass
+    statuses, forced = [], []
+    for _ in range(5):                                  # 5 frame tĩnh y hệt
+        r = st.process(_packet(_frame(100)))
+        statuses.append(r.status)
+        forced.append(r.packet.artifacts.get("motion_forced") if r.status == StageStatus.SUCCESS else None)
+    # skip,skip,ÉP-pass,skip,skip → không bao giờ skip quá 2 liên tiếp
+    assert statuses == [StageStatus.SKIPPED, StageStatus.SKIPPED, StageStatus.SUCCESS,
+                        StageStatus.SKIPPED, StageStatus.SKIPPED]
+    assert forced[2] is True                            # frame đi tiếp do hết-hạn-skip (không do motion)
+
+
 def test_gate_reduces_downstream_calls():  # integration
     # FakeFrameSource fill=count%256 → frame liên tiếp chênh 1/pixel (<25) → TĨNH → skip (trừ frame đầu).
     stub = _CountStub()

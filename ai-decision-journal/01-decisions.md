@@ -780,3 +780,13 @@ Evidence: `pytest tests/test_motion_gate.py` 8 passed (gồm integration gate gi
 Links: K-040 (lỗ scale A2.4), K-042 (camera-affinity), K-063, D-062 (config extension)
 Nội dung: `domain.changed_ratio` (numpy, cast int16 chống underflow) + `MotionGateStage` (stateful prev, camera-affinity, raise SkipFrameSignal khi ratio<min → detector không chạy). Đăng ký config `motion_gate` + CLI `--motion-gate` (đầu chuỗi). Frame đầu/đổi-shape → đi tiếp.
 Vì sao: bài toán GPU-bound đa-camera → giảm SỐ LẦN gọi detector (gate rẻ CPU) là lever đúng bản chất (R2.4), không tối ưu detector (khó/GPU). Dùng SkipFrameSignal có sẵn = zero đập lõi. Cast int16 = code chuẩn (chống bug underflow tinh vi).
+
+
+### D-065 — 2026-07-09 — Motion-gate min-frame-interval (`max_consecutive_skip`) — chống bỏ sót khi tĩnh lâu
+Status: ✅ (code TDD — verify **521/1 · lint 5/0**)
+Scope: `runtime/stages/motion_gate_stage.py` (thêm param + counter) · `pipeline_factory` (`motion_gate` param) · `vision_slice_app` (`--motion-gate-max-skip`)
+Nguồn: LOG Entry #268 · đóng lỗ nêu ở K-063 (tĩnh lâu → detector không chạy → bỏ sót)
+Evidence: `pytest tests/test_motion_gate.py` 10 passed; `vp verify` 521/1 · lint 5/0 · drift PASS
+Links: D-064 (motion-gate), K-063
+Nội dung: Thêm `max_consecutive_skip` (0=không giới hạn/hành vi gốc; N>0=sau N skip liên tiếp ép 1 frame đi tiếp, artifact `motion_forced=True`). State `_consecutive_skips` reset khi motion/pass. Cắm config + CLI. Additive (default giữ hành vi cũ).
+Vì sao: motion-gate "chỉ chạy khi có motion" có LỖ: cảnh tĩnh lâu → detector không chạy suốt → vật đứng-yên/xuất-hiện-chậm bị bỏ sót. Bounded-skip ép detector chạy định kỳ = fix bản chất độ-tin-cậy (thà chạy thừa định kỳ hơn bỏ sót). Theo-frame (không theo-giây) = xác định, test được.

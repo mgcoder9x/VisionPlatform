@@ -73,6 +73,7 @@ def _stage_motion_gate(params: Mapping, detector: Any):
     return MotionGateStage(
         pixel_diff_threshold=params.get("pixel_diff_threshold", 25),
         min_area_ratio=params.get("min_area_ratio", 0.005),
+        max_consecutive_skip=params.get("max_consecutive_skip", 0),
     )
 
 
@@ -129,7 +130,7 @@ _det_fake.allowed_params = frozenset({"model_size"})
 _det_pt.allowed_params = frozenset({"weights", "device"})
 _stage_detect.allowed_params = frozenset()
 _stage_count.allowed_params = frozenset()
-_stage_motion_gate.allowed_params = frozenset({"pixel_diff_threshold", "min_area_ratio"})
+_stage_motion_gate.allowed_params = frozenset({"pixel_diff_threshold", "min_area_ratio", "max_consecutive_skip"})
 _stage_track.allowed_params = frozenset({"iou_threshold", "max_age"})
 _stage_line_crossing.allowed_params = frozenset({"ax", "ay", "bx", "by"})
 _sink_jsonl.allowed_params = frozenset({"path"})
