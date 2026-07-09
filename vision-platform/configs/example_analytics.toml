@@ -1,0 +1,35 @@
+# Cấu hình ANALYTICS đầy đủ — deploy-by-config, KHÔNG cần GPU/camera (chạy mọi máy CI/dev).
+# Chuỗi: source → detect → track (đếm-không-trùng) → line_crossing (đếm qua vạch) → count; sink = log sự-kiện.
+# Chạy:       python -m vision_platform.profiles.vision_slice_app --config configs/example_analytics.toml
+# Kiểm trước: python -m vision_platform.profiles.vision_slice_app --config configs/example_analytics.toml --validate
+
+[[pipelines]]
+id = "analytics-fake"
+max_frames = 20
+
+[pipelines.source]
+type = "fake"
+params = { max_frames = 20 }
+
+[pipelines.detector]
+type = "fake"
+params = { model_size = 640 }
+
+[[pipelines.stages]]
+type = "detect"
+
+[[pipelines.stages]]
+type = "track"
+params = { iou_threshold = 0.3, max_age = 30 }
+
+[[pipelines.stages]]
+type = "line_crossing"
+# Vạch dọc giữa khung 640×480 (ORIGINAL_FRAME): x=320, từ đỉnh xuống đáy.
+params = { ax = 320.0, ay = 0.0, bx = 320.0, by = 480.0 }
+
+[[pipelines.stages]]
+type = "count"
+
+[[pipelines.sinks]]
+type = "crossing_events"
+params = { path = "out/crossings.jsonl" }

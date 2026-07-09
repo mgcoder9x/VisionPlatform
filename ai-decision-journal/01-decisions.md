@@ -750,3 +750,13 @@ Evidence: `get_diagnostics` 2 file = 0 diagnostic; API bám thật (`JsonlEventS
 Links: D-060 (line-crossing — nguồn crossing), D-041 (JsonlEventSink/wall-clock QĐ-4), K-061
 Nội dung: Thiết kế `CrossingEvent` DTO@kernel + sửa ADDITIVE `LineCrossingStage` (phát `artifacts["crossing_events"]` + clock tiêm default wall-clock UTC) + `CrossingEventJsonlSink`@adapters (mkdir/append/flush theo mẫu JsonlEventSink) + wire `--crossing-out`. 5 Property + test no-GPU (clock tiêm + tmp_path). Non-Goal: DB/queue/dedupe/schema-version.
 Vì sao: sản phẩm thương mại cần bản-ghi-sự-kiện bền vững (ai/khi/hướng qua vạch) để audit/tích hợp, không chỉ số đếm phù du. event phát trong stage (nguồn sự thật lượt-qua). Design-first: valid schema/ranh-giới trước code.
+
+
+### D-062 — 2026-07-09 — Config-declarative mở rộng ANALYTICS (deploy-by-config): đăng ký track/line_crossing/crossing_events
+Status: ✅ (code + test + `--validate` + `vp verify` 505/1 · lint 5/0)
+Scope: `profiles/pipeline_factory.py` (3 builder + allowed_params + registry) · `configs/example_analytics.toml` · `.gitignore` (out/)
+Nguồn: LOG Entry #265 · user "cực sâu tiếp tục" · dùng extension point D-042 (Req 3.3)
+Evidence: `pytest tests/test_config_analytics.py` 4 passed; `--validate example_analytics.toml` EXIT 0; `vp verify` 505/1 · lint 5/0 · drift PASS
+Links: D-042 (config-declarative), D-045/K-046 (strict-key), D-059/D-060/D-061 (analytics được wire)
+Nội dung: Thêm builder `_stage_track`/`_stage_line_crossing`/`_sink_crossing_events` vào registry pipeline_factory + `allowed_params` mỗi cái. KHÔNG sửa `build_runner`/`validate_config`/schema (lặp generic) → additive thuần đúng thiết kế D-042. + config mẫu `example_analytics.toml` (chuỗi detect→track→line_crossing→count + sink crossing_events). Deploy-by-config: 1 TOML khai báo chuỗi analytics per-pipeline.
+Vì sao: hệ ~100 camera thương mại cần khai-báo-per-camera qua config, không đổi code mỗi deploy. Dùng extension point có sẵn = fix bản chất (đúng chỗ mở rộng đã thiết kế), không sửa lõi. KHÔNG tạo spec nặng cho "đăng ký 3 builder" = tránh over-process (proportionate).

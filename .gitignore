@@ -46,3 +46,7 @@ vision-platform/models/
 
 # Profile moi truong rieng theo may (vp.cmd nap) — KHONG commit
 scripts/env.local.cmd
+
+# Output runtime (event log JSONL... sinh khi chay) — KHONG commit
+out/
+**/out/

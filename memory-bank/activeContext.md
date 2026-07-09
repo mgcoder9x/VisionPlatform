@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-09)
-**Cập nhật lúc:** 2026-07-09T18:20:00+07:00.
+**Cập nhật lúc:** 2026-07-09T19:00:00+07:00.
+**[✅ #265 — Config-declarative mở rộng ANALYTICS (deploy-by-config) — khai báo track/line/crossing qua TOML]**
+- Analytics trước chỉ wire qua cờ CLI; giờ khai báo được per-pipeline qua config (deploy ~100 cam không đổi code). Additive vào registry `pipeline_factory` (đúng extension point D-042/Req 3.3): builder `track`/`line_crossing`/`crossing_events` + `allowed_params` (K-046). KHÔNG sửa build_runner/validate_config/schema. + `configs/example_analytics.toml` template.
+- **VERIFY THẬT:** `pytest tests/test_config_analytics.py` = 4 passed (build đúng chuỗi stage + run + validate + strict-key + required); `--validate example_analytics.toml` = OK EXIT 0; `scripts\vp.cmd verify` = **505 passed/1 skipped · lint 5/0 · drift PASS** (501→505). Journal +D-062 (tổng 168). Log #265. `out/` gitignore.
+- **Sản phẩm giờ deploy-by-config:** 1 file TOML khai báo source→detect→track→line_crossing→count + sink event → chạy `--config`. Nhiều pipeline (nhiều camera) tuần tự (T-015). Baseline 465→**505** (session +40 test qua 4 feature).
+- **Bước kế (chờ user):** (a) DB/SQLite sink (thay JSONL, queryable) · (b) classify tầng-2 (model/GPU) · (c) chạy chuỗi trên video/pt thật · (d) A1 batching (GPU) · (e) dừng mốc sạch.
+- Song song chờ: CI run đầu (#257) · PAT rotate (#256).
+---
 **[✅ #264 — `crossing-event-log` HOÀN TẤT (code TDD + wire `--crossing-out`) — sự-kiện qua-vạch → JSONL bền vững]**
 - Code PHA2 (sau design #263): `kernel/crossing_event.py::CrossingEvent` + sửa ADDITIVE `LineCrossingStage` (clock tiêm + phát `crossing_events`) + `adapters/crossing_event_sink.py::CrossingEventJsonlSink` (mẫu JsonlEventSink) + wire `--crossing-out` + `tests/test_crossing_event.py` (7 test).
 - **VERIFY THẬT:** `pytest tests/test_crossing_event.py` = 7 passed; `scripts\vp.cmd verify` = **501 passed/1 skipped · lint 5/0 · drift PASS · EXIT 0** (494→501, additive; test #262 vẫn pass). Journal D-061 ✅ +K-062 (tổng 167). Log #264.

@@ -67,10 +67,34 @@ def _stage_count(params: Mapping, detector: Any):
     return CountStage()
 
 
+def _stage_track(params: Mapping, detector: Any):
+    # Analytics stateful (đếm-không-trùng). Đọc artifacts["detections"] (cần stage 'detect' trước).
+    from vision_platform.runtime.iou_tracker import IouTracker
+    from vision_platform.runtime.stages.tracking_stage import TrackingStage
+    return TrackingStage(IouTracker(
+        iou_threshold=params.get("iou_threshold", 0.3),
+        max_age=params.get("max_age", 30),
+    ))
+
+
+def _stage_line_crossing(params: Mapping, detector: Any):
+    # Đếm qua vạch (cần stage 'track' trước → đọc artifacts["tracks"]).
+    from vision_platform.runtime.stages.line_crossing_stage import LineCrossingStage
+    for k in ("ax", "ay", "bx", "by"):
+        _need(params, k, "stage line_crossing")
+    return LineCrossingStage(params["ax"], params["ay"], params["bx"], params["by"])
+
+
 def _sink_jsonl(params: Mapping):
     from vision_platform.adapters.jsonl_event_sink import JsonlEventSink
     _need(params, "path", "sink jsonl")
     return JsonlEventSink(params["path"])
+
+
+def _sink_crossing_events(params: Mapping):
+    from vision_platform.adapters.crossing_event_sink import CrossingEventJsonlSink
+    _need(params, "path", "sink crossing_events")
+    return CrossingEventJsonlSink(params["path"])
 
 
 def _need(params: Mapping, key: str, what: str) -> None:
@@ -90,7 +114,10 @@ _det_fake.allowed_params = frozenset({"model_size"})
 _det_pt.allowed_params = frozenset({"weights", "device"})
 _stage_detect.allowed_params = frozenset()
 _stage_count.allowed_params = frozenset()
+_stage_track.allowed_params = frozenset({"iou_threshold", "max_age"})
+_stage_line_crossing.allowed_params = frozenset({"ax", "ay", "bx", "by"})
 _sink_jsonl.allowed_params = frozenset({"path"})
+_sink_crossing_events.allowed_params = frozenset({"path"})
 
 
 def _check_params(builder: Callable, where: str, params: Mapping) -> None:
@@ -111,8 +138,9 @@ def _check_params(builder: Callable, where: str, params: Mapping) -> None:
 DEFAULT_REGISTRY: dict[str, dict[str, Callable]] = {
     "sources": {"fake": _src_fake, "noise": _src_noise, "video": _src_video, "rtsp": _src_rtsp},
     "detectors": {"fake": _det_fake, "pt": _det_pt},
-    "stages": {"detect": _stage_detect, "count": _stage_count},
-    "sinks": {"jsonl": _sink_jsonl},
+    "stages": {"detect": _stage_detect, "count": _stage_count,
+               "track": _stage_track, "line_crossing": _stage_line_crossing},
+    "sinks": {"jsonl": _sink_jsonl, "crossing_events": _sink_crossing_events},
 }
 
 

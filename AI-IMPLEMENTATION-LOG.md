@@ -5370,3 +5370,26 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết (K-062):** Non-Goal v1: DB/queue sink (chỉ JSONL — DB là ISink khác sau) · KHÔNG dedupe qua restart (append thuần → restart ghi tiếp) · KHÔNG event cho count-per-frame · KHÔNG schema-version. `--crossing-out` v1 sync (như `--track/--line`).
 
 **Đã verify (CHẠY THẬT):** `pytest tests/test_crossing_event.py` = **7 passed** (stage phát event clock-tiêm + không-qua→() + clock mặc định "Z" + sink ghi N dòng JSON đúng field + skip non-SUCCESS/no-event + 2 wiring `--crossing-out`); `scripts\vp.cmd verify` = **501 passed/1 skipped · lint 5/0 · drift PASS · EXIT 0** (494→501, additive, không flaky). · **Chưa verify:** `--crossing-out` trên video/pt THẬT (mode ngoài CI); durability khi crash cứng (flush mỗi dòng → mất tối đa 1 event, thiết kế chấp nhận).
+
+
+### Entry #265 — 2026-07-09 — Mở rộng config-declarative: khai báo analytics chain (track/line_crossing/crossing_events) qua config — Kiro-Opus
+
+**Bối cảnh:** User "tiếp tục". Analytics (track/line/crossing-event) trước chỉ wire qua cờ CLI `vision_slice_app`. Cho hệ ~100 camera thương mại cần DEPLOY-BY-CONFIG (per-pipeline qua TOML). Mở rộng `config-declarative` (D-042) — dùng ĐÚNG extension point đã thiết kế (Req 3.3: "thêm loại = đăng ký registry, không sửa lõi").
+
+**1. Quyết định AI tự ra (spec không nói):**
+- KHÔNG tạo spec nặng: đây là additive thuần vào registry có sẵn (đăng ký 3 builder) — spec đầy đủ cho việc này = over-process (nêu design inline + TDD thay thế).
+- `pipeline_factory`: thêm builder `_stage_track` (params iou_threshold/max_age) · `_stage_line_crossing` (params ax,ay,bx,by, `_need` bắt buộc) · `_sink_crossing_events` (params path); đăng ký vào `stages`/`sinks`; khai `allowed_params` mỗi cái (strict-key K-046). KHÔNG sửa `build_runner`/`validate_config`/schema (chúng lặp generic).
+- Thêm `configs/example_analytics.toml` (chuỗi detect→track→line_crossing→count + sink crossing_events) làm template deploy.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không (additive vào registry; mọi config/test cũ chạy y hệt).
+
+**3. Trade-off đã cân nhắc:**
+- Đăng ký builder (dùng extension point) vs sửa build_runner tay → đăng ký (đúng thiết kế D-042, zero sửa lõi).
+- Spec đầy đủ vs inline+TDD cho "đăng ký 3 builder" → inline+TDD (proportionate, không over-process — đúng nguyên tắc chống over-engineer).
+
+**4. Điều bạn nên biết:**
+- Thứ tự stage trong config PHẢI đúng phụ thuộc: `detect` trước `track` trước `line_crossing` (đọc artifacts trước đó) — nếu sai thứ tự → StageResult.ERROR runtime (đã có guard thiếu-key ở mỗi stage). Config không tự sắp thứ tự (v1).
+- `out/` (output runtime, vd crossings.jsonl) đã gitignore.
+- `--validate` kiểm type/allowed_params (không bắt thiếu required param như ax/bx — cái đó fail-fast lúc build/run).
+
+**Đã verify (CHẠY THẬT):** `pytest tests/test_config_analytics.py` = **4 passed** (build_runner dựng đúng [DetectStage,TrackingStage,LineCrossingStage] + run 3 frame OK + validate chấp nhận + strict-key bắt typo `iou_thresh` + thiếu bx,by→ConfigError); `--validate configs/example_analytics.toml` = **config OK EXIT 0**; `scripts\vp.cmd verify` = **505 passed/1 skipped · lint 5/0 · drift PASS** (501→505, additive). · **Chưa verify:** chạy example_analytics.toml đầy đủ tạo out/crossings.jsonl (test đã chạy chuỗi qua tmp; không chạy example để tránh artifact).
