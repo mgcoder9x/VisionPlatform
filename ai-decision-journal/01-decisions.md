@@ -740,3 +740,13 @@ Evidence: `get_diagnostics` 2 file = 0 diagnostic; API bám thật (`Track.box`,
 Links: D-059 (tracking — cung cấp track_id), K-042 (camera-affinity), K-060 (giới hạn tracking)
 Nội dung: Thiết kế đếm vật băng qua vạch `[A,B]` theo hướng (in/out/total) — geometry thuần `domain/geometry.py` (orientation/cross-product + segments_intersect) + `LineCrossingStage`@runtime (stateful, đọc artifacts["tracks"], camera-affinity fail-fast, prune-bounded-memory). Additive (không sửa TrackingStage/lõi). 6 Property + test no-GPU (Track dựng tay).
 Vì sao: "đếm qua cửa" = nghiệp vụ phổ biến + là bước kế tự nhiên trên tracking (cần track_id để biết cùng vật). Design-first: valid geometry/quy-ước-hướng trước khi code (subsystem có hình học dễ sai). Nhánh scale (A1) vẫn chặn GPU.
+
+
+### D-061 — 2026-07-09 — Mở spec `crossing-event-log` (PHA1 design-first) — biến đếm-qua-vạch thành SỰ KIỆN JSONL bền vững
+Status: 🔵 (design-first 0-diag · CHƯA code · chờ user valid → PHA2 TDD)
+Scope: `.kiro/specs/crossing-event-log/{requirements,design}.md` (2 file, 0 code)
+Nguồn: LOG Entry #263 · user "cực sâu tiếp tục" · xây trên D-060 (line-crossing) · tái dùng mẫu JsonlEventSink
+Evidence: `get_diagnostics` 2 file = 0 diagnostic; API bám thật (`JsonlEventSink`, `LineCrossingStage._do_process`, `Track`, `ISink`)
+Links: D-060 (line-crossing — nguồn crossing), D-041 (JsonlEventSink/wall-clock QĐ-4), K-061
+Nội dung: Thiết kế `CrossingEvent` DTO@kernel + sửa ADDITIVE `LineCrossingStage` (phát `artifacts["crossing_events"]` + clock tiêm default wall-clock UTC) + `CrossingEventJsonlSink`@adapters (mkdir/append/flush theo mẫu JsonlEventSink) + wire `--crossing-out`. 5 Property + test no-GPU (clock tiêm + tmp_path). Non-Goal: DB/queue/dedupe/schema-version.
+Vì sao: sản phẩm thương mại cần bản-ghi-sự-kiện bền vững (ai/khi/hướng qua vạch) để audit/tích hợp, không chỉ số đếm phù du. event phát trong stage (nguồn sự thật lượt-qua). Design-first: valid schema/ranh-giới trước code.

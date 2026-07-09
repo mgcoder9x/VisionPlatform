@@ -5331,3 +5331,23 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - `--line` v1 đường sync (như `--track`) — hợp video/synthetic.
 
 **Đã verify (CHẠY THẬT):** `pytest tests/test_line_crossing.py` = **14 passed** (domain geometry + stage qua/không/hướng/edge/prune + 2 wiring: `main(--track --line)` rc0 "crossings_tot: 0", `--line` thiếu `--track`→SystemExit); `scripts\vp.cmd verify` = **494 passed/1 skipped · lint 5/0 · drift PASS · EXIT 0** (480→494, +14; additive; KHÔNG flaky lần này). · **Chưa verify:** `--line` trên video/pt THẬT (mode ngoài CI); cấu hình vạch cho cảnh thật.
+
+
+### Entry #263 — 2026-07-09 — Mở spec `crossing-event-log` (PHA1 design-first) — biến đếm thành SỰ KIỆN bền vững — Kiro-Opus
+
+**Bối cảnh:** User "cực sâu tiếp tục". Bước kế (khuyến nghị #1 sau line-crossing): biến `crossings_in/out/total` (aggregate RAM) → BẢN GHI TỪNG SỰ KIỆN JSONL (audit/tích hợp) — làm hệ thống sinh dữ liệu dùng được, no-GPU.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Mở spec `crossing-event-log` design-first: `requirements.md` (5 Req EARS) + `design.md` (CrossingEvent DTO@kernel + sửa ADDITIVE LineCrossingStage phát artifacts["crossing_events"] + clock TIÊM + CrossingEventJsonlSink@adapters theo mẫu JsonlEventSink + wire `--crossing-out`). CẢ HAI **0 diagnostic**. CHƯA CODE.
+- event phát TRONG LineCrossingStage (nơi duy nhất biết lượt-qua cụ thể); sink chỉ ghi.
+- clock tiêm (default wall-clock UTC) → xác định-test + đúng mẫu QĐ-4 slice (monotonic vô nghĩa khi lưu).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** sẽ sửa ADDITIVE LineCrossingStage (#262) — thêm clock kwarg (default now-UTC) + artifact crossing_events; counts + test cũ KHÔNG đổi.
+
+**3. Trade-off đã cân nhắc (design QĐ-1..5):** event-trong-stage vs sink-tự-suy (chọn stage — nguồn sự thật) · clock-tiêm vs now-cứng (tiêm — xác định) · sink RIÊNG vs nhồi JsonlEventSink (riêng — SRP) · DTO chỉ tâm cx,cy vs full BBox (tối giản json-friendly).
+
+**4. Điều bạn nên biết:**
+- PHA thiết kế: CHỜ user valid → PHA2 code TDD (DTO + sửa additive stage + sink + wire + test), kỳ vọng >494 · lint 5/0. Chưa code.
+- Non-Goal v1: DB/queue sink · dedupe qua restart · event count/classify · schema-version (đều sub-spec sau).
+
+**Đã verify:** `get_diagnostics` 2 file = **0 diagnostic**; API tham chiếu (`JsonlEventSink` mẫu, `LineCrossingStage._do_process` chỗ chèn, `Track`, `ISink`) đã đọc code thật. · **Chưa verify:** runtime (chưa code — PHA2); verify bằng test TDD (clock tiêm + tmp_path) sau khi user valid.

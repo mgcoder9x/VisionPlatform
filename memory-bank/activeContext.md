@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-09)
-**Cập nhật lúc:** 2026-07-09T17:00:00+07:00.
+**Cập nhật lúc:** 2026-07-09T17:40:00+07:00.
+**[🔵 #263 — Mở spec `crossing-event-log` PHA1 design-first (đếm→sự-kiện JSONL bền vững) — chờ user valid]**
+- Bước sản phẩm kế (khuyến nghị #1 sau line-crossing): biến `crossings_*` (aggregate RAM) → bản-ghi TỪNG SỰ KIỆN JSONL (audit/tích hợp downstream) — làm hệ thống sinh dữ liệu dùng được, no-GPU.
+- Tạo `.kiro/specs/crossing-event-log/{requirements,design}.md` — **0 diagnostic**, CHƯA code.
+- **Thiết kế:** `CrossingEvent` DTO@kernel (track_id/label/direction/source_id/cx,cy/event_ts wall-clock) + sửa ADDITIVE `LineCrossingStage` (phát `artifacts["crossing_events"]` + clock TIÊM default now-UTC) + `CrossingEventJsonlSink`@adapters (mẫu JsonlEventSink) + wire `--crossing-out`. 5 Property + test no-GPU (clock tiêm). Journal +D-061. Log #263.
+- **Bước kế (CHỜ user valid design):** → PHA2 code TDD (DTO + sửa additive stage + sink + wire + test), kỳ vọng >494 · lint 5/0. Nếu muốn feature khác → đổi hướng.
+- Song song chờ: CI run đầu (#257) · A1 cần GPU · PAT rotate (#256).
+---
 **[✅ #262 — `line-crossing-count` HOÀN TẤT (code TDD + wire `--line`) — đếm vật qua vạch end-to-end]**
 - Code PHA2 (sau design #261): `domain/geometry.py` (orient + segments_intersect thuần) + `runtime/stages/line_crossing_stage.py::LineCrossingStage` (stateful, đọc artifacts["tracks"], đếm in/out/total theo hướng, camera-affinity + space fail-fast, prune bounded-memory) + wire `--line "ax,ay,bx,by"` (cần `--track`) + `tests/test_line_crossing.py` (14 test).
 - **VERIFY THẬT:** `pytest tests/test_line_crossing.py` = 14 passed; `scripts\vp.cmd verify` = **494 passed/1 skipped · lint 5/0 · drift PASS · EXIT 0** (480→494, additive; không flaky). Journal D-060 ✅ +K-061 (tổng 165). Log #262.
