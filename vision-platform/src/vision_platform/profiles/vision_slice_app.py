@@ -98,6 +98,8 @@ def _validate(args, parser):
             parser.error("--line: cần 4 số 'ax,ay,bx,by'")
     if args.crossing_out and not args.line:
         parser.error("--crossing-out cần --line (ghi sự kiện qua vạch)")
+    if args.crossing_db and not args.line:
+        parser.error("--crossing-db cần --line (ghi sự kiện qua vạch vào SQLite)")
 
 
 def _validate_config_only(path: str) -> int:
@@ -181,6 +183,8 @@ def main(argv=None) -> int:
                         help="vạch đếm-qua dạng 'ax,ay,bx,by' (ORIGINAL_FRAME) — cần --track")
     parser.add_argument("--crossing-out", default=None,
                         help="path .jsonl ghi CrossingEvent mỗi lượt qua vạch — cần --line")
+    parser.add_argument("--crossing-db", default=None,
+                        help="path .sqlite ghi CrossingEvent vào SQLite (queryable) — cần --line")
     args = parser.parse_args(argv)
 
     if args.validate and not args.config:
@@ -215,6 +219,9 @@ def main(argv=None) -> int:
     if args.crossing_out:
         from vision_platform.adapters.crossing_event_sink import CrossingEventJsonlSink
         sinks.append(CrossingEventJsonlSink(args.crossing_out))
+    if args.crossing_db:
+        from vision_platform.adapters.crossing_event_sqlite_sink import CrossingEventSqliteSink
+        sinks.append(CrossingEventSqliteSink(args.crossing_db))
     if track_summary is not None:
         sinks.append(track_summary)
     sink = CompositeSink(sinks)
@@ -238,6 +245,8 @@ def main(argv=None) -> int:
         print(f"  crossings_tot: {track_summary.cross_total}", file=sys.stderr)
     if args.crossing_out:
         print(f"  crossing events → {args.crossing_out}", file=sys.stderr)
+    if args.crossing_db:
+        print(f"  crossing events db → {args.crossing_db}", file=sys.stderr)
     if args.out:
         print(f"  events → {args.out}", file=sys.stderr)
     return 0

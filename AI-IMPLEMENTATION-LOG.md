@@ -5393,3 +5393,24 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - `--validate` kiểm type/allowed_params (không bắt thiếu required param như ax/bx — cái đó fail-fast lúc build/run).
 
 **Đã verify (CHẠY THẬT):** `pytest tests/test_config_analytics.py` = **4 passed** (build_runner dựng đúng [DetectStage,TrackingStage,LineCrossingStage] + run 3 frame OK + validate chấp nhận + strict-key bắt typo `iou_thresh` + thiếu bx,by→ConfigError); `--validate configs/example_analytics.toml` = **config OK EXIT 0**; `scripts\vp.cmd verify` = **505 passed/1 skipped · lint 5/0 · drift PASS** (501→505, additive). · **Chưa verify:** chạy example_analytics.toml đầy đủ tạo out/crossings.jsonl (test đã chạy chuỗi qua tmp; không chạy example để tránh artifact).
+
+
+### Entry #266 — 2026-07-09 — Spec + code `crossing-event-sqlite-sink`: lưu sự-kiện qua-vạch vào SQLite queryable — Kiro-Opus
+
+**Bối cảnh:** User "máy không GPU, code chuẩn nhất, video/GPU để sau". Thêm lưu trữ QUERYABLE (SQL) cho CrossingEvent — `sqlite3` stdlib, no-GPU, chuẩn vận hành/BI. Design-first (spec 0-diag) rồi code TDD cùng lượt (sink pattern quen + design đã rõ).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Spec `crossing-event-sqlite-sink` (req+design 0-diag) + `adapters/crossing_event_sqlite_sink.py::CrossingEventSqliteSink` (sqlite3 stdlib): schema bảng `crossings` + index `(source_id,event_ts)` + INSERT tham-số-hoá `?` + `executemany` + commit/frame.
+- Đăng ký registry `crossing_events_sqlite` (extension point D-042) + CLI `--crossing-db` (cần `--line`).
+- `check_same_thread` mặc định (1 luồng runner sync) — đa-thread Non-Goal.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không (additive — sink mới song song JsonlSink; không sửa stage/lõi/schema config).
+
+**3. Trade-off đã cân nhắc (design QĐ-1..5):** sqlite3 stdlib vs server-DB (chọn sqlite — zero-dep, đủ 1 node; server-DB là ISink sau) · commit/frame vs batch (durability > tốc độ) · tham-số-hoá `?` (an toàn injection) · sink RIÊNG (SRP, 2 backend chọn qua config/CLI).
+
+**4. Điều bạn nên biết:**
+- Non-Goal v1: ORM/migration/schema-version · đa-thread/pool · server-DB · dedupe qua restart (append thuần).
+- `check_same_thread=True` (mặc định) → sink dùng ĐÚNG 1 thread (runner sync). Async/đa-thread sau cần conn/thread hoặc flag+lock (ghi rõ).
+- Query mẫu: `SELECT direction,COUNT(*) FROM crossings WHERE source_id=? AND event_ts>=? GROUP BY direction`.
+
+**Đã verify (CHẠY THẬT + query lại DB):** `pytest tests/test_crossing_event_sqlite.py` = **6 passed** (ghi+SELECT khớp field · setup idempotent 2 lần · skip non-SUCCESS/no-event · index tồn tại + label chứa `'` lưu nguyên (tham-số-hoá) · config `crossing_events_sqlite` build+run + CLI `--crossing-db` rc0 + thiếu `--line`→SystemExit); `scripts\vp.cmd verify` = **511 passed/1 skipped · lint 5/0 · drift PASS · EXIT 0** (505→511). · **Chưa verify:** tải ghi lớn/hiệu năng SQLite thật; đa-thread (Non-Goal).

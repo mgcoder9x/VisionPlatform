@@ -760,3 +760,13 @@ Evidence: `pytest tests/test_config_analytics.py` 4 passed; `--validate example_
 Links: D-042 (config-declarative), D-045/K-046 (strict-key), D-059/D-060/D-061 (analytics được wire)
 Nội dung: Thêm builder `_stage_track`/`_stage_line_crossing`/`_sink_crossing_events` vào registry pipeline_factory + `allowed_params` mỗi cái. KHÔNG sửa `build_runner`/`validate_config`/schema (lặp generic) → additive thuần đúng thiết kế D-042. + config mẫu `example_analytics.toml` (chuỗi detect→track→line_crossing→count + sink crossing_events). Deploy-by-config: 1 TOML khai báo chuỗi analytics per-pipeline.
 Vì sao: hệ ~100 camera thương mại cần khai-báo-per-camera qua config, không đổi code mỗi deploy. Dùng extension point có sẵn = fix bản chất (đúng chỗ mở rộng đã thiết kế), không sửa lõi. KHÔNG tạo spec nặng cho "đăng ký 3 builder" = tránh over-process (proportionate).
+
+
+### D-063 — 2026-07-09 — Spec + code `crossing-event-sqlite-sink`: lưu CrossingEvent vào SQLite queryable
+Status: ✅ (PHA1 design 0-diag + PHA2 code TDD — verify **511/1 · lint 5/0**)
+Scope: `.kiro/specs/crossing-event-sqlite-sink/{requirements,design}.md` · `adapters/crossing_event_sqlite_sink.py` · `pipeline_factory` (registry `crossing_events_sqlite`) · `vision_slice_app` (`--crossing-db`)
+Nguồn: LOG Entry #266 · user "code chuẩn nhất, GPU sau" · mẫu CrossingEventJsonlSink (D-061) · extension point D-042
+Evidence: `pytest tests/test_crossing_event_sqlite.py` 6 passed (query lại DB khớp); `vp verify` 511/1 · lint 5/0 · drift PASS; `sqlite3 3.45.1` stdlib
+Links: D-061 (CrossingEvent), D-062 (config extension), D-042 (registry), K-062
+Nội dung: `CrossingEventSqliteSink` (sqlite3 stdlib): bảng `crossings` + index `(source_id,event_ts)` + INSERT tham-số-hoá `?` + `executemany` + commit/frame; lifecycle setup(connect+CREATE IF NOT EXISTS)/handle(chỉ SUCCESS)/teardown(commit+close). Đăng ký registry `crossing_events_sqlite` + CLI `--crossing-db` (cần `--line`). Song song JsonlSink (chọn theo nhu cầu: stream vs query).
+Vì sao: vận hành/BI cần lưu trữ TRUY VẤN được (SQL) — flat JSONL khó query. sqlite3 stdlib (zero-dep, đủ 1 node) đúng mức, không server-DB (over-engineer khi chưa scale; server-DB là ISink khác sau — không đập lõi). Tham-số-hoá = an toàn injection + đúng kiểu (code chuẩn).

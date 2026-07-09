@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-09)
-**Cập nhật lúc:** 2026-07-09T19:00:00+07:00.
+**Cập nhật lúc:** 2026-07-09T19:40:00+07:00.
+**[✅ #266 — `crossing-event-sqlite-sink`: lưu sự-kiện qua-vạch vào SQLite QUERYABLE (no-GPU, code chuẩn)]**
+- User: máy không GPU → làm code chuẩn nhất phần no-GPU; video/GPU sau. Thêm lưu trữ TRUY VẤN được (SQL) cho CrossingEvent.
+- `adapters/crossing_event_sqlite_sink.py::CrossingEventSqliteSink` (sqlite3 stdlib, zero-dep): bảng `crossings` + index `(source_id,event_ts)` + INSERT tham-số-hoá `?` + `executemany` + commit/frame; setup CREATE IF NOT EXISTS idempotent. Đăng ký registry `crossing_events_sqlite` + CLI `--crossing-db` (cần `--line`). Design-first spec 0-diag rồi code cùng lượt.
+- **VERIFY THẬT:** `pytest tests/test_crossing_event_sqlite.py` = 6 passed (ghi+query lại DB khớp field · idempotent · skip non-SUCCESS · index+tham-số-hoá an toàn label chứa `'` · config+CLI). `scripts\vp.cmd verify` = **511 passed/1 skipped · lint 5/0 · drift PASS**. Journal +D-063 (spec `crossing-event-sqlite-sink`). Log #266. Tổng 169 entry.
+- **Lưu trữ giờ 2 backend:** JSONL (stream) + SQLite (queryable) — chọn qua config (`crossing_events`/`crossing_events_sqlite`) hoặc CLI (`--crossing-out`/`--crossing-db`).
+- **Bước kế (chờ user):** (a) classify tầng-2 (cần model/GPU — để khi có GPU) · (b) motion-gate (CPU, no-GPU, giảm tải inference — K-040) · (c) server-DB sink · (d) chạy chuỗi trên video/pt thật (khi user có video+GPU) · (e) dừng mốc sạch.
+- Song song chờ: CI run đầu (#257) · PAT rotate (#256).
+---
 **[✅ #265 — Config-declarative mở rộng ANALYTICS (deploy-by-config) — khai báo track/line/crossing qua TOML]**
 - Analytics trước chỉ wire qua cờ CLI; giờ khai báo được per-pipeline qua config (deploy ~100 cam không đổi code). Additive vào registry `pipeline_factory` (đúng extension point D-042/Req 3.3): builder `track`/`line_crossing`/`crossing_events` + `allowed_params` (K-046). KHÔNG sửa build_runner/validate_config/schema. + `configs/example_analytics.toml` template.
 - **VERIFY THẬT:** `pytest tests/test_config_analytics.py` = 4 passed (build đúng chuỗi stage + run + validate + strict-key + required); `--validate example_analytics.toml` = OK EXIT 0; `scripts\vp.cmd verify` = **505 passed/1 skipped · lint 5/0 · drift PASS** (501→505). Journal +D-062 (tổng 168). Log #265. `out/` gitignore.

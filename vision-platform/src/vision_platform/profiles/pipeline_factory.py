@@ -97,6 +97,12 @@ def _sink_crossing_events(params: Mapping):
     return CrossingEventJsonlSink(params["path"])
 
 
+def _sink_crossing_events_sqlite(params: Mapping):
+    from vision_platform.adapters.crossing_event_sqlite_sink import CrossingEventSqliteSink
+    _need(params, "path", "sink crossing_events_sqlite")
+    return CrossingEventSqliteSink(params["path"])
+
+
 def _need(params: Mapping, key: str, what: str) -> None:
     if key not in params:
         raise ConfigError(f"{what} thiếu params['{key}']")
@@ -118,6 +124,7 @@ _stage_track.allowed_params = frozenset({"iou_threshold", "max_age"})
 _stage_line_crossing.allowed_params = frozenset({"ax", "ay", "bx", "by"})
 _sink_jsonl.allowed_params = frozenset({"path"})
 _sink_crossing_events.allowed_params = frozenset({"path"})
+_sink_crossing_events_sqlite.allowed_params = frozenset({"path"})
 
 
 def _check_params(builder: Callable, where: str, params: Mapping) -> None:
@@ -140,7 +147,8 @@ DEFAULT_REGISTRY: dict[str, dict[str, Callable]] = {
     "detectors": {"fake": _det_fake, "pt": _det_pt},
     "stages": {"detect": _stage_detect, "count": _stage_count,
                "track": _stage_track, "line_crossing": _stage_line_crossing},
-    "sinks": {"jsonl": _sink_jsonl, "crossing_events": _sink_crossing_events},
+    "sinks": {"jsonl": _sink_jsonl, "crossing_events": _sink_crossing_events,
+              "crossing_events_sqlite": _sink_crossing_events_sqlite},
 }
 
 
