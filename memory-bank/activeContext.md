@@ -1,7 +1,13 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-09)
-**Cập nhật lúc:** 2026-07-09T13:15:00+07:00.
+**Cập nhật lúc:** 2026-07-09T13:50:00+07:00.
+**[🔵 #257 — CI server-side (GitHub Actions `verify.yml`) — anti-drift phía-server, CHỜ run CI đầu]**
+- Thêm `.github/workflows/verify.yml`: windows-latest → checkout→setup-python 3.11→`pip install -e .[dev,onnx,cv2,web]`→`pytest -q`→lint(`importlinter.api`)→`python tests/drift_check.py`. Chạy CHÍNH cổng `vp verify` trên server sau mỗi push/PR → không phụ thuộc dev chạy Kiro. windows-latest giữ parity test `win32`.
+- **Ranh giới verify (trung thực):** KHÔNG chạy Actions cục bộ được → workflow 🔵 CHƯA verify; xanh/đỏ chỉ biết khi push kích hoạt (xem tab Actions / dán log). YAML viết tay (venv không có pyyaml để parse).
+- Journal +D-058(🔵)/T-024/K-059(🔵) (tổng 161). Log #257. Sẽ commit+push nhánh → push này tự kích hoạt CI lần đầu.
+- **Bước kế:** xem kết quả CI run đầu → nếu xanh đổi D-058/K-059 ✅; nếu đỏ (flaky K-035 hay version actions) → sửa. Fork sản phẩm (A1 GPU · R3 hoãn · C1) vẫn chờ.
+---
 **[🛠️ #256 — Lớp trừu tượng môi trường: dev-env launcher `scripts/vp.cmd` (cross-machine) + commit/push nhánh]**
 - User: máy này KHÔNG GPU + muốn lớp môi trường chạy dễ trên nhiều máy/môi trường; commit+push nhánh KHÔNG cần hỏi.
 - **Làm:** `scripts/vp.cmd` (`env/setup/test/lint/check/verify`) auto-detect interpreter (py→venv→python capability-test) + GPU (nvidia-smi inform) + ghi đè `VP_PYTHON`/`VP_EXTRAS` qua `scripts/env.local.cmd` (gitignored, per-máy) + `env.local.cmd.example` + `scripts/README.md`. `lint` bake `importlinter.api` (K-044); KHÔNG auto torch (K-049). Gitignore +`.venv_broken`/`env.local.cmd`.

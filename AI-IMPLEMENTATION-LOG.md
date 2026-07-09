@@ -5196,3 +5196,27 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Batch dùng `enabledelayedexpansion` + `!errorlevel!` để propagate exit code đúng; `if errorlevel 1` cho capability-test trong block.
 
 **Đã verify (CHẠY THẬT + đọc output):** `vp env` = BASEPY `py -3`/venv exists/GPU khong/extras baseline (EXIT 0); `vp verify` = **465 passed/1 skipped · lint 5 kept/0 broken · DRIFT-CHECK PASS · test=0 lint=0 check=0 · VERIFY OK EXIT 0**; `vp setup` = reinstall vision_platform EXIT 0. · **Chưa verify:** nhánh `python`/venv của detect trên máy scoop; `vp.sh` Linux (chưa tạo).
+
+
+### Entry #257 — 2026-07-09 — CI server-side (GitHub Actions `verify.yml`) — tầng anti-drift độc lập máy dev — Kiro-Opus
+
+**Bối cảnh:** Anti-drift hiện có (hook Kiro + linter) phụ thuộc dev chạy Kiro trên máy mình → push từ máy/công cụ khác không bị chặn. Thêm cổng server-side chạy vô điều kiện sau mỗi push/PR = tầng mạnh nhất, chuẩn sản phẩm thương mại. User "duyệt theo khuyến nghị / tiếp tục" → thực thi khuyến nghị #1.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Tạo `.github/workflows/verify.yml`: checkout → setup-python 3.11 → `pip install -e .[dev,onnx,cv2,web]` (KHÔNG torch) → `pytest -q` → import-linter qua `importlinter.api` → `python tests/drift_check.py`. Chạy CHÍNH bộ cổng của `vp verify` (không logic mới).
+- Runner **windows-latest** (không ubuntu) — giữ parity test cross-process guard `win32` (ubuntu sẽ skip → cổng yếu).
+- CI dùng `python` trực tiếp (setup-python bảo đảm `python` thật, KHÔNG Store-alias) → không cần launcher .cmd ở đây.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không (additive; cùng cổng, chỉ chuyển sang server-side).
+
+**3. Trade-off đã cân nhắc:**
+- windows-latest vs ubuntu-latest → windows (parity win32 cross-process; đổi lấy tốn Actions-minutes hơn). Nếu repo private ngân sách minutes hạn chế → có thể ubuntu + chấp nhận skip win32 (chưa chọn, ghi để user quyết).
+- CI cài trực tiếp vào python runner vs dựng venv/`vp setup` → cài trực tiếp (runner sạch, venv thừa) — CI và `vp verify` là 2 mặt của cùng cổng.
+
+**4. Điều bạn nên biết:**
+- **Ranh giới verify (trung thực):** tôi KHÔNG chạy được GitHub Actions cục bộ → workflow chỉ được verify khi push kích hoạt (xem tab Actions / dán log lại). YAML viết cẩn thận nhưng chưa parse (venv không có pyyaml).
+- Rủi ro flaky trên CI (K-035: test cross-process/shutdown nhạy tải) — nếu đỏ do flaky, không phải regression; xử lý riêng.
+- `actions/checkout@v4` + `actions/setup-python@v5` là major version ổn định hiện hành [chưa kiểm trên chính CI này — verify khi chạy].
+- Token PAT nhúng URL origin (cảnh báo #256) KHÔNG ảnh hưởng Actions (Actions dùng GITHUB_TOKEN tự cấp).
+
+**Đã verify:** file `.github/workflows/verify.yml` đã tạo (YAML thủ công, cấu trúc jobs.verify + 5 step). · **Chưa verify:** CI chạy xanh trên GitHub (verify khi push — không chạy Actions cục bộ được); tính đúng version actions@v4/v5 khi thực thi.

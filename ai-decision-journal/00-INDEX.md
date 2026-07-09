@@ -2,7 +2,7 @@
 
 > Rà nhanh: lọc mọi dòng **🔴 / 🟡** → đó là danh sách "chưa chắc chắn / rủi ro mở" cần đối chiếu.
 > Chi tiết + `Nguồn`/`Evidence` của mỗi ID nằm trong file tương ứng. Trạng thái nguồn: xem `README.md` §4.
-> **Cập nhật lúc:** 2026-07-09 (máy `k.nguyen.manh.toan` — FIX GỐC hook drift-check PORTABLE: launcher `tests/drift_check.cmd` capability-test interpreter, đóng lỗ hook EXIT 9009 do `python` Store-alias; +D-056/T-022/K-057). Bản đã-commit #253 RE-VERIFY XANH tại máy này (465/1 · lint 5/0 · drift-check PASS). **Hook agentStop tự chạy launcher = PASS/EXIT 0 (VERIFIED #255).** **Dev-env launcher `scripts/vp.cmd` (cross-machine, #256): `vp env/setup/test/lint/check/verify` — verify 465/1·5/0·drift PASS.** Log canonical tới **Entry #256**. Baseline test: **465 passed/1 skipped · lint 5 kept/0 broken**. **Drift-check (`cmd /c tests\drift_check.cmd` hoặc `py tests/drift_check.py`): PASS.** Tổng **158 entry** (D57·C20·T23·K58). Review-hardened backpressure: F1 (đua drain) + D-055 (bất biến vô điều kiện); F3 = hợp đồng dùng (K-056). Còn nợ: R3 chưa wire end-to-end · POSIX chưa verify · git K-007 (máy này CÓ .git, up-to-date `origin/main` — cần user xác nhận `origin` là backup thật).
+> **Cập nhật lúc:** 2026-07-09 (máy `k.nguyen.manh.toan` — FIX GỐC hook drift-check PORTABLE: launcher `tests/drift_check.cmd` capability-test interpreter, đóng lỗ hook EXIT 9009 do `python` Store-alias; +D-056/T-022/K-057). Bản đã-commit #253 RE-VERIFY XANH tại máy này (465/1 · lint 5/0 · drift-check PASS). **Hook agentStop tự chạy launcher = PASS/EXIT 0 (VERIFIED #255).** **Dev-env launcher `scripts/vp.cmd` (cross-machine, #256).** **CI server-side `.github/workflows/verify.yml` (#257, 🔵 chờ run CI đầu): pytest+lint+drift trên windows-latest sau mỗi push.** Log canonical tới **Entry #257**. Baseline test: **465 passed/1 skipped · lint 5 kept/0 broken**. **Drift-check (`cmd /c tests\drift_check.cmd` hoặc `py tests/drift_check.py`): PASS.** Tổng **161 entry** (D58·C20·T24·K59). Review-hardened backpressure: F1 (đua drain) + D-055 (bất biến vô điều kiện); F3 = hợp đồng dùng (K-056). Còn nợ: R3 chưa wire end-to-end · POSIX chưa verify · git K-007 (máy này CÓ .git, up-to-date `origin/main` — cần user xác nhận `origin` là backup thật).
 
 ## 1. Quyết định tự ra — `01-decisions.md`
 | ID | Trạng thái | Tóm tắt | Nguồn (LOG Entry) |
@@ -64,6 +64,7 @@
 | D-055 | ✅ | Bất biến bảo toàn ĐÚNG VÔ ĐIỀU KIỆN: `camera_worker.finally` teardown-trước → đếm `frames_dropped_shutdown`=leftover-van + snapshot-sau-quiesce; `_write_result` gộp 3 tầng drop (client+shm+shutdown). Đóng biên "server chết+van đầy" + F2(K-056). **VERIFY: fullstack + full 465/1 + lint 5/0** | #253 |
 | D-056 | ✅ | Hook drift-check dùng LAUNCHER `tests/drift_check.cmd` capability-test interpreter (py→venv→python) thay hardcode `python` → đóng lỗ hook EXIT 9009 (Store-alias). Fix gốc portable, KHÔNG đụng rule/RULES_VERSION. Port kit. **VERIFY: launcher EXIT 0 + drift_check PASS** | #254 |
 | D-057 | ✅ | Lớp trừu tượng môi trường = dev-env launcher `scripts/vp.cmd` (`env/setup/test/lint/check/verify`) auto-detect interpreter/GPU + ghi đè `VP_PYTHON`/`VP_EXTRAS` qua `env.local.cmd` (per-máy, gitignored). Gộp venv/pytest/lint(K-044)/drift → 1 giao diện cross-machine. **VERIFY: env/setup/verify EXIT 0 · 465/1·5/0·drift PASS** | #256 |
+| D-058 | 🔵 | CI server-side `.github/workflows/verify.yml` (windows-latest, parity `win32`): checkout→setup-python 3.11→install→pytest→lint(importlinter.api)→drift_check. Anti-drift PHÍA-SERVER (không phụ thuộc dev chạy Kiro). CHƯA verify run CI (không chạy Actions cục bộ) | #257 |
 ## 2. Chỗ phải đổi — `02-requirement-changes.md`
 | ID | Trạng thái | Đổi gì | Nguồn |
 |---|---|---|---|
@@ -114,6 +115,7 @@
 | T-021 | ✅ | R3 cấm BLOCK+RTSP: hàm guard THUẦN sẵn-sàng-wire vs bơm field policy vào schema+parse+wire ngay → guard thuần (config chưa tiêu thụ policy → schema = over-engineer; guard+test nắm bản chất R3, P7) | #245 |
 | T-022 | ✅ | Hook interpreter: launcher capability-test vs swap `python`→`py` vs chỉ-venv → **launcher** (2 máy setup khác nhau, không tên đơn nào đúng cả hai; py-swap=ngọn vỡ scoop; venv-only vỡ fresh-clone) | #254 |
 | T-023 | ✅ | Dev-env: dispatcher `.cmd` tự-viết vs Makefile/just/nox vs lệnh tay → **`.cmd` thuần** (chạy ngay mọi Windows sạch, zero-dep; Make/just cần cài thêm = trái mục tiêu; lệnh tay = fix ngọn không xóa ma sát). Cross-OS `.sh` = mở rộng sau | #256 |
+| T-024 | ✅ | CI runner: windows-latest vs ubuntu-latest → **windows-latest** (parity test `win32` cross-process; ubuntu skip chúng = cổng yếu/tự-lừa). Đổi lấy: tốn Actions-minutes hơn. Ép ngân sách → ubuntu + ghi rõ skip | #257 |
 
 ## 4. Điều nên biết / rủi ro — `04-things-to-know.md`
 | ID | Trạng thái | Nội dung | Đóng khi |
@@ -176,6 +178,7 @@
 | K-056 | 🟡 | Ranh giới client backpressure (KHÔNG bug — hợp đồng dùng): F2 `metrics_snapshot` đọc-sau-quiesce (io idle); F3 không trộn `infer()` sync + `submit()` async nặng (sync bỏ qua flow-control window) | #252 |
 | K-057 | ✅ | Interpreter Python KHÔNG portable giữa máy Windows (python.org có `py` · scoop có `python` · Store-alias `python` tồn-tại-mà-hỏng-9009) → hook/CI dò CAPABILITY (`--version` exit 0), KHÔNG hardcode tên/không presence-test. Đóng bằng launcher D-056 | #254 |
 | K-058 | ✅ | Dev-env launcher: đổi máy chỉ cần `scripts\vp.cmd setup` → `vp verify`; auto-detect sai thì tạo `scripts\env.local.cmd` (gitignored) đặt `VP_PYTHON`/`VP_EXTRAS`; máy GPU thêm `pt` vào extras (nhớ K-049 torch-CPU). `vp lint` né AV sẵn (K-044) | #256 |
+| K-059 | 🔵 | CI `verify.yml`: KHÔNG verify được cục bộ → chỉ biết xanh/đỏ khi push (dán log Actions); flaky risk K-035 (đỏ-flaky≠regression); actions checkout@v4/setup-python@v5 [chưa kiểm trên CI]; PAT-URL không ảnh hưởng Actions (GITHUB_TOKEN). Đóng ✅ khi CI xanh lần đầu | #257 |
 
 ## Tổng quan trạng thái (cập nhật 2026-07-06 — phiên máy-3 `endgame`, sync đầy đủ config-declarative + môi trường)
 - **Tổng 127 entry:** D 47 (D-001..047) · C 17 (C-001..017) · T 17 (T-001..017) · K 49 (K-001..049). Baseline **436 passed/1 skipped · lint 5/0** — ✅ **ĐÃ TỰ VERIFY phiên này** (máy `endgame`, scoop py3.13.12, LOG #232: pytest 48.70s EXIT 0 + `importlinter.api` LINT_OK True). K-047+K-045+K-046 đóng; +9 test bench.

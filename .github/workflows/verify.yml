@@ -1,0 +1,42 @@
+name: verify
+
+# Cổng chất lượng server-side (anti-drift độc lập máy dev): chạy lại ĐÚNG bộ cổng của
+# `scripts/vp.cmd verify` — pytest + import-linter + drift-check — sau MỖI push/PR.
+# Vì sao windows-latest: baseline 465/1 gồm test cross-process guard `win32`; ubuntu sẽ SKIP
+# chúng → cổng yếu đi. Windows giữ parity. (Đổi lấy: tốn Actions-minutes hơn ubuntu.)
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install package + baseline extras (KHÔNG torch/GPU)
+        working-directory: vision-platform
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,onnx,cv2,web]"
+
+      - name: Tests (pytest)
+        working-directory: vision-platform
+        run: python -m pytest -q
+
+      - name: Import-linter (qua importlinter.api — parity với `vp lint`, đóng K-044)
+        working-directory: vision-platform
+        run: python -c "import importlinter.api; from importlinter.application.use_cases import lint_imports; import sys; sys.exit(0 if lint_imports() else 1)"
+
+      - name: Drift-check (nhất quán bộ nhớ + RULES_VERSION)
+        run: python tests/drift_check.py

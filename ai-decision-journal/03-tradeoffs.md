@@ -244,3 +244,14 @@ Chọn: **dispatcher `.cmd` thuần** (auto-detect + env-var override).
 - Phương án B (bác) — Makefile/just/nox: mạnh + cross-OS, NHƯNG thêm dependency (make/just/nox chưa chắc có trên máy sạch Windows) → mâu thuẫn chính mục tiêu "chạy ngay mọi máy không cần cài thêm". `.cmd` chạy trên mọi Windows sạch.
 - Phương án C (bác) — giữ lệnh tay + ghi doc: zero-code nhưng KHÔNG xóa ma sát (vẫn gõ tay, vẫn sai interpreter/extras mỗi máy) = fix ngọn (doc) không phải gốc (tự động hóa).
 - Vì sao chấp nhận A (bản chất): mục tiêu = "đổi máy chạy được NGAY, không cài thêm gì". `.cmd` thuần thỏa trọn (Windows có sẵn cmd) + tái dùng pattern capability-test đã verify. Cross-OS là mở rộng, không phải yêu cầu hiện tại.
+
+
+### T-024 — 2026-07-09 — CI runner: windows-latest  vs  ubuntu-latest
+Status: ✅ (chọn windows-latest — chờ verify CI run)
+Scope: `.github/workflows/verify.yml`
+Nguồn: LOG Entry #257 · D-058
+Links: D-058, K-059
+Chọn: **windows-latest**.
+- Cái mất: Actions-minutes đắt hơn ubuntu (~2×); khởi động runner chậm hơn.
+- Phương án B (bác) — ubuntu-latest: rẻ + nhanh, NHƯNG baseline 465/1 gồm test cross-process guard `sys.platform=='win32'` → trên ubuntu chúng SKIP → cổng CI KHÔNG phủ đúng phần đã dev/verify trên Windows = cổng yếu hơn thực tế.
+- Vì sao chấp nhận A (bản chất): mục tiêu CI = chặn regression ĐÚNG cái baseline đang bảo vệ (465/1 gồm win32). Chạy môi trường khác baseline = tự lừa mình (xanh CI nhưng bỏ sót path). Parity > tiết kiệm minutes. Nếu ngân sách minutes ép buộc → ubuntu + ghi rõ "win32 tests skip" (chưa cần).

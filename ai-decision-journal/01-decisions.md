@@ -710,3 +710,13 @@ Evidence: `vp env` EXIT 0 (BASEPY=py -3, GPU=khong); `vp verify` = 465/1 + lint 
 Links: D-056 (launcher pattern), K-058, T-023, K-044/K-049
 Nội dung: Dispatcher `.cmd` subcommand `env/setup/test/lint/check/verify` — 1 giao diện chạy giống nhau mọi máy. Auto-detect interpreter theo KHẢ NĂNG (py→venv→python) + GPU qua nvidia-smi (chỉ inform). Ghi đè per-máy bằng `VP_PYTHON`/`VP_EXTRAS` nạp từ `scripts/env.local.cmd` (gitignored) — mỗi máy 1 profile, file chung vẫn chạy nhờ auto-detect. `lint` bake `importlinter.api` (K-044), `check` ủy quyền drift_check.cmd.
 Vì sao: đổi máy = ma sát tay lặp lại (đã ghi ≥5 K-entry) → gom thành lớp ổn định = fix GỐC ma sát môi trường, không phải vá từng lần. KHÔNG auto-cài torch dù thấy GPU (tôn trọng K-049) → an toàn, để env-var quyết.
+
+
+### D-058 — 2026-07-09 — CI server-side (GitHub Actions `verify.yml`) chạy cổng pytest+lint+drift sau mỗi push
+Status: 🔵 (tạo xong · CHƯA verify chạy CI — verify khi push kích hoạt)
+Scope: `.github/workflows/verify.yml`
+Nguồn: LOG Entry #257 · khuyến nghị #256 (anti-drift server-side)
+Evidence: file tạo (jobs.verify, windows-latest, 5 step: checkout/setup-python/install/pytest/lint(importlinter.api)/drift_check). CHƯA chạy CI (không chạy Actions cục bộ được)
+Links: D-057 (vp verify — cùng cổng), D-056, K-059, T-024, K-044
+Nội dung: CI chạy lại ĐÚNG cổng của `vp verify` trên server sau mỗi push/PR → không phụ thuộc dev chạy Kiro cục bộ. windows-latest giữ parity test `win32`. Dùng `python` trực tiếp (setup-python, không Store-alias) nên không cần launcher.
+Vì sao: hook Kiro + linter là anti-drift PHÍA-DEV (bỏ qua được nếu push từ máy/tool khác). CI = anti-drift PHÍA-SERVER, vô điều kiện → mạnh nhất + chuẩn thương mại. Tái dùng cổng đã có = rủi ro thấp, không logic mới.

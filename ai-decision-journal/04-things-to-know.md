@@ -611,3 +611,13 @@ Evidence: `vp env/verify/setup` chạy thật EXIT 0 trên máy `k.nguyen.manh.t
 Đóng khi: đã dùng được (ghi để dùng đúng)
 Nội dung: Đổi máy → chỉ cần `scripts\vp.cmd setup` rồi `scripts\vp.cmd verify`. Auto-detect interpreter/GPU; nếu sai, tạo `scripts\env.local.cmd` (copy từ `.example`, gitignored) đặt `VP_PYTHON`/`VP_EXTRAS`. Máy CÓ GPU + muốn torch: `set "VP_EXTRAS=dev,onnx,cv2,web,pt"` (lưu ý K-049: Windows dễ ra torch-CPU, cần CUDA wheel riêng nếu muốn GPU thật). `vp lint` đã né AV (K-044) sẵn. `vp check` = drift-check.
 Vì sao ghi: để phiên/máy sau KHÔNG lặp lại chuỗi tay (dò python + dựng venv + nhớ workaround lint) — 1 lệnh thay tất cả; là hiện thực hoá lớp chống-ma-sát-môi-trường (đồng họ K-013/44/47/52/57).
+
+
+### K-059 — 🔵 (2026-07-09) CI `verify.yml` — ranh giới verify + rủi ro cần biết
+Status: 🔵 (chờ lần chạy CI đầu để chuyển ✅ hoặc sửa)
+Scope: `.github/workflows/verify.yml`
+Nguồn: LOG Entry #257 · D-058
+Evidence: file tạo tại chỗ; CHƯA có run CI nào (không chạy Actions cục bộ)
+Đóng khi: CI chạy xanh lần đầu (xem tab Actions / dán log)
+Nội dung: (a) KHÔNG verify được CI cục bộ → chỉ biết xanh/đỏ khi push kích hoạt (giống cách hook được verify qua output dán). (b) Rủi ro flaky trên CI (K-035: cross-process/shutdown nhạy tải) → đỏ-do-flaky ≠ regression. (c) `actions/checkout@v4`+`actions/setup-python@v5` [chưa kiểm trên chính CI này]. (d) Token PAT nhúng URL origin KHÔNG ảnh hưởng Actions (dùng GITHUB_TOKEN). (e) CI = cùng cổng `vp verify`, chỉ khác chạy server-side.
+Vì sao ghi: đánh dấu rõ đây là hạng mục "verify-khi-chạy", tránh tự nhận "CI xong" khi chưa có 1 run xanh thật.
