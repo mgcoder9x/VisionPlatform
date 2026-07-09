@@ -770,3 +770,13 @@ Evidence: `pytest tests/test_crossing_event_sqlite.py` 6 passed (query lại DB 
 Links: D-061 (CrossingEvent), D-062 (config extension), D-042 (registry), K-062
 Nội dung: `CrossingEventSqliteSink` (sqlite3 stdlib): bảng `crossings` + index `(source_id,event_ts)` + INSERT tham-số-hoá `?` + `executemany` + commit/frame; lifecycle setup(connect+CREATE IF NOT EXISTS)/handle(chỉ SUCCESS)/teardown(commit+close). Đăng ký registry `crossing_events_sqlite` + CLI `--crossing-db` (cần `--line`). Song song JsonlSink (chọn theo nhu cầu: stream vs query).
 Vì sao: vận hành/BI cần lưu trữ TRUY VẤN được (SQL) — flat JSONL khó query. sqlite3 stdlib (zero-dep, đủ 1 node) đúng mức, không server-DB (over-engineer khi chưa scale; server-DB là ISink khác sau — không đập lõi). Tham-số-hoá = an toàn injection + đúng kiểu (code chuẩn).
+
+
+### D-064 — 2026-07-09 — Spec + code `motion-gate`: chặn frame tĩnh trước detector (giảm tải GPU, R2.4)
+Status: ✅ (PHA1 design 0-diag + PHA2 code TDD — verify **519/1 · lint 5/0**)
+Scope: `.kiro/specs/motion-gate/{requirements,design}.md` · `domain/motion.py` · `runtime/stages/motion_gate_stage.py` · `pipeline_factory` (`motion_gate`) · `vision_slice_app` (`--motion-gate`)
+Nguồn: LOG Entry #267 · user "code chuẩn nhất, GPU sau" · scale-architecture R2.4 · SkipFrameSignal (đã có)
+Evidence: `pytest tests/test_motion_gate.py` 8 passed (gồm integration gate giảm số lần chạy stage sau); `vp verify` 519/1 · lint 5/0 · drift PASS
+Links: K-040 (lỗ scale A2.4), K-042 (camera-affinity), K-063, D-062 (config extension)
+Nội dung: `domain.changed_ratio` (numpy, cast int16 chống underflow) + `MotionGateStage` (stateful prev, camera-affinity, raise SkipFrameSignal khi ratio<min → detector không chạy). Đăng ký config `motion_gate` + CLI `--motion-gate` (đầu chuỗi). Frame đầu/đổi-shape → đi tiếp.
+Vì sao: bài toán GPU-bound đa-camera → giảm SỐ LẦN gọi detector (gate rẻ CPU) là lever đúng bản chất (R2.4), không tối ưu detector (khó/GPU). Dùng SkipFrameSignal có sẵn = zero đập lõi. Cast int16 = code chuẩn (chống bug underflow tinh vi).

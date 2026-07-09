@@ -5414,3 +5414,22 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Query mẫu: `SELECT direction,COUNT(*) FROM crossings WHERE source_id=? AND event_ts>=? GROUP BY direction`.
 
 **Đã verify (CHẠY THẬT + query lại DB):** `pytest tests/test_crossing_event_sqlite.py` = **6 passed** (ghi+SELECT khớp field · setup idempotent 2 lần · skip non-SUCCESS/no-event · index tồn tại + label chứa `'` lưu nguyên (tham-số-hoá) · config `crossing_events_sqlite` build+run + CLI `--crossing-db` rc0 + thiếu `--line`→SystemExit); `scripts\vp.cmd verify` = **511 passed/1 skipped · lint 5/0 · drift PASS · EXIT 0** (505→511). · **Chưa verify:** tải ghi lớn/hiệu năng SQLite thật; đa-thread (Non-Goal).
+
+
+### Entry #267 — 2026-07-09 — Spec + code `motion-gate`: chặn frame tĩnh trước detector (giảm tải GPU) — Kiro-Opus
+
+**Bối cảnh:** User "máy không GPU, code chuẩn nhất, GPU sau". Motion-gate = lever #1 giảm tải GPU cho ~100 cam (scale-architecture R2.4) — gate CPU rẻ đứng trước inference đắt. No-GPU, chuẩn bị đúng cho GPU tương lai. Design-first spec 0-diag rồi code TDD cùng lượt.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- `domain/motion.py::changed_ratio` (thuần numpy) + `runtime/stages/motion_gate_stage.py::MotionGateStage` (stateful prev-frame, camera-affinity) → raise `SkipFrameSignal` khi tĩnh (cơ chế skip CÓ SẴN: BaseStage→SKIPPED→executor dừng chuỗi→detector không chạy).
+- Đăng ký config `motion_gate` (params pixel_diff_threshold/min_area_ratio) + CLI `--motion-gate` (chèn ĐẦU chuỗi).
+- **Cast int16 trước trừ** (uint8 underflow → sáng→tối bị nuốt nếu không cast) — điểm "code chuẩn".
+- Frame đầu/đổi-shape → CHO ĐI TIẾP (thiếu mốc → thà chạy thừa hơn bỏ sót sự kiện).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không (additive — dùng SkipFrameSignal có sẵn; KHÔNG sửa BaseStage/executor/DetectStage/runner).
+
+**3. Trade-off đã cân nhắc (design QĐ-1..5):** dùng SkipFrameSignal có sẵn (zero đập lõi) · cast int16 (chống underflow) · first/shape→đi-tiếp (an toàn không bỏ nhầm) · gate-trước-detect (giảm SỐ LẦN inference) · motion=tỉ-lệ-pixel-full-frame (rẻ/đủ/xác định, không MOG2/optical-flow).
+
+**4. Điều bạn nên biết (K-063):** Non-Goal v1: MOG2/background-subtraction (chịu đổi ánh sáng) · optical-flow · ROI-mask · downscale-tối-ưu · min-frame-interval (luôn chạy 1/N kể cả tĩnh chống miss). Motion-diff full-frame nhạy với đổi-ánh-sáng-toàn-cục (đèn bật/tắt → coi là motion) — chấp nhận v1.
+
+**Đã verify (CHẠY THẬT):** `pytest tests/test_motion_gate.py` = **8 passed** (changed_ratio underflow · skip-tĩnh/pass-motion/first/shape/mixed-source · integration PipelineRunner: stage sau CHỈ chạy trên frame không-skip, `stub.calls==processed<frames_read`); full `pytest -q` = **519 passed/1 skipped** (SẠCH sau xác nhận flake K-035 supervisor_liveness: isolated 4/4, motion-gate không đụng supervisor); lint 5/0; drift PASS. · **Chưa verify:** hiệu quả giảm-tải trên detector THẬT + video thật (chờ GPU+video); nhạy đổi-ánh-sáng (giới hạn đã-biết K-063).

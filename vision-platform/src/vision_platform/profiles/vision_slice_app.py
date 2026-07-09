@@ -175,6 +175,8 @@ def main(argv=None) -> int:
     parser.add_argument("--rtsp", default=None)
     parser.add_argument("--max-reconnect", type=int, default=None)
     parser.add_argument("--out", default=None, help="path .jsonl → bật JsonlEventSink (lưu trữ optional)")
+    parser.add_argument("--motion-gate", action="store_true",
+                        help="bật MotionGateStage (chặn frame tĩnh TRƯỚC detector → giảm tải GPU)")
     parser.add_argument("--track", action="store_true",
                         help="bật TrackingStage (theo dõi + đếm-không-trùng) sau CountStage")
     parser.add_argument("--track-iou", type=float, default=0.3, help="ngưỡng IoU association (khi --track)")
@@ -199,7 +201,12 @@ def main(argv=None) -> int:
 
     source = _build_source(args)
     detector = _build_detector(args)
-    stages = [DetectStage(detector), CountStage()]
+    stages = []
+    if args.motion_gate:
+        from vision_platform.runtime.stages.motion_gate_stage import MotionGateStage
+        stages.append(MotionGateStage())          # ĐẦU chuỗi: chặn frame tĩnh trước detect
+    stages.append(DetectStage(detector))
+    stages.append(CountStage())
     track_summary = None
     if args.track:
         from vision_platform.runtime.iou_tracker import IouTracker

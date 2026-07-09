@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-09)
-**Cập nhật lúc:** 2026-07-09T19:40:00+07:00.
+**Cập nhật lúc:** 2026-07-09T20:20:00+07:00.
+**[✅ #267 — `motion-gate`: chặn frame tĩnh trước detector (giảm tải GPU, R2.4) — CPU/no-GPU]**
+- User: máy không GPU, code chuẩn nhất, GPU sau. Motion-gate = lever #1 giảm tải GPU cho ~100 cam (gate CPU rẻ trước inference đắt) — no-GPU + chuẩn bị cho GPU tương lai.
+- `domain/motion.py::changed_ratio` (numpy, **cast int16 chống uint8 underflow**) + `runtime/stages/motion_gate_stage.py::MotionGateStage` (stateful prev, camera-affinity, raise `SkipFrameSignal` khi tĩnh → detector KHÔNG chạy — cơ chế skip CÓ SẴN, không đập lõi). Config `motion_gate` + CLI `--motion-gate` (đầu chuỗi). Design-first 0-diag rồi code.
+- **VERIFY THẬT:** `pytest tests/test_motion_gate.py` = 8 passed (gồm integration: stage sau chỉ chạy trên frame không-skip, `stub.calls==processed<frames_read`). `scripts\vp.cmd verify` = **519 passed/1 skipped · lint 5/0 · drift PASS** (511→519; flake supervisor_liveness K-035 = isolated 4/4, không hồi quy). Journal +D-064/K-063 (tổng 171). Log #267.
+- **Chuỗi giờ (deploy-by-config/CLI):** source → [motion_gate] → detect → track → line_crossing → count; sink JSONL/SQLite. Đủ trục cho hệ giám sát no-GPU.
+- **Bước kế (chờ user):** (a) min-frame-interval cho motion-gate (chống miss khi tĩnh lâu, no-GPU) · (b) ROI-mask · (c) server-DB sink · (d) classify/ALPR (cần GPU+model — khi user có) · (e) chạy chuỗi video/pt thật · (f) dừng mốc sạch.
+- Song song chờ: CI run đầu (#257) · PAT rotate (#256).
+---
 **[✅ #266 — `crossing-event-sqlite-sink`: lưu sự-kiện qua-vạch vào SQLite QUERYABLE (no-GPU, code chuẩn)]**
 - User: máy không GPU → làm code chuẩn nhất phần no-GPU; video/GPU sau. Thêm lưu trữ TRUY VẤN được (SQL) cho CrossingEvent.
 - `adapters/crossing_event_sqlite_sink.py::CrossingEventSqliteSink` (sqlite3 stdlib, zero-dep): bảng `crossings` + index `(source_id,event_ts)` + INSERT tham-số-hoá `?` + `executemany` + commit/frame; setup CREATE IF NOT EXISTS idempotent. Đăng ký registry `crossing_events_sqlite` + CLI `--crossing-db` (cần `--line`). Design-first spec 0-diag rồi code cùng lượt.

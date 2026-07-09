@@ -67,6 +67,15 @@ def _stage_count(params: Mapping, detector: Any):
     return CountStage()
 
 
+def _stage_motion_gate(params: Mapping, detector: Any):
+    # Gate CPU chặn frame tĩnh trước detector (giảm tải GPU). Đặt TRƯỚC 'detect' trong chuỗi.
+    from vision_platform.runtime.stages.motion_gate_stage import MotionGateStage
+    return MotionGateStage(
+        pixel_diff_threshold=params.get("pixel_diff_threshold", 25),
+        min_area_ratio=params.get("min_area_ratio", 0.005),
+    )
+
+
 def _stage_track(params: Mapping, detector: Any):
     # Analytics stateful (đếm-không-trùng). Đọc artifacts["detections"] (cần stage 'detect' trước).
     from vision_platform.runtime.iou_tracker import IouTracker
@@ -120,6 +129,7 @@ _det_fake.allowed_params = frozenset({"model_size"})
 _det_pt.allowed_params = frozenset({"weights", "device"})
 _stage_detect.allowed_params = frozenset()
 _stage_count.allowed_params = frozenset()
+_stage_motion_gate.allowed_params = frozenset({"pixel_diff_threshold", "min_area_ratio"})
 _stage_track.allowed_params = frozenset({"iou_threshold", "max_age"})
 _stage_line_crossing.allowed_params = frozenset({"ax", "ay", "bx", "by"})
 _sink_jsonl.allowed_params = frozenset({"path"})
@@ -145,7 +155,7 @@ def _check_params(builder: Callable, where: str, params: Mapping) -> None:
 DEFAULT_REGISTRY: dict[str, dict[str, Callable]] = {
     "sources": {"fake": _src_fake, "noise": _src_noise, "video": _src_video, "rtsp": _src_rtsp},
     "detectors": {"fake": _det_fake, "pt": _det_pt},
-    "stages": {"detect": _stage_detect, "count": _stage_count,
+    "stages": {"detect": _stage_detect, "count": _stage_count, "motion_gate": _stage_motion_gate,
                "track": _stage_track, "line_crossing": _stage_line_crossing},
     "sinks": {"jsonl": _sink_jsonl, "crossing_events": _sink_crossing_events,
               "crossing_events_sqlite": _sink_crossing_events_sqlite},

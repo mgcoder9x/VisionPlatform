@@ -653,3 +653,13 @@ Evidence: `vp verify` 501/1 · 7 test crossing-event pass
 Đóng khi: (giới hạn — đóng nếu thêm DB sink / dedupe / schema-version)
 Nội dung: (a) chỉ JSONL (DB/queue = impl ISink khác sau — Non-Goal v1). (b) KHÔNG dedupe qua restart: sink mở "a" (append) → chạy lại ghi TIẾP (trùng nếu re-process cùng frame); dedupe/idempotency là bước sau. (c) `event_ts` wall-clock UTC "Z" (giờ thật, không monotonic); flush mỗi dòng → crash cứng mất tối đa 1 event (đánh đổi durability/tốc độ). (d) `--crossing-out` cần `--line` (cần `--track`); đường sync. (e) clock TIÊM được cho test xác định.
 Vì sao ghi: rõ ranh giới dùng (append→có thể trùng khi re-run) + điểm nâng cấp (DB/dedupe) — tránh kỳ vọng "exactly-once" mà v1 chưa có.
+
+
+### K-063 — 🟡 (2026-07-09) MotionGateStage v1: giới hạn + cách dùng
+Status: 🟡 (giới hạn thiết kế đã-biết, KHÔNG bug)
+Scope: `domain/motion.py` · `runtime/stages/motion_gate_stage.py` · config `motion_gate` · CLI `--motion-gate`
+Nguồn: LOG Entry #267 · design motion-gate self-review
+Evidence: `vp verify` 519/1 · 8 test (gồm integration gate giảm downstream calls)
+Đóng khi: (giới hạn — đóng nếu thêm MOG2/ROI/min-interval)
+Nội dung: (a) motion = tỉ-lệ-pixel-đổi full-frame → NHẠY với đổi-ánh-sáng-toàn-cục (đèn bật/tắt, mây qua → coi là motion, chạy detector thừa). MOG2/background-subtraction chịu tốt hơn = Non-Goal v1. (b) KHÔNG ROI-mask (gate cả khung, không chỉ vùng quan tâm). (c) KHÔNG min-frame-interval (tĩnh liên tục → detector KHÔNG chạy suốt; nếu cần "chắc chắn chạy 1 frame/N" để không miss → thêm sau). (d) cast int16 BẮT BUỘC (uint8 underflow). (e) frame đầu/đổi-shape → đi tiếp (không bỏ nhầm). (f) camera-affinity 1-instance/1-camera. (g) đặt TRƯỚC detect trong chuỗi.
+Vì sao ghi: rõ khi nào gate đếm nhầm motion (ánh sáng) + điểm nâng cấp (MOG2/ROI/min-interval); tránh kỳ vọng "lọc hoàn hảo".
