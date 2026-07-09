@@ -589,3 +589,25 @@ Nội dung: (F2) `metrics_snapshot()` đọc `_sent/_ok/_err/_timeout` + `queue.
 Vì sao ghi: chống hiểu nhầm "snapshot realtime chính xác" + chống dùng sai (trộn 2 đường). Không phải lỗi — là hợp đồng sử dụng.
 **CẬP NHẬT #253 (D-055):** F2 giờ được xử lý CẤU TRÚC trong `camera_worker` — `finally` teardown TRƯỚC (dừng io thread → quiesce) rồi mới `metrics_snapshot()` → snapshot luôn đọc sau quiesce (không còn dựa "nhớ đọc đúng lúc"). F3 vẫn là hợp đồng dùng (không trộn sync/async nặng).
 
+
+
+### K-057 — ✅ (2026-07-09) Interpreter Python KHÔNG portable giữa máy Windows → hook/CI phải dò capability, không hardcode tên
+Status: ✅ (đóng bằng launcher D-056; ghi để không tái phạm)
+Scope: mọi hook `runCommand` / CI gọi Python trên Windows (`tests/drift_check.cmd`)
+Nguồn: LOG Entry #254 · lỗi thật hook EXIT 9009
+Evidence: máy `k.nguyen.manh.toan`: `py -3 --version` EXIT 0 · `python --version` EXIT≠0 (Store-alias). Máy `toann` (#251): `python` chạy hook OK.
+Đóng khi: đã đóng bằng launcher capability-test (D-056)
+Nội dung: 3 kiểu Python trên Windows KHÁC nhau theo máy: (a) python.org → có `py` (Python Launcher), `python` có thể thiếu; (b) scoop → có `python`, thường THIẾU `py`; (c) Windows Store alias `python` → TỒN TẠI trên PATH nhưng chạy in "Python was not found" + EXIT 9009. ⇒ Hook hardcode 1 tên (`python` HAY `py`) sẽ hỏng trên ít nhất 1 loại máy. Giải: launcher dò bằng KHẢ NĂNG (`X --version` exit 0), KHÔNG bằng tồn tại (`where` thấy Store-alias nhưng nó hỏng).
+Vì sao ghi: đây là bẫy môi trường lặp lại (họ K-013/K-044/K-047 "venv/interpreter per-machine"). Ghi để phiên sau KHÔNG "sửa nhanh" bằng cách đổi tên interpreter (fix ngọn) mà tái phạm.
+
+**CẬP NHẬT #255 (VERIFIED):** hook `agentStop` `auto-drift-check` ĐÃ TỰ KÍCH HOẠT sau lượt #254 → chạy `cmd /c tests\drift_check.cmd` → **PASS/EXIT 0** trên chính máy `k.nguyen.manh.toan` (nơi trước đó EXIT 9009). Launcher capability-test (D-056) xác nhận đóng lỗ THẬT trong cơ chế hook tự động, không chỉ chạy tay. → K-057 = VERIFIED.
+
+
+### K-058 — ✅ (2026-07-09) Dev-env launcher `scripts/vp.cmd` — cách chạy mọi máy + profile per-máy
+Status: ✅ (dùng được — verify EXIT 0)
+Scope: `scripts/vp.cmd` · `scripts/env.local.cmd` (gitignored) · `scripts/README.md`
+Nguồn: LOG Entry #256 · D-057
+Evidence: `vp env/verify/setup` chạy thật EXIT 0 trên máy `k.nguyen.manh.toan` (no-GPU)
+Đóng khi: đã dùng được (ghi để dùng đúng)
+Nội dung: Đổi máy → chỉ cần `scripts\vp.cmd setup` rồi `scripts\vp.cmd verify`. Auto-detect interpreter/GPU; nếu sai, tạo `scripts\env.local.cmd` (copy từ `.example`, gitignored) đặt `VP_PYTHON`/`VP_EXTRAS`. Máy CÓ GPU + muốn torch: `set "VP_EXTRAS=dev,onnx,cv2,web,pt"` (lưu ý K-049: Windows dễ ra torch-CPU, cần CUDA wheel riêng nếu muốn GPU thật). `vp lint` đã né AV (K-044) sẵn. `vp check` = drift-check.
+Vì sao ghi: để phiên/máy sau KHÔNG lặp lại chuỗi tay (dò python + dựng venv + nhớ workaround lint) — 1 lệnh thay tất cả; là hiện thực hoá lớp chống-ma-sát-môi-trường (đồng họ K-013/44/47/52/57).

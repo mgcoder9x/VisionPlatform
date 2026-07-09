@@ -1,10 +1,15 @@
 """Điểm vào DUY NHẤT chạy toàn bộ drift-check — dùng cho hook + đầu phiên.
 
 VÌ SAO file này (bản chất): hook runCommand chạy "A; B" bị mangle (`;` dán vào argv, không phải separator)
-→ mọi lệnh nhiều-phần đều hỏng bất kể shell. Giải pháp gốc = MỘT script gọi cả 2 linter nội bộ → hook/đầu
-phiên chỉ cần 1 lệnh `python tests/drift_check.py` (không separator, shell-agnostic) = một-nguồn-sự-thật.
+→ mọi lệnh nhiều-phần đều hỏng bất kể shell. Giải pháp gốc = MỘT script gọi cả 2 linter nội bộ → chỉ cần
+1 lệnh (không separator, shell-agnostic) = một-nguồn-sự-thật.
 
-Chạy: `py tests/drift_check.py`   (exit 0 = bản ghi nhất quán, 1 = có DRIFT → sửa trước khi tiếp).
+CHẠY (chọn 1):
+  - Hook/CI (portable, tự dò interpreter chạy được): `cmd /c tests\\drift_check.cmd`
+  - Trực tiếp khi biết interpreter: `py tests/drift_check.py` (Windows python.org) hoặc `python3 tests/drift_check.py` (Linux).
+Vì SAO có launcher `.cmd`: `python`/`py`/venv KHÁC nhau theo máy (python.org có `py`; scoop có `python`;
+Windows Store-alias `python` tồn tại nhưng chạy lỗi 9009). Hook KHÔNG được hardcode 1 tên → launcher dò
+theo KHẢ NĂNG (`--version` exit 0), dùng cái đầu tiên chạy được. Exit 0 = nhất quán · 1 = DRIFT → sửa trước.
 Gồm: (1) nhất quán bộ nhớ (test_memory_consistency) + (2) RULES_VERSION sync (test_rules_sync).
 """
 from __future__ import annotations

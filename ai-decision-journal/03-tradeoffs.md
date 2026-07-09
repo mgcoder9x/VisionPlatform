@@ -220,3 +220,27 @@ Chọn: **hàm guard THUẦN** `assert_policy_allowed_for_source(source_type, po
 - Cái mất: R3 chưa được gọi trong 1 đường config THẬT (vì config chưa mang policy per-source) → là guard "sẵn-sàng-wire", chưa chặn ở runtime end-to-end. Khi config có policy phải nhớ gọi guard tại nơi map config→client.
 - Phương án B (bác): thêm `policy` vào SourceConfig + parse TOML + validate + wire vào ZmqInferenceClient. Đầy đủ hơn NHƯNG: (a) config-declarative path hiện dựng PipelineRunner in-process, KHÔNG dùng ZMQ client → field policy không có nơi tiêu thụ; (b) = xây hạ tầng cho khả năng chưa tồn tại = over-engineer (trái nguyên tắc user + T-015 "làm khi thực sự cần").
 - Vì sao chấp nhận A (bản chất): R3 về BẢN CHẤT = "ngăn tổ hợp rtsp+BLOCK nguy hiểm (TCP Zero Window)". Guard thuần + test nắm trọn bản chất đó, kiểm chứng được (P7), zero-schema-bloat. Bơm schema khi chưa ai tiêu thụ = fix phần ngọn (hình thức "có field") thay vì phần gốc (logic cấm). Wire đầy đủ để dành khi config-declarative thực sự tích hợp ZMQ client (spec sau).
+
+
+### T-022 — 2026-07-09 — Hook interpreter: LAUNCHER capability-test  vs  swap `python`→`py`  vs  chỉ-venv-path
+Status: ✅ (chọn launcher — verify EXIT 0, cross-machine robust)
+Scope: `tests/drift_check.cmd` (điểm vào hook drift-check)
+Nguồn: LOG Entry #254 · bằng chứng 2 máy interpreter khác nhau
+Links: D-056, K-057, K-055
+Chọn: **launcher `.cmd` capability-test 3 tầng** (`py -3` → venv → `python`).
+- Cái mất: thêm 1 file `.cmd` (~30 dòng) + Windows-only (Linux cần `.sh` sau); phức tạp hơn 1 dòng lệnh.
+- Phương án B (bác) — swap `python`→`py`: 1 dòng, nhưng VỠ trên máy scoop (thường thiếu `py` launcher) → chỉ dời lỗi = fix NGỌN.
+- Phương án C (bác) — chỉ dùng venv python path: đúng khi venv dựng, nhưng VỠ khi fresh-clone chưa dựng venv → dùng làm fallback #2, không phải duy nhất.
+- Vì sao chấp nhận A (bản chất): đã QUAN SÁT 2 setup thật không tương thích (k.nguyen cần `py`, toann cần `python`) → không tên đơn nào đúng cả hai. Launcher capability-test là mức TỐI THIỂU chạy đúng trên cả hai + mọi máy khác, kiểm chứng được (EXIT 0). Không over-engineer: đúng tầm vấn đề thực đã thấy.
+
+
+### T-023 — 2026-07-09 — Dev-env: dispatcher `.cmd` tự-viết  vs  Makefile/just/nox  vs  giữ lệnh tay
+Status: ✅ (chọn .cmd thuần — verify env/setup/verify EXIT 0)
+Scope: `scripts/vp.cmd`
+Nguồn: LOG Entry #256 · yêu cầu cross-machine
+Links: D-057, D-056, K-058
+Chọn: **dispatcher `.cmd` thuần** (auto-detect + env-var override).
+- Cái mất: Windows-only (Linux cần `vp.sh` sau — YAGNI); ~90 dòng batch phải bảo trì.
+- Phương án B (bác) — Makefile/just/nox: mạnh + cross-OS, NHƯNG thêm dependency (make/just/nox chưa chắc có trên máy sạch Windows) → mâu thuẫn chính mục tiêu "chạy ngay mọi máy không cần cài thêm". `.cmd` chạy trên mọi Windows sạch.
+- Phương án C (bác) — giữ lệnh tay + ghi doc: zero-code nhưng KHÔNG xóa ma sát (vẫn gõ tay, vẫn sai interpreter/extras mỗi máy) = fix ngọn (doc) không phải gốc (tự động hóa).
+- Vì sao chấp nhận A (bản chất): mục tiêu = "đổi máy chạy được NGAY, không cài thêm gì". `.cmd` thuần thỏa trọn (Windows có sẵn cmd) + tái dùng pattern capability-test đã verify. Cross-OS là mở rộng, không phải yêu cầu hiện tại.

@@ -8,7 +8,7 @@
   },
   "then": {
     "type": "runCommand",
-    "command": "python tests/drift_check.py",
+    "command": "cmd /c tests\\drift_check.cmd",
     "timeout": 60
   }
 }

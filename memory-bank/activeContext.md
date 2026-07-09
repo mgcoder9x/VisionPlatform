@@ -1,7 +1,30 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
-## Trạng thái hiện tại (2026-07-08)
-**Cập nhật lúc:** 2026-07-08T18:20:00+07:00.
+## Trạng thái hiện tại (2026-07-09)
+**Cập nhật lúc:** 2026-07-09T13:15:00+07:00.
+**[🛠️ #256 — Lớp trừu tượng môi trường: dev-env launcher `scripts/vp.cmd` (cross-machine) + commit/push nhánh]**
+- User: máy này KHÔNG GPU + muốn lớp môi trường chạy dễ trên nhiều máy/môi trường; commit+push nhánh KHÔNG cần hỏi.
+- **Làm:** `scripts/vp.cmd` (`env/setup/test/lint/check/verify`) auto-detect interpreter (py→venv→python capability-test) + GPU (nvidia-smi inform) + ghi đè `VP_PYTHON`/`VP_EXTRAS` qua `scripts/env.local.cmd` (gitignored, per-máy) + `env.local.cmd.example` + `scripts/README.md`. `lint` bake `importlinter.api` (K-044); KHÔNG auto torch (K-049). Gitignore +`.venv_broken`/`env.local.cmd`.
+- **VERIFY THẬT:** `vp env` EXIT 0 (GPU=khong); `vp verify` = **465/1 · lint 5/0 · drift PASS · EXIT 0**; `vp setup` reinstall EXIT 0. Journal +D-057/T-023/K-058 (tổng 158). Log #256.
+- **Bước kế:** commit + push nhánh (user cho phép standing). Backpressure + anti-drift + env-layer DONE.
+---
+**[✅ #255 — VERIFIED hook agentStop tự chạy launcher drift-check (PASS/EXIT 0) — đóng lỗ #254 THẬT]**
+- Sau #254, hook `agentStop` TỰ chạy `cmd /c tests\drift_check.cmd` → PASS/EXIT 0 (user dán output, khớp drift_check.py) trên chính máy `python`-hỏng. → launcher (D-056) đóng lỗ 9009 trong cơ chế hook TỰ ĐỘNG, không chỉ chạy tay. K-057 = VERIFIED. Log #255.
+- **KHÔNG task bắt buộc mở.** Anti-drift 3 tầng verified end-to-end tại máy này. Thay đổi phiên (launcher/hook/journal/log) CHƯA commit (git-safety — chờ user duyệt).
+- **Fork chờ user:** A1 (cần GPU) · R3 (đã chủ ý hoãn T-021, wire = over-engineer khi config chưa tiêu thụ policy) · C1 metrics (quyết định thiết kế) · hoặc commit backup + dừng mốc sạch.
+---
+**[🔧 #254 — FIX GỐC hook drift-check PORTABLE (launcher capability-test) — máy `k.nguyen.manh.toan`]**
+- **Lỗi thật:** hook `agentStop`/`userTriggered` EXIT 9009 — hardcode `python tests/drift_check.py`; máy này `python`=Store-alias hỏng (chỉ `py` chạy). Lỗ trong lưới anti-drift (hook "tự chạy" âm thầm hỏng trên máy interpreter khác).
+- **Fix GỐC (không ngọn):** tạo launcher `tests/drift_check.cmd` dò Python theo KHẢ NĂNG (`--version` exit 0): `py -3` → venv → `python`, dùng cái đầu tiên chạy được. 2 hook → `cmd /c tests\drift_check.cmd`. Đổi `python`→`py` chỉ là ngọn (vỡ máy scoop). Port kit `drift_check.template.cmd`. Docstring `drift_check.py` cập nhật. KHÔNG đụng rule/RULES_VERSION (bề mặt tối thiểu).
+- **VERIFY THẬT:** `cmd /c tests\drift_check.cmd` = PASS + EXIT 0 (dùng py -3, loại Store-alias); `py tests/drift_check.py` = EXIT 0. Journal +D-056/T-022/K-057 (tổng 155). Log #254.
+- **Bước kế:** chờ user chọn fork (R3 wire / C1 metrics / A1 cần GPU / dừng). Backpressure + anti-drift DONE.
+---
+**[✅ RE-VERIFY máy `k.nguyen.manh.toan` (phiên mới) — bản đã-commit #253 XANH tại đây; checkpoint chờ hướng]**
+- **Bối cảnh:** phiên mở với context STALE (#241/#242); phát hiện repo đã sync tới **#253** (git 6 commit, tree sạch, `main` up-to-date `origin/main`). Rebuild `.venv` (`py -3.11` py3.11.9 + `.[dev,onnx,cv2,web]`, KHÔNG torch).
+- **VERIFY THẬT tại máy này:** `py tests/drift_check.py` = **PASS** (memory nhất quán + RULES_VERSION 15 khớp 4 mirror) · full `pytest -q` = **465 passed/1 skipped (44.10s)** · lint `importlinter.api` = **5 kept/0 broken**. Khớp verify máy `toann` (#252/#253).
+- **ĐÍNH CHÍNH note stale:** K-007/K-052 ghi "máy này KHÔNG .git → backup bất khả" là của máy `toann`. Máy `k.nguyen.manh.toan` HIỆN CÓ git (6 commit, `main` up-to-date `origin/main`, tree sạch) → trạng thái đã commit + khớp remote-tracking `origin/main`. **[cần user xác nhận]** origin có phải remote backup thật không.
+- **Trạng thái tổng KHÔNG đổi:** backpressure DONE + review-hardened 2 vòng · anti-drift 3 tầng verified · **KHÔNG task bắt buộc mở.** Fork chờ user chọn (dưới #253). KHÔNG tự lao.
+---
 **[🔬 #253 — Bất biến bảo toàn ĐÚNG VÔ ĐIỀU KIỆN (đếm shutdown-leftover) — verify 465/1·5/0]**
 - **Review tiếp:** biên "server chết + van đầy lúc shutdown" → drain deadline-cut để lại frame trong van (captured nhưng không submit/drop) → bất biến vỡ. **FIX GỐC:** `camera_worker.finally` teardown-trước (quiesce) → đếm `frames_dropped_shutdown=outbound_size` + `_write_result` gộp 3 tầng drop → bất biến `submitted+dropped==captured` đúng **VÔ ĐIỀU KIỆN**. Đóng luôn F2 (snapshot sau quiesce).
 - **VERIFY:** fullstack pass + full **465/1** + lint **5/0**. Journal +D-055 (tổng 152). Log #253. K-056 F2 đóng; F3 = hợp đồng dùng.

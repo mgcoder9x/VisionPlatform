@@ -1,9 +1,13 @@
 """TEMPLATE — Điểm vào DUY NHẤT chạy drift-check. Copy sang `tests/drift_check.py`.
 
 VÌ SAO 1 script (bản chất): hook runCommand chạy "A; B" bị mangle (`;` dán vào argv, không phải separator)
-→ dùng 1 script gọi cả 2 linter nội bộ → hook/đầu-phiên chỉ cần `python tests/drift_check.py` (shell-agnostic).
+→ dùng 1 script gọi cả 2 linter nội bộ → chỉ cần 1 lệnh (shell-agnostic) = một-nguồn-sự-thật.
 
-Chạy: `py tests/drift_check.py`  (exit 0 = nhất quán, 1 = có DRIFT).
+CHẠY (chọn 1):
+  - Hook/CI (portable, tự dò interpreter): `cmd /c tests\\drift_check.cmd` (copy `drift_check.template.cmd`).
+  - Trực tiếp: `py tests/drift_check.py` (Windows python.org) hoặc `python3 tests/drift_check.py` (Linux).
+VÌ SAO có launcher `.cmd`: `python`/`py`/venv KHÁC nhau theo máy (Store-alias `python` tồn tại mà chạy lỗi
+9009). Hook KHÔNG hardcode 1 tên → launcher dò theo KHẢ NĂNG (`--version` exit 0). exit 0 = nhất quán, 1 = DRIFT.
 Yêu cầu: `tests/test_memory_consistency.py` + `tests/test_rules_sync.py` (copy từ kit) cùng thư mục.
 """
 from __future__ import annotations

@@ -690,3 +690,23 @@ Links: D-054, C-019, T-020, K-053, K-056 (F2 đóng)
 Nội dung: Review phát hiện biên THẬT: drain deadline = `timeout_s+1`; nếu server CHẾT + van còn Q frame lúc shutdown → window đầy, io chỉ gửi tiếp sau mỗi timeout-scan (`timeout_s`) → flush Q cần ~`ceil(Q/window)*timeout_s` ≫ deadline → drain thoát khi `outbound_size>0` → frame còn trong van: captured NHƯNG không submit/không evict → **bất biến VỠ đúng bằng leftover**. **FIX GỐC (hoàn thiện kế toán, không nới deadline vô hạn = ngọn):** `finally` teardown TRƯỚC (dừng io thread → counters+van ỔN ĐỊNH) → đếm `frames_dropped_shutdown = client.outbound_size` (leftover) → `_write_result` GỘP 3 tầng drop (client-window + SHM + shutdown) → bất biến `submitted+dropped==captured` đúng **VÔ ĐIỀU KIỆN**. Kèm: snapshot đọc SAU teardown = sau quiesce → đóng luôn F2 (K-056).
 Vì sao: bất biến bảo toàn là LINH HỒN của fix A2 (không mất frame im lặng); "đúng nếu drain hoàn tất" là guarantee YẾU. Hoàn thiện kế toán 3 tầng (mỗi captured frame → đúng 1 trong {submitted, client-drop, shm-drop, shutdown-leftover}) = guarantee MẠNH vô điều kiện = đúng bản chất cho sản phẩm 24/7.
 
+
+
+### D-056 — 2026-07-09 — Hook drift-check dùng LAUNCHER capability-test interpreter (fix gốc portable), không hardcode `python`
+Status: ✅ (verify thật — launcher EXIT 0 dùng `py -3`; drift_check PASS)
+Scope: `tests/drift_check.cmd` (mới) + 2 hook (`auto-drift-check`, `kiem-drift-bo-nho`) + docstring `tests/drift_check.py` + kit `ai-learning-os-kit/tests/drift_check.template.cmd`
+Nguồn: LOG Entry #254 · lỗi thật user dán (hook EXIT 9009 "Python was not found") · kiểm 2 máy (k.nguyen: `py` OK/`python` Store-alias hỏng; toann: `python` OK/`py` chưa kiểm)
+Evidence: `cmd /c tests\drift_check.cmd` từ repo root = PASS + EXIT 0 (dùng py -3); `py tests/drift_check.py` = EXIT 0
+Links: K-055 (điểm-vào-1-script #250), K-057 (interpreter portability), T-022
+Nội dung: Launcher `.cmd` dò Python theo KHẢ NĂNG (`--version` exit 0), thứ tự tin cậy `py -3` → venv dự án → `python`; dùng cái ĐẦU TIÊN chạy được. Hook trỏ `cmd /c tests\drift_check.cmd`. Đóng LỖ anti-drift: hook "tự chạy" (#251) âm thầm hỏng trên máy có `python` là Store-alias.
+Vì sao: nguyên nhân GỐC = hook phụ thuộc 1 tên interpreter cố định (không portable). Đổi `python`→`py` là fix NGỌN (dời lỗi sang máy scoop thiếu `py`). Capability-test (không presence-test) loại đúng Store-alias tồn-tại-mà-hỏng. Launcher đúng trên MỌI máy → không dựa suy đoán máy nào có gì.
+
+
+### D-057 — 2026-07-09 — Lớp trừu tượng môi trường = dev-env launcher `scripts/vp.cmd` (auto-detect + env-var override), cross-machine
+Status: ✅ (verify thật — env/setup/verify EXIT 0, 465/1·5/0·drift PASS)
+Scope: `scripts/vp.cmd` (mới) + `scripts/env.local.cmd.example` + `scripts/README.md` + `.gitignore` (env.local.cmd, .venv_broken)
+Nguồn: LOG Entry #256 · yêu cầu user "lớp môi trường cho nhiều máy" · gốc K-013/K-044/K-047/K-048/K-049/K-052/K-057
+Evidence: `vp env` EXIT 0 (BASEPY=py -3, GPU=khong); `vp verify` = 465/1 + lint 5/0 + drift PASS (test=0 lint=0 check=0) EXIT 0; `vp setup` reinstall EXIT 0
+Links: D-056 (launcher pattern), K-058, T-023, K-044/K-049
+Nội dung: Dispatcher `.cmd` subcommand `env/setup/test/lint/check/verify` — 1 giao diện chạy giống nhau mọi máy. Auto-detect interpreter theo KHẢ NĂNG (py→venv→python) + GPU qua nvidia-smi (chỉ inform). Ghi đè per-máy bằng `VP_PYTHON`/`VP_EXTRAS` nạp từ `scripts/env.local.cmd` (gitignored) — mỗi máy 1 profile, file chung vẫn chạy nhờ auto-detect. `lint` bake `importlinter.api` (K-044), `check` ủy quyền drift_check.cmd.
+Vì sao: đổi máy = ma sát tay lặp lại (đã ghi ≥5 K-entry) → gom thành lớp ổn định = fix GỐC ma sát môi trường, không phải vá từng lần. KHÔNG auto-cài torch dù thấy GPU (tôn trọng K-049) → an toàn, để env-var quyết.

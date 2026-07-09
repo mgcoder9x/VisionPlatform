@@ -5127,3 +5127,72 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Chưa thêm test cross-process cho ca "server chết + van đầy" (khó dựng deterministic, dễ flaky) — bất biến đúng by-construction; overload test (server sống) vẫn phủ ca chính.
 
 **Đã verify:** máy `toann`: `test_fullstack_integration` 1 passed (8.95s); full `pytest -q` = **465 passed/1 skipped (40.64s)**; lint **5 kept/0 broken**; parse_result đọc field mới generic (không phá test cũ). · **Chưa verify:** ca dead-server-full-queue bằng test riêng (by-construction + documented); POSIX.
+
+
+### Entry #254 — 2026-07-09 — FIX GỐC hook drift-check portable (launcher capability-test interpreter) — Kiro-Opus
+
+**Bối cảnh:** Hook `agentStop`/`userTriggered` (auto-drift-check + kiem-drift) EXIT 9009 trên máy `k.nguyen.manh.toan` vì hardcode lệnh `python tests/drift_check.py` — máy này `python` là Windows Store-alias (chạy lỗi 9009), chỉ `py` chạy được. Đây là LỖ trong lưới anti-drift (cơ chế "tự chạy" âm thầm hỏng trên máy interpreter khác).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Tạo **launcher `tests/drift_check.cmd`** dò Python theo KHẢ NĂNG (`--version` exit 0), thứ tự: `py -3` → venv `vision-platform\.venv` → `python`; dùng cái đầu tiên chạy được. 2 hook trỏ `cmd /c tests\drift_check.cmd`.
+- **Fix bản chất, không fix ngọn:** vấn đề gốc = hook phụ thuộc 1 tên interpreter cố định (không portable). Đổi `python`→`py` chỉ dời lỗi sang máy scoop (thường thiếu `py`). Launcher capability-test đúng trên MỌI máy bất kể có `py` hay `python`.
+- **Kiểm KHẢ NĂNG, không kiểm tồn tại:** Store-alias `python` TỒN TẠI trên PATH nhưng chạy lỗi → chỉ `--version` exit 0 mới xác nhận dùng được.
+- Port vào kit: `ai-learning-os-kit/tests/drift_check.template.cmd` (tái dùng cho dự án sau).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Điểm vào hook đổi từ `python tests/drift_check.py` (#250, K-055) → `cmd /c tests\drift_check.cmd` (launcher). Cùng hành vi (chạy drift_check.py) nhưng portable. `drift_check.py` KHÔNG đổi logic (chỉ docstring).
+
+**3. Trade-off đã cân nhắc:**
+- Launcher .cmd capability-test vs `python`→`py` (1 dòng) vs chỉ-venv-path → chọn launcher: robust cross-machine (đã thấy 2 setup khác nhau: k.nguyen dùng py, toann dùng python); `py`-swap vỡ máy scoop (ngọn); venv-only vỡ khi fresh-clone chưa dựng venv → venv làm fallback #2.
+- Phạm vi TỐI THIỂU: chỉ sửa 2 hook + launcher + docstring, KHÔNG đụng rule §0/RULES_VERSION (rule đã ghi `py ...` chạy được + AI tự thích nghi; thêm bề mặt sync = tăng rủi ro drift, không đáng).
+
+**4. Điều bạn nên biết:**
+- Launcher là Windows `.cmd` (dự án hiện Windows-only). Trên Linux tương lai chạy thẳng `python3 tests/drift_check.py` (drift_check.py là lõi portable) — cần thêm `.sh` sau nếu có máy dev Linux (chưa làm = YAGNI).
+- `%~dp0` trong .cmd làm đường dẫn độc-lập-cwd; `enabledelayedexpansion` + `!errorlevel!` để propagate đúng exit code trong block (tránh bẫy %errorlevel% expand-lúc-parse của batch).
+- Hook agentStop (#251) từng verify PASS trên máy `toann` — vì máy đó `python` chạy được. Bug chỉ lộ trên máy `python`-hỏng. Launcher đóng lỗ này vĩnh viễn.
+
+**Đã verify:** `cmd /c tests\drift_check.cmd` (đúng lệnh hook, từ repo root) = **PASS + EXIT 0** (dùng `py -3`, loại Store-alias); `py tests/drift_check.py` sau sửa docstring = EXIT 0. · **Chưa verify:** hook Kiro tự kích hoạt launcher trong phiên thật (agentStop) — cơ chế .cmd đã chạy tay OK; hành vi trên máy scoop (`py` absent) đi nhánh venv/python — [chưa kiểm trên máy đó, nhưng launcher robust by-design].
+
+
+### Entry #255 — 2026-07-09 — VERIFIED: hook agentStop tự chạy LAUNCHER drift-check (PASS) trên máy `python`-hỏng — đóng "chưa verify" #254 — Kiro-Opus
+
+**Bối cảnh:** Sau lượt #254 (fix hook = launcher), hook `agentStop` `auto-drift-check` TỰ KÍCH HOẠT → chạy `cmd /c tests\drift_check.cmd` → output PASS/EXIT 0 (user dán lại). Đây là bằng chứng end-to-end trong CƠ CHẾ HOOK THẬT của Kiro, trên đúng máy `k.nguyen.manh.toan` nơi trước đó hook EXIT 9009.
+
+**1. Quyết định AI tự ra (spec không nói):** Không (chỉ ghi nhận verify + đóng loose-end).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không.
+
+**3. Trade-off đã cân nhắc:** Không (verification-closure entry, theo tiền lệ #251).
+
+**4. Điều bạn nên biết:**
+- Chuỗi anti-drift nay VERIFIED end-to-end trên máy `python`-hỏng: launcher capability-test (D-056) → hook agentStop tự chạy → drift-check C1–C6 PASS + RULES_VERSION 15 khớp. Lỗ #254 (hook 9009) đóng THẬT, không chỉ giả định.
+- K-057 chuyển "chưa verify hook tự kích hoạt" → VERIFIED.
+- KHÔNG còn task bắt buộc mở. Fork còn lại vướng tiền đề (A1=GPU · R3=đã chủ ý hoãn theo T-021 tránh over-engineer · C1=quyết định thiết kế) → checkpoint sạch chờ hướng. Thay đổi phiên này CHƯA commit (git-safety: chờ user duyệt commit/push).
+
+**Đã verify:** hook agentStop tự chạy `cmd /c tests\drift_check.cmd` = PASS/EXIT 0 (user-pasted, khớp output drift_check.py — C1 max #254, RULES_VERSION 15 ×4, DRIFT-CHECK PASS). · **Chưa verify:** nhánh venv/`python` của launcher trên máy scoop (`py` absent) — robust by-design, chưa chạy trên máy đó; POSIX.
+
+
+### Entry #256 — 2026-07-09 — Lớp trừu tượng môi trường: dev-env launcher `scripts/vp.cmd` (cross-machine) — Kiro-Opus
+
+**Bối cảnh:** User yêu cầu "tạo lớp môi trường cho dễ làm trên nhiều máy/môi trường khác nhau (máy này không GPU)". Bám gốc các nỗi đau lặp lại đã ghi: dò Python (K-052/K-057), dựng venv (K-013/K-047), extras theo GPU (K-048/K-049), lint workaround (K-044).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Tạo **task-launcher `scripts/vp.cmd`** (dispatcher subcommand: `env/setup/test/lint/check/verify`) — 1 giao diện ổn định, tự thích nghi môi trường. Tái dùng pattern capability-test của `drift_check.cmd`.
+- **Cơ chế "máy khác nhau":** auto-detect interpreter (py→venv→python theo KHẢ NĂNG) + GPU (`nvidia-smi`, chỉ inform); **ghi đè bằng env var** `VP_PYTHON`/`VP_EXTRAS` nạp từ `scripts/env.local.cmd` (gitignored, mỗi máy 1 bản) + `env.local.cmd.example` tracked làm mẫu.
+- `lint` bake sẵn `importlinter.api` (đóng K-044 vào launcher). `check` ủy quyền `tests/drift_check.cmd`.
+- **KHÔNG auto-cài torch** dù phát hiện GPU (tôn trọng K-049: `pip .[pt]` trên Windows dễ ra torch-CPU) → để `VP_EXTRAS` quyết.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Không đổi quy trình cũ; launcher là lớp GỘP các lệnh tay hiện có (venv/pytest/importlinter.api/drift_check) — additive, không thay logic nào.
+
+**3. Trade-off đã cân nhắc:**
+- Dispatcher `.cmd` tự-viết vs Makefile/just/nox (công cụ ngoài) → `.cmd` thuần (zero dependency thêm, chạy ngay trên Windows sạch; cái mất: Windows-only → thêm `.sh` sau khi có máy Linux, YAGNI).
+- Auto-detect + env-var override vs hardcode per-machine → auto + override (chạy mọi nơi mặc định, vẫn cho ép khi cần); cái mất: thêm ~90 dòng batch.
+- Auto-cài torch khi thấy GPU vs để env-var → để env-var (tránh cài nhầm torch-CPU K-049, tránh tải ~2.5GB ngoài ý muốn).
+
+**4. Điều bạn nên biết:**
+- `vp setup` khi venv HỎNG (python venv chạy lỗi) tự dời `.venv_broken` rồi tạo mới; `.venv_broken` + `scripts/env.local.cmd` đã .gitignore.
+- Windows-only hiện tại; lõi Python đã cross-OS (drift_check.py/pytest/importlinter) → `vp.sh` là mở rộng tương lai.
+- Batch dùng `enabledelayedexpansion` + `!errorlevel!` để propagate exit code đúng; `if errorlevel 1` cho capability-test trong block.
+
+**Đã verify (CHẠY THẬT + đọc output):** `vp env` = BASEPY `py -3`/venv exists/GPU khong/extras baseline (EXIT 0); `vp verify` = **465 passed/1 skipped · lint 5 kept/0 broken · DRIFT-CHECK PASS · test=0 lint=0 check=0 · VERIFY OK EXIT 0**; `vp setup` = reinstall vision_platform EXIT 0. · **Chưa verify:** nhánh `python`/venv của detect trên máy scoop; `vp.sh` Linux (chưa tạo).

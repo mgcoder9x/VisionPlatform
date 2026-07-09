@@ -2,7 +2,7 @@
 
 > Rà nhanh: lọc mọi dòng **🔴 / 🟡** → đó là danh sách "chưa chắc chắn / rủi ro mở" cần đối chiếu.
 > Chi tiết + `Nguồn`/`Evidence` của mỗi ID nằm trong file tương ứng. Trạng thái nguồn: xem `README.md` §4.
-> **Cập nhật lúc:** 2026-07-08 (máy `toann` — spec backpressure HOÀN TẤT Wave 1–5 + **CƠ CHẾ CHỐNG-DRIFT: linter nhất quán bộ nhớ D-052** `tests/test_memory_consistency.py` (dogfood đã bắt+sửa drift tồn đọng K-054); +D-052/C-020/K-054). Log canonical tới **Entry #253**. Baseline test: **465 passed/1 skipped · lint 5 kept/0 broken** — ✅ tự-verify máy `toann`. **Drift-check (`py tests/drift_check.py`): PASS · hook agentStop verify tự chạy.** Tổng **152 entry** (D55·C20·T21·K56). Review-hardened backpressure: F1 (đua drain) + D-055 (bất biến vô điều kiện: đếm shutdown-leftover); F3 = hợp đồng dùng (K-056). Còn nợ: R3 chưa wire end-to-end · POSIX chưa verify · git chưa push (K-007).
+> **Cập nhật lúc:** 2026-07-09 (máy `k.nguyen.manh.toan` — FIX GỐC hook drift-check PORTABLE: launcher `tests/drift_check.cmd` capability-test interpreter, đóng lỗ hook EXIT 9009 do `python` Store-alias; +D-056/T-022/K-057). Bản đã-commit #253 RE-VERIFY XANH tại máy này (465/1 · lint 5/0 · drift-check PASS). **Hook agentStop tự chạy launcher = PASS/EXIT 0 (VERIFIED #255).** **Dev-env launcher `scripts/vp.cmd` (cross-machine, #256): `vp env/setup/test/lint/check/verify` — verify 465/1·5/0·drift PASS.** Log canonical tới **Entry #256**. Baseline test: **465 passed/1 skipped · lint 5 kept/0 broken**. **Drift-check (`cmd /c tests\drift_check.cmd` hoặc `py tests/drift_check.py`): PASS.** Tổng **158 entry** (D57·C20·T23·K58). Review-hardened backpressure: F1 (đua drain) + D-055 (bất biến vô điều kiện); F3 = hợp đồng dùng (K-056). Còn nợ: R3 chưa wire end-to-end · POSIX chưa verify · git K-007 (máy này CÓ .git, up-to-date `origin/main` — cần user xác nhận `origin` là backup thật).
 
 ## 1. Quyết định tự ra — `01-decisions.md`
 | ID | Trạng thái | Tóm tắt | Nguồn (LOG Entry) |
@@ -62,6 +62,8 @@
 | D-053 | ✅ | Củng cố chống-drift 3 tầng: hook **agentStop** `auto-drift-check` (tự chạy linter sau mỗi lượt, runCommand không loop) + PORT cơ chế vào kit (`test_memory_consistency.template.py` + §2 rule + bump AGENTS.template 15). "Cực mạnh" = máy-kiểm + tự-chạy + tái-dùng, không dựa kỷ luật | #249 |
 | D-054 | ✅ | Review đối kháng code backpressure + FIX GỐC F1 (đua drain): reorder io_loop step 1b — set pending/in_flight/_sent TRƯỚC send() → đóng cửa sổ (outbound=0 & in_flight=0) frame cuối. **VERIFY: 14 test đích + overload 3/3 không flaky + full 465/1 + lint 5/0** | #252 |
 | D-055 | ✅ | Bất biến bảo toàn ĐÚNG VÔ ĐIỀU KIỆN: `camera_worker.finally` teardown-trước → đếm `frames_dropped_shutdown`=leftover-van + snapshot-sau-quiesce; `_write_result` gộp 3 tầng drop (client+shm+shutdown). Đóng biên "server chết+van đầy" + F2(K-056). **VERIFY: fullstack + full 465/1 + lint 5/0** | #253 |
+| D-056 | ✅ | Hook drift-check dùng LAUNCHER `tests/drift_check.cmd` capability-test interpreter (py→venv→python) thay hardcode `python` → đóng lỗ hook EXIT 9009 (Store-alias). Fix gốc portable, KHÔNG đụng rule/RULES_VERSION. Port kit. **VERIFY: launcher EXIT 0 + drift_check PASS** | #254 |
+| D-057 | ✅ | Lớp trừu tượng môi trường = dev-env launcher `scripts/vp.cmd` (`env/setup/test/lint/check/verify`) auto-detect interpreter/GPU + ghi đè `VP_PYTHON`/`VP_EXTRAS` qua `env.local.cmd` (per-máy, gitignored). Gộp venv/pytest/lint(K-044)/drift → 1 giao diện cross-machine. **VERIFY: env/setup/verify EXIT 0 · 465/1·5/0·drift PASS** | #256 |
 ## 2. Chỗ phải đổi — `02-requirement-changes.md`
 | ID | Trạng thái | Đổi gì | Nguồn |
 |---|---|---|---|
@@ -110,6 +112,8 @@
 | T-019 | ✅ | Tái dùng `BoundedQueue` kernel vs viết mới → tái dùng (client 1 process, thread⊥thread → thỏa K-016 thread-safe; có sẵn 4 policy + đếm) | #238 |
 | T-020 | ✅ | SHM-ring-đầy tính DROP (gộp `frames_dropped_backpressure` + counter riêng) vs `frames_captured`=chỉ-frame-ghi-SHM-OK → chọn gộp (giữ R4.1 + không giấu mất-frame tầng SHM = đúng mục tiêu A2). Assert Wave 4 (D-051) | #244,#246 |
 | T-021 | ✅ | R3 cấm BLOCK+RTSP: hàm guard THUẦN sẵn-sàng-wire vs bơm field policy vào schema+parse+wire ngay → guard thuần (config chưa tiêu thụ policy → schema = over-engineer; guard+test nắm bản chất R3, P7) | #245 |
+| T-022 | ✅ | Hook interpreter: launcher capability-test vs swap `python`→`py` vs chỉ-venv → **launcher** (2 máy setup khác nhau, không tên đơn nào đúng cả hai; py-swap=ngọn vỡ scoop; venv-only vỡ fresh-clone) | #254 |
+| T-023 | ✅ | Dev-env: dispatcher `.cmd` tự-viết vs Makefile/just/nox vs lệnh tay → **`.cmd` thuần** (chạy ngay mọi Windows sạch, zero-dep; Make/just cần cài thêm = trái mục tiêu; lệnh tay = fix ngọn không xóa ma sát). Cross-OS `.sh` = mở rộng sau | #256 |
 
 ## 4. Điều nên biết / rủi ro — `04-things-to-know.md`
 | ID | Trạng thái | Nội dung | Đóng khi |
@@ -170,6 +174,8 @@
 | K-054 | ✅ | Drift TỒN ĐỌNG bị linter D-052 bắt: LOG dup legacy #90/91/95/96 (2 AI append cùng ngày → allowlist, không renumber vì append-only) + thiếu detail D-036 (khôi phục từ LOG #198, C-020) | #248 |
 | K-055 | ✅ | Hook `runCommand` KHÔNG hiểu `;` separator (dán vào argv → "No such file") → fix gốc: 1-script entry `tests/drift_check.py` gọi cả 2 linter; hook + §0 dùng 1 lệnh. Bài học: hook KHÔNG ghép lệnh bằng `;`/`&&` | #250 |
 | K-056 | 🟡 | Ranh giới client backpressure (KHÔNG bug — hợp đồng dùng): F2 `metrics_snapshot` đọc-sau-quiesce (io idle); F3 không trộn `infer()` sync + `submit()` async nặng (sync bỏ qua flow-control window) | #252 |
+| K-057 | ✅ | Interpreter Python KHÔNG portable giữa máy Windows (python.org có `py` · scoop có `python` · Store-alias `python` tồn-tại-mà-hỏng-9009) → hook/CI dò CAPABILITY (`--version` exit 0), KHÔNG hardcode tên/không presence-test. Đóng bằng launcher D-056 | #254 |
+| K-058 | ✅ | Dev-env launcher: đổi máy chỉ cần `scripts\vp.cmd setup` → `vp verify`; auto-detect sai thì tạo `scripts\env.local.cmd` (gitignored) đặt `VP_PYTHON`/`VP_EXTRAS`; máy GPU thêm `pt` vào extras (nhớ K-049 torch-CPU). `vp lint` né AV sẵn (K-044) | #256 |
 
 ## Tổng quan trạng thái (cập nhật 2026-07-06 — phiên máy-3 `endgame`, sync đầy đủ config-declarative + môi trường)
 - **Tổng 127 entry:** D 47 (D-001..047) · C 17 (C-001..017) · T 17 (T-001..017) · K 49 (K-001..049). Baseline **436 passed/1 skipped · lint 5/0** — ✅ **ĐÃ TỰ VERIFY phiên này** (máy `endgame`, scoop py3.13.12, LOG #232: pytest 48.70s EXIT 0 + `importlinter.api` LINT_OK True). K-047+K-045+K-046 đóng; +9 test bench.

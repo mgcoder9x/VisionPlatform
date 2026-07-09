@@ -41,3 +41,8 @@ vision-platform/models/
 # Old virtual env
 .venv_old_del/
 **/.venv_old_del/
+.venv_broken/
+**/.venv_broken/
+
+# Profile moi truong rieng theo may (vp.cmd nap) — KHONG commit
+scripts/env.local.cmd
