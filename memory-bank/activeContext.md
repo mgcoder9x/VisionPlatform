@@ -6,7 +6,9 @@
 - User: máy này KHÔNG GPU + muốn lớp môi trường chạy dễ trên nhiều máy/môi trường; commit+push nhánh KHÔNG cần hỏi.
 - **Làm:** `scripts/vp.cmd` (`env/setup/test/lint/check/verify`) auto-detect interpreter (py→venv→python capability-test) + GPU (nvidia-smi inform) + ghi đè `VP_PYTHON`/`VP_EXTRAS` qua `scripts/env.local.cmd` (gitignored, per-máy) + `env.local.cmd.example` + `scripts/README.md`. `lint` bake `importlinter.api` (K-044); KHÔNG auto torch (K-049). Gitignore +`.venv_broken`/`env.local.cmd`.
 - **VERIFY THẬT:** `vp env` EXIT 0 (GPU=khong); `vp verify` = **465/1 · lint 5/0 · drift PASS · EXIT 0**; `vp setup` reinstall EXIT 0. Journal +D-057/T-023/K-058 (tổng 158). Log #256.
-- **Bước kế:** commit + push nhánh (user cho phép standing). Backpressure + anti-drift + env-layer DONE.
+- **ĐÃ commit + push** nhánh `chore/dev-env-launcher-portable-hooks` lên `origin` (16 files, tracking set up) → việc phiên này đã BACKUP trên remote. Backpressure + anti-drift + env-layer DONE.
+- ⚠️ **Bảo mật:** URL `origin` nhúng GitHub PAT plaintext (`ghp_...`) → khuyến nghị user ROTATE token + dùng credential manager (không nhúng URL). Token KHÔNG nằm trong file commit (chỉ trong .git/config local).
+- **Bước kế:** user tạo PR/merge nhánh nếu muốn; hoặc chỉ hướng sản phẩm tiếp (A1 cần GPU · R3 hoãn T-021 · C1 metrics · dừng mốc sạch).
 ---
 **[✅ #255 — VERIFIED hook agentStop tự chạy launcher drift-check (PASS/EXIT 0) — đóng lỗ #254 THẬT]**
 - Sau #254, hook `agentStop` TỰ chạy `cmd /c tests\drift_check.cmd` → PASS/EXIT 0 (user dán output, khớp drift_check.py) trên chính máy `python`-hỏng. → launcher (D-056) đóng lỗ 9009 trong cơ chế hook TỰ ĐỘNG, không chỉ chạy tay. K-057 = VERIFIED. Log #255.
