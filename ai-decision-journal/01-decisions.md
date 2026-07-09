@@ -720,3 +720,13 @@ Evidence: file tạo (jobs.verify, windows-latest, 5 step: checkout/setup-python
 Links: D-057 (vp verify — cùng cổng), D-056, K-059, T-024, K-044
 Nội dung: CI chạy lại ĐÚNG cổng của `vp verify` trên server sau mỗi push/PR → không phụ thuộc dev chạy Kiro cục bộ. windows-latest giữ parity test `win32`. Dùng `python` trực tiếp (setup-python, không Store-alias) nên không cần launcher.
 Vì sao: hook Kiro + linter là anti-drift PHÍA-DEV (bỏ qua được nếu push từ máy/tool khác). CI = anti-drift PHÍA-SERVER, vô điều kiện → mạnh nhất + chuẩn thương mại. Tái dùng cổng đã có = rủi ro thấp, không logic mới.
+
+
+### D-059 — 2026-07-09 — Mở spec `object-tracking-count` (PHA1 design-first) — analytics stateful đầu tiên, đóng hướng Lỗ 3/K-042
+Status: 🔵 (design-first 0-diag · CHƯA code · chờ user valid → PHA2 TDD)
+Scope: `.kiro/specs/object-tracking-count/{requirements,design}.md` (2 file, 0 code)
+Nguồn: LOG Entry #258 · yêu cầu user "quay lại dự án cho xong" · `vision-vertical-slice/design.md` (sub-spec kế) · roadmap `scale-architecture` R3.3 · K-042
+Evidence: `get_diagnostics` 2 file = 0 diagnostic; API bám code thật (`domain.iou`, `BaseStage._do_process→MediaPacket`, `with_artifact`, `Detection/BBox`, `ISink` — đã đọc)
+Links: K-042 (stateful+camera-affinity), D-041 (slice stateless), T-011 (slice-trước), D-039 (pipeline-runner)
+Nội dung: Thiết kế analytics STATEFUL đầu tiên (tracking + đếm-không-trùng) — 3 lớp: `domain/tracking.py::greedy_associate` (thuần, index-based, tái dùng iou) + `kernel` `Track` DTO/`ITracker` port + `runtime` `IouTracker`(giữ state)/`TrackingStage`(BaseStage, camera-affinity fail-fast). Additive: KHÔNG sửa CountStage (fan-out chung `detections`). 6 Correctness Property + testing no-GPU (chuỗi Detection dựng tay). IoU-greedy (không ML/GPU) → xác định.
+Vì sao: bước nghiệp vụ kế của sản phẩm + là nền cho mọi analytics (không trùng đếm). Nhánh scale (A1) bị chặn GPU (R6.1) → chọn nghiệp vụ làm+test được không-GPU. Design-first (user preference): valid design rồi mới code.

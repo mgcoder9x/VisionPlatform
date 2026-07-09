@@ -5220,3 +5220,28 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Token PAT nhúng URL origin (cảnh báo #256) KHÔNG ảnh hưởng Actions (Actions dùng GITHUB_TOKEN tự cấp).
 
 **Đã verify:** file `.github/workflows/verify.yml` đã tạo (YAML thủ công, cấu trúc jobs.verify + 5 step). · **Chưa verify:** CI chạy xanh trên GitHub (verify khi push — không chạy Actions cục bộ được); tính đúng version actions@v4/v5 khi thực thi.
+
+
+### Entry #258 — 2026-07-09 — Quay lại SẢN PHẨM: mở spec `object-tracking-count` (PHA1 design-first, đóng hướng Lỗ 3/K-042) — Kiro-Opus
+
+**Bối cảnh:** User "quay lại dự án cho xong". Nhánh SCALE bị chặn bởi R6.1 (benchmark cần GPU — máy no-GPU, không bịa số). Nhánh NGHIỆP VỤ làm+test được không-GPU. Chọn bước sản phẩm kế tiếp = tracking/đếm-không-trùng (chính `vision-vertical-slice/design.md` đã liệt kê là sub-spec kế; đóng Lỗ 3/K-042 stateful+camera-affinity — nền cho mọi analytics).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Mở spec `object-tracking-count` design-first: `requirements.md` (5 Req EARS) + `design.md` (kiến trúc 3 lớp: `domain.greedy_associate` thuần index-based + `kernel` Track DTO/ITracker port + `runtime` IouTracker/TrackingStage; camera-affinity fail-fast; 6 Correctness Property; testing no-GPU). CẢ HAI **0 diagnostic**. CHƯA CODE.
+- Thuật toán = IoU-greedy tái dùng `domain.iou` sẵn có (không ML/không GPU) → xác định, test bằng chuỗi Detection dựng tay.
+- Camera-affinity (K-042) bằng **fail-fast source_id guard** trong TrackingStage (thay vì key-state-theo-source phức tạp).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không (additive tuyệt đối — chỉ THÊM domain/kernel/runtime file, KHÔNG sửa DetectStage/CountStage/PipelineRunner; CountStage stateless giữ nguyên, TrackingStage đọc chung `detections` = fan-out R3.1).
+
+**3. Trade-off đã cân nhắc (chi tiết trong design QĐ-1..7):**
+- greedy IoU vs Hungarian/Kalman/ML → greedy v1 (xác định, zero-dep, no-GPU; ML qua port-swap sau).
+- ITracker là PORT vs nhét logic vào Stage → port (roadmap R3.3, swap-ready) — cái mất: thêm 1 abstraction.
+- camera-affinity fail-fast vs key-state-theo-source → fail-fast (hợp đồng rõ, chống dùng sai âm thầm).
+- unique_count đơn điệu (=_next_id) vs đếm active → giữ cả hai artifact (unique cumulative + active hiện tại).
+
+**4. Điều bạn nên biết:**
+- Đây là PHA thiết kế: CHỜ user đọc-lại-valid design → PHA2 code TDD (port/DTO/domain/impl/stage + test, kỳ vọng >465, lint 5/0). Chưa 1 dòng code.
+- Giới hạn trung thực (design self-review Lỗ 5): greedy ≠ tối ưu toàn cục — 2 vật giao nhau có thể đổi id; chấp nhận v1, ML tracker qua port sau.
+- Nhánh SCALE (A1 batching) vẫn chờ máy GPU để benchmark (R6.1) — không làm được đúng ở máy này.
+
+**Đã verify:** `get_diagnostics` 2 file spec = **0 diagnostic**; API tham chiếu (iou/BaseStage/with_artifact/Detection/BBox/ISink) đã ĐỌC code thật trước khi thiết kế (trích trong design "Nền đã đọc code thật"). · **Chưa verify:** hành vi runtime (chưa code — PHA2); tính đúng thuật toán association (sẽ verify bằng test TDD sau khi user valid design).

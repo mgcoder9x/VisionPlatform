@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-09)
-**Cập nhật lúc:** 2026-07-09T13:50:00+07:00.
+**Cập nhật lúc:** 2026-07-09T14:30:00+07:00.
+**[🔵 #258 — QUAY LẠI SẢN PHẨM: spec `object-tracking-count` PHA1 design-first (đóng Lỗ 3/K-042) — chờ user valid]**
+- User "quay lại dự án cho xong". Nhánh SCALE (A1 batching) CHẶN bởi R6.1 (benchmark cần GPU — máy no-GPU, không bịa). → chọn nhánh NGHIỆP VỤ làm+test được không-GPU.
+- **Bước sản phẩm kế:** tracking + đếm-không-trùng (analytics STATEFUL đầu tiên; slice design đã liệt kê là sub-spec kế; nền cho ALPR/face/đếm). Tạo `.kiro/specs/object-tracking-count/{requirements,design}.md` — **0 diagnostic**, CHƯA code.
+- **Thiết kế:** 3 lớp `domain.greedy_associate`(thuần, tái dùng iou) + `kernel` Track/ITracker(port) + `runtime` IouTracker(state)/TrackingStage(camera-affinity fail-fast). IoU-greedy no-GPU, xác định. Additive (không sửa CountStage — fan-out). 6 Property + test no-GPU. Journal +D-059. Log #258.
+- **Bước kế (CHỜ user valid design):** → PHA2 code TDD (domain associate + Track/ITracker + IouTracker + TrackingStage + test, kỳ vọng >465 · lint 5/0). Nếu user muốn feature khác trước (ALPR/face) → đổi hướng.
+- Song song còn chờ: CI run đầu (#257 🔵) · A1 cần GPU · PAT rotate (#256).
+---
 **[🔵 #257 — CI server-side (GitHub Actions `verify.yml`) — anti-drift phía-server, CHỜ run CI đầu]**
 - Thêm `.github/workflows/verify.yml`: windows-latest → checkout→setup-python 3.11→`pip install -e .[dev,onnx,cv2,web]`→`pytest -q`→lint(`importlinter.api`)→`python tests/drift_check.py`. Chạy CHÍNH cổng `vp verify` trên server sau mỗi push/PR → không phụ thuộc dev chạy Kiro. windows-latest giữ parity test `win32`.
 - **Ranh giới verify (trung thực):** KHÔNG chạy Actions cục bộ được → workflow 🔵 CHƯA verify; xanh/đỏ chỉ biết khi push kích hoạt (xem tab Actions / dán log). YAML viết tay (venv không có pyyaml để parse).
