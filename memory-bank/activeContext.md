@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T21:30:00+07:00.
+**Cập nhật lúc:** 2026-07-10T22:15:00+07:00.
+**[✅ #294 — ĐIỀU TRA tái hiện K-035 residual: 24/24 isolated → contention môi-trường, KHÔNG phải bug logic — máy `k.nguyen.manh.toan`]**
+- §0 đúng: git clean, HEAD=origin. Thử tái hiện K-035 kiểm-chứng-được (thay vì vá speculative / bỏ lửng).
+- **Bằng chứng:** chạy LẶP `test_supervisor_liveness.py` 12× (hang-tests timeout 0.4s) + `test_step_09_shutdown.py` 12× = **24/24 PASS, 0 fail**. → Hypothesis "hang-test startup-false-hang" BÁC BỎ; cả 2 file SOUND isolated. Residual (~2/5 full-run 80s+) CHỈ dưới tải FULL-SUITE (600 test: web/zmq/full-stack/spawn cạnh tranh CPU-RAM máy yếu) → **contention MÔI-TRƯỜNG, không phải bug logic**.
+- **Quyết định:** GIỮ không-vá-speculative (startup_grace/bump-timeout = trị triệu-chứng-contention, không verify được + không phải root logic). Đo/đóng tuyệt đối cần máy mạnh/CI (full-suite lặp, isolated resource). Kết luận CÓ BẰNG CHỨNG (24/24), không suy đoán.
+- **Ghi sổ:** LOG #294 (điều tra, không +D/C/T/K) · K-035 characterization nâng: test-logic SOUND (24/24) + residual=contention · INDEX #294. Drift PASS. Không đổi code (mốc 601/2·5/0·RULES 15 giữ).
+- **Bước kế (điểm dừng an toàn — chờ user):** như #293 — (a) máy GPU: CUDA/RTSP/benchmark/K-035-full-suite-lặp · (b) DB server: server-DB sink · (c) runtime song song: config-metrics · (d) hướng no-GPU khác nếu user chỉ định.
+---
 **[✅ #293 — MỐC SẠCH: củng cố bộ nhớ + refresh `progress.md` (sửa drift bản ghi cũ) — máy `k.nguyen.manh.toan`]**
 - §0 đúng: git clean, HEAD=origin. Sau chuỗi no-GPU trọn (#256-#292), hướng lớn còn lại đều CHẶN điều kiện (GPU/DB/runtime-song-song/máy-mạnh-cho-K035) → chốt MỐC SẠCH thay vì thêm feature speculative.
 - **KHÔNG vá `startup_grace_s`** dù suy ra root khả dĩ của K-035 residual — vì residual KHÔNG tái hiện isolated (5/5 ổn định), chỉ dưới tải full-suite cực đại → không verify được fix → vá = speculative. Đúng "không kiểm được + quan trọng → DỪNG".

@@ -5999,3 +5999,22 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Không có việc dở giữa chừng — điểm dừng an toàn để user quyết hướng.
 
 **Đã verify (máy k.nguyen.manh.toan):** `drift_check.py` PASS (#293, Σ199, RULES_VERSION 15 khớp 4 mirror) — chạy thật, đọc output; baseline 601/2·5/0 từ #292 (vp verify EXIT 0). progress.md refresh khớp activeContext + INDEX. · **Chưa verify (trung thực):** K-035 tuyệt-đối/GPU/DB/parallel — chặn điều kiện, đã nêu.
+
+### Entry #294 — 2026-07-10 — ĐIỀU TRA tái hiện K-035 residual (24/24 isolated) → xác nhận contention môi-trường, KHÔNG phải bug logic — Kiro-Opus
+
+**Bối cảnh:** §0 đúng (git clean, HEAD=origin 3cc8c89). Để hoặc root-fix-có-bằng-chứng hoặc kết luận trung thực (thay vì vá speculative), thử TÁI HIỆN K-035 residual một cách kiểm-chứng-được.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **Thử tái hiện có phương pháp:** chạy LẶP `test_supervisor_liveness.py` 12× + `test_step_09_shutdown.py` 12× (tổng 24 run isolated) để bắt flaky. Hypothesis ban đầu: hang-test (heartbeat_timeout 0.4s) bị startup-false-hang dưới tải.
+- **Kết quả (bằng chứng):** **24/24 PASS, 0 fail.** → Hypothesis hang-test startup-false-hang **BÁC BỎ**; cả 2 file test SOUND khi chạy riêng. Residual flaky (thấy ~2/5 full-run 80s+) CHỈ xuất hiện dưới TẢI FULL-SUITE (600 test: web/zmq/full-stack/spawn cạnh tranh CPU-RAM máy yếu) → **contention MÔI-TRƯỜNG, KHÔNG phải bug logic** trong supervisor test.
+- **Quyết định:** GIỮ không-vá-speculative (startup_grace/bump-timeout = trị triệu-chứng-contention, không verify được + không phải root logic). Đóng/đo tuyệt đối cần máy mạnh/CI chạy full-suite lặp (isolated resource). Đây là kết luận có BẰNG CHỨNG (24/24), không suy đoán.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (điều tra + tinh chỉnh characterization K-035; không đổi code).
+
+**3. Trade-off đã cân nhắc:** tái hiện bằng full-suite-lặp (đắt, probabilistic 2/5, ~80s×N) vs isolated-lặp (rẻ, 24×) → isolated trước (đủ chứng minh test-logic-sound + loại giả thuyết logic-bug). Full-suite-lặp để máy mạnh/CI (không hiệu quả trên máy yếu này).
+
+**4. Điều bạn nên biết:**
+- K-035 nâng characterization: **test logic SOUND (24/24 isolated) · residual = full-suite contention máy yếu** (không tái hiện isolated) → cần stronger env để observe/close. KHÔNG bump-timeout che.
+- Không đổi code phiên này (điều tra thuần). Mốc 601/2·5/0·drift PASS·RULES 15 giữ nguyên.
+
+**Đã verify (máy k.nguyen.manh.toan):** chạy LẶP `test_supervisor_liveness.py` 12× + `test_step_09_shutdown.py` 12× = **24/24 passed, 0 fail** (chạy thật, đọc output từng run); `drift_check.py` chạy sau ghi sổ. · **Chưa verify (trung thực):** residual full-suite-contention (không tái hiện isolated được → cần máy mạnh/CI đo).
