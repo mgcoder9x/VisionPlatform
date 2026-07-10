@@ -141,6 +141,23 @@ def test_config_pt_auto_resolves_cpu_on_no_cuda(monkeypatch):
     assert runner is not None
 
 
+# ============ CLI --capabilities (operator command) ============
+
+def test_cli_capabilities_prints_json(capsys):
+    """`--capabilities` → in JSON năng lực máy ra stdout + thoát rc 0 (KHÔNG chạy pipeline)."""
+    import json
+    from vision_platform.profiles.vision_slice_app import main
+    rc = main(["--capabilities"])
+    assert rc == 0
+    out = capsys.readouterr().out.strip()
+    data = json.loads(out.splitlines()[-1])
+    for k in ("has_torch", "has_cuda", "cuda_device_count", "gpu_name", "has_cv2"):
+        assert k in data
+    assert data["has_torch"] is False        # máy dev này KHÔNG cài torch
+    assert data["has_cuda"] is False
+    assert data["cuda_device_count"] == 0
+
+
 # ============ P6: gate test theo năng lực (conftest autoskip) ============
 
 @pytest.mark.gpu

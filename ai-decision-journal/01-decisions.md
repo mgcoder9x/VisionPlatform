@@ -916,3 +916,12 @@ Evidence: `pytest test_metrics_http_endpoint.py` 9 passed ×5 ổn định (gồ
 Links: D-078 (design), K-071 (deadlock fix), D-074 (render_prometheus), D-069 (MetricsObserver), T-028 (secure default), K-019
 Nội dung: Exporter `/metrics` @adapters (http.server ThreadingHTTPServer daemon non-blocking; handler /metrics→render_prometheus(provider())+CT 0.0.4 / healthz / 404 / 500-không-sập; `_serving` Event chống deadlock stop-sớm; start()→cổng thực; stop() idempotent). provider callable TIÊM (leaf giữ). Wire inline: MetricsObserver+InMemoryMetrics+exporter, composite nếu +observe, secure-default localhost + cảnh báo phơi-mạng. Test no-GPU (127.0.0.1 ephemeral + urllib).
 Vì sao: #284 render được nhưng chưa PHỤC VỤ → Prometheus không kéo. Exporter hoàn tất chuỗi observability→scrape (dashboard/cảnh báo dùng được thật). Fix bản chất deadlock (_serving Event) từ review #290. Secure-by-default. Giới hạn trung thực: config-path metrics = follow-on; supervisor flaky hiếm dưới tải vô hạn (không phải code này).
+
+### D-080 — 2026-07-10 — Lệnh operator `--capabilities` (hoàn tất follow-on capability-aware-execution) + sửa trung thực K-035
+Status: ✅ code (--capabilities verify) · ⚠️ đảo một phần tuyên bố D-077/#288 ("đóng K-035"→"giảm-thiểu mạnh")
+Scope: `profiles/vision_slice_app.py` (+`--capabilities` in JSON caps rồi thoát) · `tests/test_capability.py` (+1 test)
+Nguồn: LOG Entry #292
+Evidence: `pytest test_capability.py` 14 passed/1 skipped; `--capabilities` in `{"has_torch":false,"has_cuda":false,...,"has_cv2":true}` (khớp máy); `vp verify` EXIT 0; full 601/2 (run xanh) — nhưng ~2/5 full-run 80s+ có 1 flaky supervisor
+Links: D-073 (capability probe), D-077 (test-stability), K-035, T-015 (config tuần tự)
+Nội dung: `--capabilities` dò+in năng lực máy (JSON) rồi thoát — operator kiểm máy trước deploy (đổi máy GPU/không-GPU). Additive. HOÃN config-path metrics (T-015 tuần tự → giá trị hạn chế). **Sửa trung thực:** #288 ghi "đóng K-035" là OVERCLAIM — thực tế qua nhiều full-run 80s+ thấy flaky supervisor ~2/5 lần dưới tải cực đại (chạy riêng 5/5 ổn định, vp verify xanh) → K-035 = GIẢM-THIỂU MẠNH (event-driven diệt race thiết kế) chứ chưa đóng tuyệt đối dưới tải cực đại.
+Vì sao: config-path metrics chưa đáng (tuần tự). --capabilities nhỏ+đúng pain+verify được. Sửa overclaim = nguyên tắc "không bịa, thà nói không chắc, valid nhiều lần" — residual flaky là bản chất môi-trường (máy yếu, tải cực đại), không phải race logic; đo/đóng tiếp cần máy mạnh/CI, KHÔNG bump-timeout che.

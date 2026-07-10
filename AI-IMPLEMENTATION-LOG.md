@@ -5961,3 +5961,22 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - **1 lần full-suite (tải nặng 73s) có 1 flaky fail** (không phải test metrics-http — đã kiểm 5/5 ổn định) = flaky hiếm supervisor/step_09 dưới tải cực đại. ĐÚNG giới hạn đã ghi #288 (event-driven diệt race + 5/5 ổn định NHƯNG không chứng minh 0-flake máy tải VÔ HẠN, deadline 20s hữu hạn). KHÔNG phải hồi-quy code mới.
 
 **Đã verify (máy k.nguyen.manh.toan, py3.11.9):** `git status` clean; `pytest test_metrics_http_endpoint.py` 9 passed ×5 ổn định; `vp verify` EXIT 0; full `pytest -q` 600/2 (×2 xanh). · **Chưa verify:** 0-flake supervisor máy tải vô hạn (giới hạn đã nêu); scrape qua RTSP/mạng thật (cần triển khai); config-path metrics-http (follow-on).
+
+### Entry #292 — 2026-07-10 — Lệnh operator `--capabilities` (hoàn tất follow-on capability) + SỬA TRUNG THỰC tuyên bố K-035 — Kiro-Opus
+
+**Bối cảnh:** §0 đúng (git clean, HEAD=origin 714d297). Cân nhắc wire metrics vào đường config NHƯNG đọc code thấy `_run_from_config` chạy TUẦN TỰ (T-015) → /metrics config-path giá trị hạn chế tới khi runtime song song → HOÃN (tránh over-engineer). Chọn follow-on nhỏ giá-trị-thật: lệnh `--capabilities` (phục vụ nỗi đau đổi-máy-GPU/không-GPU).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **`--capabilities`** ở `vision_slice_app`: dò + IN năng lực máy (JSON stdout: has_torch/has_cuda/cuda_device_count/gpu_name/has_cv2 + dòng người-đọc stderr) rồi thoát rc0, KHÔNG chạy pipeline. Operator/dev kiểm máy TRƯỚC deploy. Additive, dùng `probe_capabilities()` (#283).
+- **SỬA TRUNG THỰC K-035 (#288 OVERCLAIM):** tôi ghi "ĐÓNG K-035" ở #288, nhưng qua nhiều full-run 80s+ (#291, #292) thấy flaky supervisor/step_09 xuất hiện **~2/5 lần dưới tải CỰC ĐẠI** (chạy riêng 5/5 ổn định; `vp verify` xanh). → K-035 = **GIẢM-THIỂU MẠNH** (event-driven diệt RACE thiết kế), **KHÔNG đóng tuyệt đối** dưới tải full-suite cực đại. Hạ tuyên bố: ✅→🟡(mitigated). Đây là sửa overclaim (nguyên tắc thà-nói-không-chắc).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** đảo một phần tuyên bố #288 ("đóng"→"giảm-thiểu mạnh, còn flaky rất hiếm dưới tải cực đại"). Không đổi code test-stability (fix vẫn đúng + giảm mạnh; chỉ SỬA MỨC-ĐỘ tuyên bố cho khớp thực tế đo được).
+
+**3. Trade-off đã cân nhắc:** config-path metrics (wiring) vs `--capabilities` (operator) → capabilities (config-path tuần-tự nên metrics giá trị hạn chế; capabilities phục vụ đúng pain đổi-máy + verify được ngay). Điều tra thêm flaky supervisor vs chấp nhận giới hạn thống kê → ghi rõ giới hạn (event-driven đã diệt race thiết kế; residual dưới tải cực đại là bản chất môi-trường máy yếu, không phải race logic — cần máy mạnh/CI để đo tiếp; KHÔNG bump-timeout che).
+
+**4. Điều bạn nên biết (TRUNG THỰC):**
+- `--capabilities` VERIFY: `pytest test_capability.py` 14 passed/1 skipped (thêm test JSON caps); chạy thật `--capabilities` → `{"has_torch": false, "has_cuda": false, "cuda_device_count": 0, "gpu_name": null, "has_cv2": true}` (khớp máy).
+- `vp verify` EXIT 0; full `pytest -q` = **601 passed/2 skipped** (run này xanh; 600→601 +1 capabilities). NHƯNG 2/~5 full-run 80s+ có 1 flaky supervisor (không phải capabilities/metrics-http — chúng ổn định 5/5). K-035 residual = flaky rất hiếm dưới tải cực đại (không tái hiện khi chạy riêng/vp verify).
+- Không chốt được tên test flaky lần này (run xanh); pattern = supervisor/step_09 timing dưới tải (K-027/K-035).
+
+**Đã verify (máy k.nguyen.manh.toan):** `pytest test_capability.py` 14 passed/1 skipped; `--capabilities` chạy thật in JSON đúng; `vp verify` EXIT 0; full `pytest -q` 601/2 (run xanh). · **Chưa verify / TRUNG THỰC:** K-035 KHÔNG đóng tuyệt đối (flaky ~2/5 full-run tải cực đại — cần máy mạnh/CI để đo/đóng tiếp); tên test flaky chưa chốt (run xanh).

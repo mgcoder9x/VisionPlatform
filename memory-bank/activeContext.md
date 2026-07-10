@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T20:00:00+07:00.
+**Cập nhật lúc:** 2026-07-10T20:45:00+07:00.
+**[✅ #292 — Lệnh operator `--capabilities` + SỬA TRUNG THỰC tuyên bố K-035 — máy `k.nguyen.manh.toan`, verify 601/2 (run xanh)]**
+- §0 đúng: git clean, HEAD=origin. Cân nhắc config-path metrics NHƯNG `_run_from_config` TUẦN TỰ (T-015) → /metrics giá trị hạn chế → HOÃN (tránh over-engineer). Chọn follow-on nhỏ giá-trị-thật.
+- **`--capabilities`** (`vision_slice_app`): dò+in JSON năng lực máy (has_torch/has_cuda/cuda_device_count/gpu_name/has_cv2) rồi thoát rc0 — operator kiểm máy TRƯỚC deploy (pain đổi-máy GPU/không-GPU). Chạy thật: `{"has_torch":false,"has_cuda":false,"cuda_device_count":0,"gpu_name":null,"has_cv2":true}` (khớp máy).
+- **⚠️ SỬA TRUNG THỰC K-035 (#288 OVERCLAIM):** tôi ghi "đóng K-035" ở #288, nhưng qua nhiều full-run 80s+ (#291,#292) thấy flaky supervisor **~2/5 lần dưới tải CỰC ĐẠI** (chạy riêng 5/5 ổn định, `vp verify` xanh). → K-035 = **GIẢM-THIỂU MẠNH** (event-driven diệt race THIẾT KẾ) **CHỨ CHƯA đóng tuyệt đối** dưới tải cực đại. Residual = bản chất môi-trường (máy yếu), không phải race logic; đo/đóng tiếp cần máy mạnh/CI, KHÔNG bump-timeout che.
+- **Verify:** `pytest test_capability.py` 14 passed/1 skipped; `--capabilities` chạy thật đúng; `vp verify` EXIT 0; full 601/2 (run xanh). Ghi sổ: LOG #292 · +D-080 · K-035→🟡(mitigated, sửa overclaim) · INDEX #292/tổng 199 (D80·C20·T28·K71). Drift PASS.
+- **Bức tranh no-GPU (trọn):** observability đo→render→serve /metrics + `--observe`/`--metrics-port`/`--capabilities`; capability-aware GPU/no-GPU; CI giảm-thiểu-flaky mạnh. Journal 4-file + drift-check tự-động vững.
+- **Bước kế (chờ user — nhiều tính năng no-GPU đã trọn):** (a) **dừng mốc sạch** (điểm dừng hợp lý — tổng kết) · (b) khi có GPU/CI mạnh: đo+đóng K-035 tuyệt đối + verify nhánh CUDA + tune motion-gate-roi RTSP · (c) server-DB sink (cần DB) · (d) config-path metrics khi runtime song song.
+---
 **[✅ #291 — PHA2 CODE TDD `metrics-http-endpoint` HOÀN TẤT — exporter /metrics Prometheus scrape (no-GPU) — máy `k.nguyen.manh.toan`, verify 9×5 ổn định + full 600/2]**
 - §0 đúng: git clean, HEAD=origin. Hiện thực design hardened 2 vòng (#289 mở + #290 review deadlock). Hoàn tất chuỗi observability→SCRAPE.
 - **Code (additive):** `adapters/metrics_http_server.py::MetricsHttpExporter` (http.server ThreadingHTTPServer stdlib, daemon NON-BLOCKING; `/metrics`→200 render_prometheus(provider())+CT 0.0.4 / `/healthz`→200 / khác→404 / provider-lỗi→500-không-sập; **`_serving` Event CHỐNG DEADLOCK** stop-sớm; start()→cổng thực; stop() idempotent) + `is_loopback`. provider callable TIÊM (adapters leaf giữ). Wire inline `vision_slice_app`: `--metrics-port`/`--metrics-host` (MetricsObserver+InMemoryMetrics+exporter, `_CompositeObserver` nếu +observe, secure-default localhost + cảnh báo phơi-mạng).

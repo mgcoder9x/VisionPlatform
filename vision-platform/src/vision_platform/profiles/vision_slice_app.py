@@ -248,7 +248,20 @@ def main(argv=None) -> int:
                         help="bật exporter HTTP /metrics (Prometheus scrape) ở cổng này (0=ephemeral). Bật → cũng emit snapshot định kỳ")
     parser.add_argument("--metrics-host", default="127.0.0.1",
                         help="địa chỉ bind exporter /metrics (mặc định 127.0.0.1 an toàn; 0.0.0.0=phơi mạng, KHÔNG auth → chỉ mạng nội bộ)")
+    parser.add_argument("--capabilities", action="store_true",
+                        help="IN năng lực máy hiện tại (torch/cuda/cv2/gpu) dạng JSON rồi thoát — kiểm máy TRƯỚC khi deploy (đổi máy GPU/không-GPU)")
     args = parser.parse_args(argv)
+
+    if args.capabilities:
+        # Lệnh operator: dò + in năng lực máy (JSON stdout, parse được bởi script vận hành) rồi thoát.
+        import dataclasses
+        import json
+        from vision_platform.adapters.capability_probe import probe_capabilities
+        caps = probe_capabilities()
+        print(json.dumps(dataclasses.asdict(caps), ensure_ascii=False))
+        print(f"[capabilities] torch={caps.has_torch} cuda={caps.has_cuda} "
+              f"gpu={caps.gpu_name} cv2={caps.has_cv2}", file=sys.stderr)
+        return 0
 
     if args.validate and not args.config:
         parser.error("--validate cần --config <file.toml>")
