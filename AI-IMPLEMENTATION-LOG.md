@@ -5859,3 +5859,23 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Bài học: `git add -A` có thể cuốn file untracked lạ → nên `git status` đầu mỗi lượt (đã có trong §0 nhưng lượt #285 tin hook thay vì tự chạy) — sẽ chú ý.
 
 **Đã verify (máy k.nguyen.manh.toan):** `get_diagnostics` test-stability-hardening/{requirements,design}.md = **No diagnostics**; supervisor-liveness-hardening đã xoá (git D); `drift_check.py` chạy sau ghi sổ. · **Chưa verify:** hiệu quả fix test (chờ-sự-kiện ổn định ≥5 lần) — CHƯA code (PHA2).
+
+### Entry #287 — 2026-07-10 — REVIEW đối kháng design `test-stability-hardening` → fix 1 lỗ SỐNG-CÒN trước khi code — Kiro-Opus
+
+**Bối cảnh:** §0 làm đúng (TỰ `git status` = clean, HEAD=origin 988ee07 — bài học #286). Trước PHA2 code, đọc worker THẬT (`worker_funcs_for_step_09.py` + `liveness_workers.py`) + trace `run()`/`_cascade_shutdown` để validate kế hoạch viết-lại + tự phản biện (pattern #280/#282). CHƯA code.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **Lỗ SỐNG-CÒN:** `wait_until` với predicate đọc log CHƯA tạo (`open(log)` lúc worker chưa spawn/ghi) → `FileNotFoundError` → CRASH chính bản-fix event-driven (biến giải-pháp-chống-flaky thành lỗi mới). Fix: `_safe` bọc predicate (ngoại lệ = "chưa thoả", poll tiếp) + helper `log_text` (rỗng nếu chưa tạo). +Property 8.
+- **Xác nhận khả thi (đọc code, không bịa):** ok/crash/graceful worker GHI FILE → observable qua `log_text`; `heartbeat_ok_worker` CHỈ cập nhật `mp.Value` → observable qua `sup._heartbeats[wid].value`; graceful `cleanup_done` chạy vì `request_stop`→`_cascade_shutdown` set `_shutdown_event`→worker thoát vòng+finally (đã trace); non-coop ok_worker bị terminate ở cascade (counts==0); give-up count cap chính xác max+1.
+- Làm rõ observable + white-box test read (`_heartbeats`/`_restart_counts`) an toàn cross-thread dưới GIL cho poll.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (siết design cho robust; chưa code).
+
+**3. Trade-off đã cân nhắc:**
+- `wait_until` swallow ngoại lệ predicate vs bắt test tự-guard mọi predicate → swallow (1 chỗ, robust toàn cục; predicate gọn) + thêm helper `log_text` (rõ ý định).
+
+**4. Điều bạn nên biết:**
+- CHƯA code (PHA1 design đã hardened 1 vòng). `get_diagnostics` design.md = No diagnostics.
+- Bài học K-070: helper đồng-bộ event-driven PHẢI an-toàn-ngoại-lệ với side-effect CHƯA xảy ra (file chưa tạo) — nếu không, chính giải-pháp-chống-flaky lại crash. Review fix-test phải trace trạng-thái-KHỞI-ĐẦU.
+
+**Đã verify (máy k.nguyen.manh.toan):** `git status` clean; `get_diagnostics` test-stability-hardening/design.md = No diagnostics (sau fix); đối chiếu worker + luồng cascade code thật (cleanup_done chạy sau request_stop→shutdown_event); `drift_check.py` chạy sau ghi sổ. · **Chưa verify:** hiệu quả fix (chạy lặp ≥5 ổn định) — CHƯA code (PHA2).

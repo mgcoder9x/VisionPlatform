@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T15:45:00+07:00.
+**Cập nhật lúc:** 2026-07-10T16:30:00+07:00.
+**[🔵 #287 — REVIEW đối kháng design `test-stability-hardening` → fix 1 lỗ SỐNG-CÒN trước khi code — máy `k.nguyen.manh.toan`]**
+- §0 làm đúng (bài học #286): TỰ `git status` = clean, HEAD=origin `988ee07`. Đọc worker THẬT (`worker_funcs_for_step_09.py` + `liveness_workers.py`) + trace `run()`/`_cascade_shutdown` để validate + tự phản biện (pattern #280/#282).
+- **Lỗ SỐNG-CÒN:** `wait_until` với predicate đọc log CHƯA tạo (`open(log)` lúc worker chưa spawn/ghi) → `FileNotFoundError` → CRASH chính bản-fix event-driven. Fix: `_safe` bọc predicate (ngoại-lệ = "chưa thoả") + helper `log_text` (rỗng nếu chưa tạo). +Property 8.
+- **Xác nhận khả thi (đọc code):** ok/crash/graceful worker GHI FILE (observable `log_text`); `heartbeat_ok_worker` chỉ cập nhật `mp.Value` (observable `sup._heartbeats[wid].value`); graceful `cleanup_done` chạy vì `request_stop`→`_cascade_shutdown` set `_shutdown_event`→worker thoát+finally; non-coop bị terminate ở cascade; give-up cap chính xác max+1.
+- **Verify:** `get_diagnostics` design.md = No diagnostics (sau fix). Ghi sổ: LOG #287 · +K-070 · D-076 row→reviewed · INDEX #287/tổng 193 (D76·C20·T27·K70). Drift PASS.
+- **VẪN CHƯA code** (PHA1 đã hardened 1 vòng). **Bước kế (CHỜ user):** → PHA2 code TDD `test-stability-hardening` (`Supervisor.request_stop()` additive + `tests/_wait_helpers.py::wait_until`+`log_text` (an-toàn-ngoại-lệ) + viết-lại ~9 test theo property/event-driven + timeout thực tế + marker `slow` + unit-test wait_until P8; verify chạy LẶP ≥5 lần ổn định = đóng K-035). Hoặc: serving HTTP `/metrics` · wire `--capabilities` · dừng mốc sạch.
+---
 **[🔵 #286 — HỢP NHẤT spec trùng K-035: giữ `test-stability-hardening`, XOÁ `supervisor-liveness-hardening` (đảo một phần D-075) — máy `k.nguyen.manh.toan`]**
 - **Phát hiện drift:** `git add -A` (#285) cuốn vào commit c736db5 file UNTRACKED `test-stability-hardening/requirements.md` — spec design-first CHẤT LƯỢNG CAO cho CÙNG K-035 (origin không chắc; đối chiếu code thật = đúng). → 2 spec trùng = drift.
 - **Tự phản biện (doubt-driven) → công nhận D-075/#285 OVER-REACH:** production default `heartbeat_timeout_s=2.0s` đã hấp thụ startup latency → flakiness thật do TEST dùng `0.5s` phi-thực-tế, KHÔNG phải bug supervisor. Đổi semantics supervisor (startup_grace) = over-engineer cho vấn-đề-thuộc-test.

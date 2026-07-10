@@ -718,3 +718,12 @@ Evidence: design #281 (0-diag) vẫn 4 lỗ: (A) resolve chỉ kiểm has_cuda b
 Đóng khi: (bài học — luôn áp dụng)
 Nội dung: Review capability-aware-execution tìm 4 lỗ tính-đúng-chính-sách: (A) kiểm ordinal cuda:N vs cuda_device_count→fail-fast; (B) chuẩn hoá device về lower 1 dạng; (C) has_cuda = is_available AND count>0; (D) CLI bắt CapabilityError→stderr gọn+exit code (mẫu ConfigError). +Property 8/9.
 Vì sao ghi (bài học vận hành): củng cố K-065/K-067/K-068 — "0 diagnostic" chứng nhận CẤU TRÚC, KHÔNG chứng nhận tính-đúng-CHÍNH-SÁCH. Lỗ chỉ lộ khi đối chiếu POLICY (resolve_device) với (a) ràng buộc PHẦN CỨNG thật (số GPU hữu hạn) + (b) hợp đồng ADAPTER tiêu thụ thật (chuẩn hoá chữ). Nguyên tắc: review chính-sách phải trace tới đầu-vào-thực-tế (hardware) + đầu-ra-tiêu-thụ (adapter), không chỉ đọc policy cô lập.
+
+### K-070 — ✅ (2026-07-10) BÀI HỌC (củng cố K-068): helper đồng-bộ event-driven PHẢI an-toàn-ngoại-lệ với side-effect CHƯA xảy ra
+Status: ✅ (đã fix design test-stability-hardening trước khi code)
+Scope: quy trình design-first · `.kiro/specs/test-stability-hardening/design.md` · LOG Entry #287
+Nguồn: LOG Entry #287
+Evidence: design #286 (`wait_until`) predicate `"alive_" in log.read_text()` sẽ ném FileNotFoundError lúc log CHƯA tạo → crash chính bản-fix; lộ khi trace trạng-thái-KHỞI-ĐẦU (worker chưa spawn/ghi); sau fix `_safe` bọc → get_diagnostics vẫn 0.
+Đóng khi: (bài học — luôn áp dụng)
+Nội dung: `wait_until(predicate,...)` phải coi predicate NÉM = "chưa thoả" (bọc try/except→False, poll tiếp), + helper `log_text` (rỗng nếu chưa tạo). Nếu không: predicate đọc file/state CHƯA tồn tại lúc bắt đầu chờ → crash → giải-pháp-chống-flaky tự nó vỡ. +Property 8.
+Vì sao ghi (bài học vận hành): củng cố K-068 — review fix-test phải trace tới TRẠNG-THÁI-KHỞI-ĐẦU (file chưa có, state chưa set), không chỉ trạng-thái-đã-ổn-định. Event-driven wait mà không an-toàn-ngoại-lệ = nguồn flaky/crash mới. Nguyên tắc: helper đồng-bộ = phòng thủ ngoại lệ ở ranh giới quan-sát (I/O side-effect chưa xảy ra).

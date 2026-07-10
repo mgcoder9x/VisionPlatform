@@ -65,17 +65,36 @@ def request_stop(self) -> None:
 ```
 - Chỉ set bool (đọc trong `while not self._shutdown_requested`) → an toàn gọi từ thread nền (GIL + gán bool đơn).
 
-### 2. tests/_wait_helpers.py — wait_until (event-driven)
+### 2. tests/_wait_helpers.py — wait_until (event-driven, AN-TOÀN-NGOẠI-LỆ)
 ```
+def _safe(predicate) -> bool:
+    try:
+        return bool(predicate())
+    except Exception:            # side-effect CHƯA xảy ra (vd log CHƯA tạo → FileNotFoundError) = "chưa thoả"
+        return False
+
 def wait_until(predicate, deadline_s: float = 10.0, poll_s: float = 0.02) -> bool:
     end = time.monotonic() + deadline_s
     while time.monotonic() < end:
-        if predicate():
+        if _safe(predicate):
             return True
         time.sleep(poll_s)
-    return predicate()          # kiểm lần cuối tại deadline
+    return _safe(predicate)      # kiểm lần cuối tại deadline
+
+# helper an toàn cho log (predicate không cần tự guard):
+def log_text(path) -> str:
+    try:
+        return Path(path).read_text()
+    except OSError:
+        return ""
 ```
 - `deadline_s` GENEROUS (chỉ chặn treo, KHÔNG phải mốc kỳ vọng); trả sớm khi điều kiện thoả → nhanh khi máy nhanh.
+- **AN-TOÀN-NGOẠI-LỆ (fix Lỗ-review #287):** predicate ném (vd đọc log CHƯA tạo) → coi là "chưa thoả" (poll tiếp), KHÔNG crash. Đây là điểm SỐNG-CÒN: side-effect quan-sát thường CHƯA tồn tại lúc bắt đầu chờ.
+
+### 2b. Observable mỗi test (white-box, đọc cross-thread an toàn dưới GIL cho polling)
+- **step_09** (ok/crash/graceful worker GHI FILE): observable = `log_text(path)` (nội dung/số dòng). Dùng `log_text` (rỗng nếu chưa tạo).
+- **liveness heartbeat** (worker KHÔNG ghi file, chỉ cập nhật `mp.Value`): observable = `sup._heartbeats[wid].value` (nhịp tăng dần) — đọc internal state (white-box test, chấp nhận).
+- **restart/give-up:** observable = `sup._restart_counts[wid]` — đọc cross-thread dưới GIL (poll stale-by-1 vô hại).
 
 ### 3. Viết lại test (map 3 chế độ hỏng → fix)
 Mẫu chung (chạy nền, dừng theo sự kiện):
@@ -150,6 +169,10 @@ Chạy LẶP nhóm test cross-process ≥5 lần trên máy này → pass mọi 
 `request_stop` additive (không gọi = hành vi cũ); `_is_hung`/cascade/backoff giữ nguyên; số test không giảm; import-linter 5 kept/0 broken.
 **Validates: Requirements 4.1, 4.3, 5.3**
 
+### Property 8: wait_until AN-TOÀN-NGOẠI-LỆ (fix Lỗ-review #287)
+`wait_until` với predicate ném ngoại lệ lúc đầu (vd `open(log)` khi file CHƯA tạo → FileNotFoundError) → KHÔNG crash; poll tiếp; trả True NGAY khi điều kiện thoả (sau khi file xuất hiện), False nếu hết deadline. Test bằng predicate ném vài lần đầu rồi thoả.
+**Validates: Requirements 2.2**
+
 ## Testing Strategy
 
 - **Viết lại (P1–P5):** mỗi test flaky → mẫu thread + wait_until (map §Components 3). Assertion đổi rate→property,
@@ -161,6 +184,21 @@ Chạy LẶP nhóm test cross-process ≥5 lần trên máy này → pass mọi 
   giảm số test (573+); `vp lint` 5/0.
 - **Marker:** đăng ký `slow` trong pyproject `[tool.pytest.ini_options] markers` (cạnh `gpu`); test spawn/timing gắn
   `@pytest.mark.slow` — MẶC ĐỊNH vẫn chạy (giữ phủ), chỉ để lọc/định vị.
+- **wait_until an-toàn-ngoại-lệ (P8):** unit-test helper: predicate ném FileNotFoundError 2 lần đầu rồi trả True →
+  `wait_until` trả True (không crash); predicate luôn ném → trả False tại deadline (deadline nhỏ trong test này).
+
+## Review đối kháng vòng 2 (đọc-lại-valid #287 — đối chiếu worker + luồng thật, trước khi code)
+Đọc `worker_funcs_for_step_09.py` + `liveness_workers.py` + luồng `run()`/`_cascade_shutdown` thật → xác nhận kế
+hoạch KHẢ THI + tìm 1 lỗ SỐNG-CÒN:
+- **Lỗ (bản chất):** `wait_until` với predicate đọc log CHƯA tạo → `FileNotFoundError` → crash chính bản-fix. Fix:
+  `_safe` bọc predicate (ngoại lệ = "chưa thoả") + helper `log_text` (rỗng nếu chưa tạo). +Property 8.
+- **Xác nhận khả thi (không bịa):** ok_worker/crash_worker/graceful_worker GHI FILE (observable qua log_text);
+  heartbeat_ok_worker CHỈ cập nhật `mp.Value` (observable qua `_heartbeats[wid].value`); graceful cleanup chạy vì
+  `request_stop`→`_cascade_shutdown` set `_shutdown_event` → worker thoát vòng + finally ghi `cleanup_done` (đã
+  trace code). Non-coop ok_worker bị terminate ở cascade (counts==0). give-up: count cap chính xác tại max+1.
+- **Làm rõ:** test đọc `_heartbeats`/`_restart_counts` = white-box (chấp nhận); cross-thread read dưới GIL an toàn cho poll.
+> Bài học (K-070, củng cố K-068): helper đồng-bộ event-driven PHẢI an-toàn-ngoại-lệ với side-effect CHƯA xảy ra —
+> nếu không, chính giải-pháp-chống-flaky lại crash/flaky. Review fix-test phải trace tới trạng-thái-KHỞI-ĐẦU (file chưa có).
 
 ## Doubt-driven review (tự phản biện — KHẮT KHE)
 - **Forces:** CI-tin-cậy (xác định) ⟂ vẫn-bắt-hang/crash-thật (property eventually) ⟂ không-đổi-production (chỉ +API
