@@ -727,3 +727,12 @@ Evidence: design #286 (`wait_until`) predicate `"alive_" in log.read_text()` s�
 Đóng khi: (bài học — luôn áp dụng)
 Nội dung: `wait_until(predicate,...)` phải coi predicate NÉM = "chưa thoả" (bọc try/except→False, poll tiếp), + helper `log_text` (rỗng nếu chưa tạo). Nếu không: predicate đọc file/state CHƯA tồn tại lúc bắt đầu chờ → crash → giải-pháp-chống-flaky tự nó vỡ. +Property 8.
 Vì sao ghi (bài học vận hành): củng cố K-068 — review fix-test phải trace tới TRẠNG-THÁI-KHỞI-ĐẦU (file chưa có, state chưa set), không chỉ trạng-thái-đã-ổn-định. Event-driven wait mà không an-toàn-ngoại-lệ = nguồn flaky/crash mới. Nguyên tắc: helper đồng-bộ = phòng thủ ngoại lệ ở ranh giới quan-sát (I/O side-effect chưa xảy ra).
+
+### K-071 — ✅ (2026-07-10) BÀI HỌC (củng cố K-069): review adapter I/O phải trace HỢP ĐỒNG THƯ VIỆN THẬT (lifecycle/thread), không chỉ logic app
+Status: ✅ (đã fix design metrics-http-endpoint trước khi code)
+Scope: quy trình design-first · `.kiro/specs/metrics-http-endpoint/design.md` · LOG Entry #290
+Nguồn: LOG Entry #290
+Evidence: design #289 `stop()`=`shutdown()+server_close()` sẽ DEADLOCK nếu gọi trước khi `serve_forever()` vào (hợp đồng `socketserver.BaseServer`: shutdown phải khi serve_forever đang chạy thread khác). Lộ khi trace lifecycle stdlib + kịch bản start→stop nhanh (test P5). Sau fix `_serving` Event → get_diagnostics vẫn 0.
+Đóng khi: (bài học — luôn áp dụng)
+Nội dung: Exporter dùng `http.server.ThreadingHTTPServer` chạy `serve_forever` trong daemon thread. `stop()` phải CHỜ (`threading.Event` set ngay trước serve_forever) tới khi serve_forever đã vào rồi mới `shutdown()` → chống deadlock stop-sớm. +`poll_interval` để shutdown phản hồi nhanh.
+Vì sao ghi (bài học vận hành): củng cố K-069 — review thành phần I/O/hạ-tầng phải đối chiếu HỢP ĐỒNG THƯ VIỆN THẬT (thread-safety, thứ tự lifecycle, điều kiện tiên quyết của API như "shutdown cần serve_forever đang chạy"), không chỉ logic ứng dụng. Nhiều lỗi deadlock/race chỉ lộ ở tầng hợp đồng thư viện.

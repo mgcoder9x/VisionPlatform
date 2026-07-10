@@ -52,13 +52,31 @@ profiles (composition): MetricsHttpExporter(metrics.iter_metrics, host, port).st
 ### 1. adapters/metrics_http_server.py — MetricsHttpExporter (stdlib, non-blocking)
 ```
 class MetricsHttpExporter:
-    def __init__(self, provider, host="127.0.0.1", port=0, *, enable_healthz=True): ...
+    def __init__(self, provider, host="127.0.0.1", port=0, *, enable_healthz=True):
         # provider: () -> Iterable[MetricSample]. host="0.0.0.0" → cảnh báo (nơi gọi log; xem An toàn).
-    def start(self) -> int: ...      # dựng ThreadingHTTPServer, chạy serve_forever trong daemon thread; TRẢ cổng thực (server_address[1])
-    def stop(self) -> None: ...      # server.shutdown() + server_close() + thread.join(timeout)
+        self._serving = threading.Event()   # set NGAY TRƯỚC serve_forever (chống deadlock stop-sớm)
+
+    def start(self) -> int:
+        # dựng ThreadingHTTPServer (server_bind trong __init__ → port thực có ngay; port đã-dùng → OSError raise)
+        self._srv = ThreadingHTTPServer((host, port), _Handler); self._srv.daemon_threads = True
+        self._srv._vp_provider = self._provider; self._srv._vp_healthz = self._enable_healthz
+        def _serve():
+            self._serving.set()              # báo "sắp serve_forever" cho stop() (fix Lỗ-A #290)
+            self._srv.serve_forever(poll_interval=0.2)
+        self._thread = threading.Thread(target=_serve, daemon=True); self._thread.start()
+        return self._srv.server_address[1]   # cổng thực (ephemeral khi port=0)
+
+    def stop(self):
+        if self._srv is None: return         # idempotent (chưa start / 2 lần)
+        self._serving.wait(timeout=5.0)      # CHỜ serve_forever đã vào (BaseServer.shutdown yêu cầu) — chống deadlock
+        self._srv.shutdown(); self._srv.server_close()
+        self._thread.join(timeout=5.0); self._srv = None
+
     @property
-    def port(self) -> int: ...       # cổng thực (hữu ích khi port=0 ephemeral cho test)
+    def port(self) -> int: ...               # cổng thực (hữu ích khi port=0 ephemeral cho test)
 ```
+- **Fix Lỗ-A (#290, bản chất — chống deadlock):** `BaseServer.shutdown()` (stdlib) PHẢI gọi khi `serve_forever()` ĐANG chạy ở thread khác, nếu không **DEADLOCK**. `start()` return ngay → nếu `stop()` gọi TRƯỚC khi thread vào serve_forever (test start→stop nhanh, P5) → treo. Guard: `_serving` Event set ngay trước `serve_forever`; `stop()` `wait()` nó (bounded 5s) rồi mới `shutdown()`.
+- `poll_interval=0.2` để `serve_forever` phản hồi `shutdown()` nhanh (≤0.2s).
 Handler (BaseHTTPRequestHandler) — chỉ GET:
 ```
 def do_GET(self):
@@ -104,7 +122,9 @@ def log_message(self, *a): pass   # không spam stderr mỗi scrape
 | port=0 | OS cấp ephemeral; `start()` trả cổng thực (đọc server_address[1]) — test dùng | R5.1 |
 | host phi-loopback | composition LOG cảnh báo không-auth (không chặn — vận hành tự quyết) | R3.2 |
 | stop() gọi khi chưa start / 2 lần | idempotent (guard None) — không raise | R2.2 |
-| scrape đồng thời | ThreadingHTTPServer mỗi request 1 thread → không chặn | R2.1 |
+| **stop() gọi NGAY sau start (serve_forever chưa vào)** | `_serving` Event: stop() `wait()` tới khi serve_forever bắt đầu rồi mới `shutdown()` → KHÔNG deadlock (Lỗ-A #290) | R2.2, P5 |
+| **port cố định đã bị dùng** | `ThreadingHTTPServer.__init__` (server_bind) ném `OSError` → `start()` raise (fail-fast, thông báo cổng bận) | R2.1 |
+| scrape đồng thời | ThreadingHTTPServer mỗi request 1 thread (daemon_threads=True) → không chặn | R2.1 |
 
 - Exporter là phụ trợ → lỗi scrape KHÔNG được ảnh hưởng pipeline (chạy thread riêng; provider chỉ đọc snapshot).
 
@@ -126,8 +146,8 @@ provider trả giá trị khác nhau giữa 2 lần gọi → 2 scrape cho body 
 provider ném lỗi → `GET /metrics` → 500; scrape kế (provider ok) → 200 (server không sập).
 **Validates: Requirements 2.3**
 
-### Property 5: non-blocking + start/stop sạch
-`start()` không chặn (trả ngay + cổng thực); sau `stop()` → cổng đóng (connect refused) + thread joined (không rò).
+### Property 5: non-blocking + start/stop sạch (kể cả stop NGAY sau start — fix Lỗ-A #290)
+`start()` không chặn (trả ngay + cổng thực); sau `stop()` → cổng đóng (connect refused) + thread joined (không rò). `start()` rồi `stop()` NGAY (serve_forever có thể chưa vào) → KHÔNG deadlock (nhờ `_serving` Event).
 **Validates: Requirements 2.1, 2.2, 5.3**
 
 ### Property 6: an toàn bind mặc định localhost
@@ -146,6 +166,16 @@ Exporter @adapters chỉ import stdlib + adapters(render)+kernel(MetricSample) q
 - **Layer (P7):** lint importlinter.api 5/0; kiểm module chỉ import stdlib+kernel+adapters.render.
 - **An toàn (P6):** default host "127.0.0.1"; test hàm cảnh-báo (composition) phát warning khi host="0.0.0.0" (tiêm logger giả / caplog).
 - **Đối chiếu:** không cần GPU/mạng-ngoài (dùng 127.0.0.1 ephemeral). Chạy được ngay máy dev.
+
+## Review đối kháng vòng 2 (đọc-lại-valid #290 — đối chiếu ngữ nghĩa stdlib, trước khi code)
+Đối chiếu design với hợp đồng `socketserver.BaseServer` thật → tìm 1 lỗ bản chất + 1 note:
+- **Lỗ-A (deadlock tiềm ẩn):** `BaseServer.shutdown()` PHẢI gọi khi `serve_forever()` đang chạy ở thread khác,
+  nếu không DEADLOCK (shutdown chờ event chỉ serve_forever set). `start()` return ngay → `stop()` gọi TRƯỚC khi
+  thread vào serve_forever (test start→stop nhanh P5 / teardown nhanh) → treo. Fix: `_serving` Event set ngay
+  trước `serve_forever`; `stop()` `wait()` (bounded 5s) rồi mới `shutdown()`. +Property 5 + Error-Handling row.
+- **Note:** port cố định đã dùng → `server_bind` ném OSError trong `__init__` → `start()` raise (fail-fast, thông báo rõ). render trong try TRƯỚC send_response → 500 sạch (headers chưa gửi).
+> Bài học (K-071, củng cố K-069): review adapter I/O phải trace HỢP ĐỒNG THƯ VIỆN THẬT (thread/lifecycle của
+> http.server), không chỉ logic ứng dụng — deadlock start/stop chỉ lộ khi biết shutdown() cần serve_forever đang chạy.
 
 ## Doubt-driven review (tự phản biện — KHẮT KHE)
 - **Forces:** phục-vụ-chuẩn (Prometheus scrape) ⟂ non-blocking (không cản pipeline) ⟂ an-toàn (không vô tình phơi

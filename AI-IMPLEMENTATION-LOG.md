@@ -5922,3 +5922,22 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Khẳng định http.server API + Content-Type 0.0.4 = độ-chắc-chắn CAO (stdlib+chuẩn); đối chiếu docs lúc code.
 
 **Đã verify (máy k.nguyen.manh.toan):** `get_diagnostics` requirements.md + design.md = **No diagnostics found**; tham chiếu (render_prometheus/iter_metrics/MetricSample/adapters-leaf) đã đọc code thật; `drift_check.py` chạy sau ghi sổ. · **Chưa verify:** hành vi exporter (CHƯA code — PHA2); http.server đối chiếu docs lúc code.
+
+### Entry #290 — 2026-07-10 — REVIEW đối kháng design `metrics-http-endpoint` → fix 1 lỗ deadlock trước khi code — Kiro-Opus
+
+**Bối cảnh:** §0 đúng (`git status` clean, HEAD=origin f70bd62). Trước PHA2, đối chiếu design với hợp đồng `socketserver.BaseServer`/`http.server` thật (pattern review #280/#282/#287). CHƯA code.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **Lỗ-A (bản chất — deadlock tiềm ẩn):** `BaseServer.shutdown()` (stdlib) PHẢI gọi khi `serve_forever()` ĐANG chạy ở thread khác, nếu không DEADLOCK. `start()` return ngay sau khi tạo daemon thread → nếu `stop()` gọi TRƯỚC khi thread vào `serve_forever` (test start→stop nhanh P5 / teardown nhanh) → `shutdown()` treo. Fix: `_serving = threading.Event()` set NGAY TRƯỚC `serve_forever`; `stop()` `wait()` nó (bounded 5s) rồi mới `shutdown()`. +`poll_interval=0.2` cho serve_forever phản hồi shutdown nhanh. +Property 5 + Error-Handling row.
+- **Note (không phải lỗi):** port cố định đã dùng → `server_bind` ném OSError trong `__init__` → `start()` raise (fail-fast, thông báo cổng bận). render trong try TRƯỚC send_response → 500 sạch.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (siết design cho đúng hợp đồng stdlib; chưa code).
+
+**3. Trade-off đã cân nhắc:**
+- `_serving` Event + wait vs "giả định serve_forever vào kịp" → Event (đúng hợp đồng, chống deadlock xác định; test start→stop nhanh mới an toàn). Rẻ (1 Event).
+
+**4. Điều bạn nên biết:**
+- CHƯA code (PHA1 design đã hardened 1 vòng). `get_diagnostics` design.md = No diagnostics.
+- Bài học K-071: review adapter I/O phải trace HỢP ĐỒNG THƯ VIỆN THẬT (thread/lifecycle http.server), không chỉ logic ứng dụng.
+
+**Đã verify (máy k.nguyen.manh.toan):** `git status` clean; `get_diagnostics` design.md = No diagnostics (sau fix); dựa hợp đồng stdlib `BaseServer.shutdown` (độ-chắc-chắn CAO — docs Python: "shutdown() must be called while serve_forever() is running in a different thread, otherwise it will deadlock"; đối chiếu lại docs/chạy lúc code PHA2); `drift_check.py` chạy sau ghi sổ. · **Chưa verify:** hành vi exporter thật (CHƯA code — PHA2); test start/stop no-deadlock (PHA2 chạy thật).

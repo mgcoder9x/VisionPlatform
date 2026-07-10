@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T18:15:00+07:00.
+**Cập nhật lúc:** 2026-07-10T19:00:00+07:00.
+**[🔵 #290 — REVIEW đối kháng design `metrics-http-endpoint` → fix 1 lỗ DEADLOCK trước khi code — máy `k.nguyen.manh.toan`]**
+- §0 đúng: `git status` clean, HEAD=origin. Đối chiếu design với hợp đồng `socketserver.BaseServer`/`http.server` thật (pattern #280/#282/#287).
+- **Lỗ-A (bản chất — deadlock):** `BaseServer.shutdown()` PHẢI gọi khi `serve_forever()` ĐANG chạy ở thread khác, nếu không DEADLOCK. `start()` return ngay → `stop()` gọi TRƯỚC khi thread vào serve_forever (test start→stop nhanh P5) → treo. Fix: `_serving = threading.Event()` set NGAY TRƯỚC serve_forever; `stop()` `wait()` (bounded 5s) rồi mới `shutdown()`. +`poll_interval=0.2`. +Property 5.
+- **Note:** port đã dùng → `server_bind` OSError → `start()` raise (fail-fast). render trong try TRƯỚC send → 500 sạch.
+- **Verify:** `get_diagnostics` design.md = No diagnostics (sau fix). Ghi sổ: LOG #290 · +K-071 · D-078 row→reviewed · INDEX #290/tổng 197 (D78·C20·T28·K71). Drift PASS.
+- **VẪN CHƯA code** (PHA1 đã hardened 1 vòng). **Bước kế (CHỜ user):** → PHA2 code TDD `metrics-http-endpoint` (`MetricsHttpExporter` + `_serving` Event chống deadlock + wire `--metrics-port`/`--metrics-host` + test ephemeral-port urllib GET/404/500/start-stop-no-deadlock; kỳ vọng >591·5/0). Hoặc: server-DB sink · khi có GPU verify CUDA · dừng mốc sạch.
+---
 **[🔵 #289 — Mở spec `metrics-http-endpoint` (PHA1 design-first) — phục vụ /metrics Prometheus scrape (no-GPU) — máy `k.nguyen.manh.toan`]**
 - Sau #284 render được Prometheus text nhưng CHƯA phục vụ ra ngoài → Prometheus không kéo được. Exporter HTTP `/metrics` = mảnh khoá cuối hoàn tất chuỗi observability→metrics→exposition→**scrape**.
 - **Thiết kế:** `MetricsHttpExporter(provider, host="127.0.0.1", port=0)` @adapters (http.server ThreadingHTTPServer stdlib, daemon thread NON-BLOCKING, handler `/metrics`→200 `render_prometheus(provider())` /404 /500-không-sập, start()/stop()). Nhận `provider: ()->Iterable[MetricSample]` TIÊM → adapters KHÔNG import runtime (leaf giữ) + test provider giả no-GPU. **Secure-by-default: BIND 127.0.0.1**; 0.0.0.0=opt-in+LOG cảnh báo "không auth, chỉ mạng nội bộ" (T-028). zero-dep. port=0→ephemeral (test urllib).
