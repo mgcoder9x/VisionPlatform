@@ -5718,3 +5718,27 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Bài học K-068: "0 diagnostic" chứng nhận CẤU TRÚC, không chứng nhận tính-ĐÚNG-exposition; 2 lỗ chỉ lộ khi TRACE ngữ nghĩa lưu trữ thật (2 dict cùng key + biên inf/nan), không lộ khi đọc mô tả xuôi.
 
 **Đã verify (máy k.nguyen.manh.toan):** `get_diagnostics` design.md + requirements.md = **No diagnostics found** (sau fix); đối chiếu code thật `InMemoryMetrics` (`_counters`/`_gauges` 2 dict riêng cùng key) để xác nhận Lỗ-A có thật; `drift_check.py` chạy sau ghi sổ. · **Chưa verify:** hành vi renderer + fmt inf/nan + raise xung đột (CHƯA code — PHA2); byte-khớp prometheus_client (PHA2).
+
+### Entry #281 — 2026-07-10 — Mở spec `capability-aware-execution` (PHA1 design-first) — chạy đúng trên máy hỗn tạp GPU/CPU (no-GPU verify) — Kiro-Opus
+
+**Bối cảnh:** User nêu vấn đề TÁI DIỄN: đổi máy giữa có-GPU và không-GPU (kể cả không cài CUDA) là ma sát lặp lại, "trường hợp rất nhiều". Đọc code thật: `device` là CHUỖI thủ công; KHÔNG có `torch.cuda.is_available()` nào trong `src` → ép `device=cuda` trên máy không-CUDA = fail runtime khó hiểu, hoặc chạy CPU mà tưởng GPU (mismatch ngầm). Mở sub-spec xử lý BẢN CHẤT. CHỈ design (PHA1), CHƯA code.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **Nguyên tắc gốc (không fix ngọn từng chỗ `--device`):** năng lực máy = khái niệm HẠNG NHẤT: DÒ → làm TƯỜNG MINH (DTO) → mọi quyết định phụ-thuộc-năng-lực tra về một nguồn; 3 hành vi sạch: auto (chọn tốt-nhất-sẵn-có) / fail-fast (thiếu năng-lực-bắt-buộc báo rõ) / skip-êm (test-GPU trên máy không-GPU).
+- **Layer:** `MachineCapabilities` (DTO thuần) + `resolve_device` (chính sách THUẦN) + `CapabilityError` @kernel (không import torch); `probe_capabilities()` @adapters (import torch/cv2 bọc-an-toàn, KHÔNG raise khi vắng); wire @profiles (probe 1 lần → resolve → truyền device + LOG device thực tế). Gate test bằng marker `gpu` + autoskip theo probe @conftest.
+- **fail-fast cho `cuda` tường minh** (ép cuda mà máy không có → raise báo rõ + gợi ý), tách khỏi **auto fallback êm** (cuda→cpu + log) — 2 ý định khác nhau, 2 đường khác nhau (không nhập nhằng "chạy CPU mà tưởng GPU").
+- Phạm vi v1: probe + resolve_device + wire pt-detector + gate test. Multi-GPU/affinity/MPS, benchmark năng lực, probe camera, in `--capabilities` = Non-Goal/follow-on.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (spec mới; device hiện tại vẫn hoạt động — "auto" là opt-in thêm, default giữ "cpu").
+
+**3. Trade-off đã cân nhắc (→ T-027):**
+- **default device = "auto" vs giữ "cpu"** → giữ **"cpu"** (backward-compat, không đổi hành vi ngầm; đổi default = thay đổi ngầm dễ gây bất ngờ). Khuyến nghị đặt `device="auto"` trong config deploy.
+- **fail-fast (cuda tường minh) vs auto-fallback im lặng** → fail-fast cho ép-cuda (kỳ vọng sai phải BÁO), auto mới fallback êm+log.
+
+**4. Điều bạn nên biết:**
+- CHƯA code (PHA1 design-first, chờ user valid). `get_diagnostics` 2 file spec = No diagnostics.
+- Bổ trợ (không trùng) env-layer shell `vp.cmd`/`env.local` (setup/interpreter/GPU-inform) — spec này là runtime-layer Python (code tra năng lực quyết hành vi).
+- Khẳng định torch API (`cuda.is_available/device_count/get_device_name`) độ-chắc-chắn CAO; đối chiếu docs/torch thật lúc code (máy này no-torch → kiểm nhánh ImportError; máy GPU khác → kiểm nhánh có-CUDA).
+- Spec `metrics-exposition` (D-071, đã review #280) VẪN chờ code — parked, không bỏ.
+
+**Đã verify (máy k.nguyen.manh.toan):** `get_diagnostics` requirements.md + design.md = **No diagnostics found**; mọi tham chiếu code (`_det_pt` device chuỗi, `yolov5_pt_detector.setup`, `--device cpu`, KHÔNG có is_available trong src, `nvidia-smi` chỉ ở vp.cmd) đã đọc/grep file thật; `drift_check.py` chạy sau ghi sổ. · **Chưa verify:** hành vi probe/resolve/gate (CHƯA code — PHA1); torch API đối chiếu ở PHA2.

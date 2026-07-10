@@ -271,3 +271,10 @@ Bối cảnh: spec `metrics-exposition` (D-071) — cần biến `InMemoryMetric
 - **Phương án B (bác cho v1) — `prometheus_client`:** chuẩn, robust (multiprocess mode, bucket histogram, escaping sẵn) NHƯNG có REGISTRY RIÊNG → dùng nó nghĩa là BỎ `InMemoryMetrics` hoặc bắc-cầu (phức tạp + parse lại) + thêm dependency; tính năng mạnh (multiprocess/bucket) v1 CHƯA cần.
 - **Vì sao A (bản chất):** format 0.0.4 nhỏ + ổn định nhiều năm → tự bảo trì rủi ro thấp; A giữ 1 nguồn-sự-thật metrics (InMemoryMetrics) + layer sạch (renderer thuần @adapters nhận DTO thuần). Cái mất: nếu chuẩn đổi phải tự cập nhật (hiếm); histogram bucket phải tự thiết kế sau (Non-Goal v1). Đổi lấy: zero-dep + kiểm-soát-format + verify byte-khớp.
 - Kèm quyết định con: lấy dữ liệu qua accessor CÓ-CẤU-TRÚC `iter_metrics()` (fix gốc) thay vì parse-ngược chuỗi key `name{k=v}` (lossy) — xem D-071.
+
+### T-027 — 2026-07-10 — Default device: giữ "cpu" (backward-compat) vs đổi sang "auto" (ergonomic)
+Bối cảnh: spec `capability-aware-execution` (D-072) — thêm `device="auto"` (chọn tốt-nhất-sẵn-có).
+- **Phương án A (CHỌN) — giữ default "cpu", "auto" là opt-in:** không đổi hành vi ngầm của cấu hình/CLI hiện có (backward-compat tuyệt đối); ai muốn tự-chọn thì khai `device="auto"` (khuyến nghị cho config deploy đa-node).
+- **Phương án B (bác) — default "auto":** tiện hơn (đổi máy không cần sửa) NHƯNG đổi HÀNH VI NGẦM: config/lệnh cũ mặc định "cpu" bỗng chạy GPU nếu máy có → bất ngờ (khác kết quả, khác tải, khác số). Thay đổi ngầm = rủi ro.
+- **Vì sao A (bản chất):** nguyên tắc "không đổi hành vi ngầm khi nâng cấp"; auto là NĂNG LỰC MỚI (opt-in) không phải đổi mặc-định. Cái mất: user phải gõ `device=auto` để hưởng tiện ích (chấp nhận — tường minh > ngầm).
+- Kèm quyết định con: `cuda` TƯỜNG MINH thiếu CUDA = **fail-fast** (báo rõ) ⟂ `auto` = **fallback êm + log** — 2 ý định khác nhau, 2 đường khác nhau (chống "chạy CPU mà tưởng GPU").

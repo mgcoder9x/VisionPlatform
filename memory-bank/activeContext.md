@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T11:00:00+07:00.
+**Cập nhật lúc:** 2026-07-10T11:45:00+07:00.
+**[🔵 #281 — Mở spec `capability-aware-execution` (PHA1 design-first) — xử lý BẢN CHẤT đổi-máy-GPU↔không-GPU (tái diễn) — máy `k.nguyen.manh.toan`]**
+- **User nêu vấn đề tái diễn:** đổi máy giữa có-GPU và không-GPU (kể cả không CUDA) là ma sát lặp lại, "rất nhiều". Đọc code thật: `device` là chuỗi thủ công; KHÔNG có `torch.cuda.is_available()` nào trong `src` → ép `device=cuda` máy không-CUDA = fail runtime khó hiểu / chạy CPU tưởng GPU (mismatch NGẦM).
+- **Nguyên tắc gốc (không fix ngọn từng `--device`):** năng-lực máy = khái niệm HẠNG NHẤT: DÒ → DTO tường minh → mọi quyết-định tra 1 nguồn; 3 hành vi sạch: **auto** (chọn tốt-nhất-sẵn-có) / **fail-fast** (`cuda` tường-minh thiếu → báo rõ) / **skip êm** (test GPU trên máy không-GPU).
+- **Thiết kế (layer sạch, verify no-GPU):** `MachineCapabilities`(DTO) + `resolve_device`(thuần) + `CapabilityError` @kernel (không torch); `probe_capabilities()` bọc-an-toàn (torch vắng→False, KHÔNG raise) @adapters; wire @profiles (probe 1 lần→resolve→truyền device + LOG device thực); gate test marker `gpu`+autoskip @conftest. Tiêm caps → test xác định no-GPU. Additive (default "cpu"; "auto" opt-in — T-027).
+- **Verify:** `get_diagnostics` 2 file spec = No diagnostics. Ghi sổ: LOG #281 · +D-072 (🔵) +T-027 · INDEX #281/tổng 187 (D72·C20·T27·K68). Drift-check cuối = PASS.
+- **CHƯA code** (PHA1). **Bước kế (CHỜ user valid design):** → PHA2 code TDD (DTO+resolve_device @kernel + probe @adapters + wire pt-detector `auto` + conftest gpu-marker + test tiêm caps; 7 Property), kỳ vọng >560 · lint 5/0 — no-GPU/no-CUDA. **Hàng đợi spec chờ code:** `metrics-exposition` (D-071, đã review #280) + `capability-aware-execution` (D-072). Bạn chọn code cái nào trước, hay đổi hướng.
+---
 **[🔵 #280 — REVIEW đối kháng design `metrics-exposition` → fix 2 lỗ THIẾT KẾ trước khi code — máy `k.nguyen.manh.toan`]**
 - **Áp pattern đã thắng #271/#275** (đọc-lại-valid TRƯỚC code): đối chiếu design D-071 với NGỮ NGHĨA THẬT `InMemoryMetrics`. Tìm 2 lỗ tính-đúng-exposition:
 - **Lỗ-A (bản chất):** `_counters`/`_gauges` là 2 dict RIÊNG cùng key → cùng tên vừa counter vừa gauge → renderer phát 2 `# TYPE` mâu thuẫn = exposition HỎNG. Fix: hợp đồng "1 name=1 type" → **raise ValueError (fail-fast)** ở hàm thuần; serving follow-on tự bắt+log. +Property 11.
