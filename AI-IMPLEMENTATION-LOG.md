@@ -5879,3 +5879,24 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Bài học K-070: helper đồng-bộ event-driven PHẢI an-toàn-ngoại-lệ với side-effect CHƯA xảy ra (file chưa tạo) — nếu không, chính giải-pháp-chống-flaky lại crash. Review fix-test phải trace trạng-thái-KHỞI-ĐẦU.
 
 **Đã verify (máy k.nguyen.manh.toan):** `git status` clean; `get_diagnostics` test-stability-hardening/design.md = No diagnostics (sau fix); đối chiếu worker + luồng cascade code thật (cleanup_done chạy sau request_stop→shutdown_event); `drift_check.py` chạy sau ghi sổ. · **Chưa verify:** hiệu quả fix (chạy lặp ≥5 ổn định) — CHƯA code (PHA2).
+
+### Entry #288 — 2026-07-10 — PHA2 code TDD `test-stability-hardening` HOÀN TẤT — đóng K-035 flaky (event-driven, no-GPU) — Kiro-Opus
+
+**Bối cảnh:** §0 làm đúng (TỰ `git status` = clean, HEAD=origin 79fa371). Hiện thực design đã hardened 2 vòng (#286 hợp nhất + #287 review fix lỗ wait_until). Fix TEST-ONLY (KHÔNG đổi semantics supervisor production). Máy no-GPU verify được đầy đủ (chạy lặp).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **Code (additive):** `Supervisor.request_stop()` public (set cờ bool, thread-safe, additive — không gọi = hành vi cũ) · `tests/_wait_helpers.py` (`wait_until` AN-TOÀN-NGOẠI-LỆ + `log_text`/`log_line_count` rỗng-nếu-chưa-tạo) · pyproject marker `slow` · viết-lại `test_step_09_shutdown.py` (6 test) + `test_supervisor_liveness.py` (3 cross-process) theo EVENT-DRIVEN (chạy `run()` trong THREAD → `wait_until(tiến-độ)` → `request_stop()` → join) + assert PROPERTY thay rate + `heartbeat_timeout_s` THỰC TẾ 2.0s (thay 0.5s) · `tests/test_wait_helpers.py` (7 test P8).
+- Assertion đổi bản chất: `len>5`→"w2 có dòng MỚI sau khi w1 crash" (property sống-sót); `run(0.5s)+assert`→wait_until("alive_")+stop+assert "cleanup_done"; heartbeat-ok timeout 0.5s→2.0s (margin ~40× nhịp).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (test-only + API additive; production supervisor semantics giữ nguyên — đúng D-076).
+
+**3. Trade-off đã cân nhắc:** event-driven (thread+wait_until) vs bump-duration → event-driven (diệt race, pass sớm 6-8s thay vì đợi cố định). Đã hiện thực ở #287 (wait_until an-toàn-ngoại-lệ) tránh chính-fix-crash.
+
+**4. Điều bạn nên biết — VERIFY THẬT (bằng chứng đóng K-035):**
+- `pytest tests/test_wait_helpers.py` = **7 passed** (gồm P8: predicate ném FileNotFoundError 2 lần đầu → wait_until không crash, True khi file xuất hiện).
+- **Chạy LẶP 5 LẦN** `test_step_09_shutdown.py + test_supervisor_liveness.py` = **10 passed MỖI LẦN (5/5), 6-8s/lần** — ỔN ĐỊNH (trước flaky fail 2-4 dưới tải, git-stash #284 xác nhận). Đây là bằng chứng diệt-race.
+- `scripts\vp.cmd verify` = **test PASS + lint PASS + drift PASS (EXIT 0)**; full `pytest -q` = **591 passed/2 skipped** (584→591, +7 helper; 2 file viết-lại giữ 10 test) — full suite GIỜ XANH (không còn flaky).
+- Giới hạn trung thực: event-driven diệt RACE thiết kế (nguyên tắc) + 5/5 ổn định; KHÔNG chứng minh 0-flake trên máy tải VÔ HẠN (deadline hữu hạn 20s) — nêu rõ, không over-claim.
+- Production supervisor KHÔNG đổi (chỉ +request_stop additive) → `startup_grace_s` vẫn defer YAGNI.
+
+**Đã verify (máy k.nguyen.manh.toan, py3.11.9):** `git status` clean; `pytest test_wait_helpers.py` 7 passed; **5/5 lần** 2 file flaky = 10 passed ổn định; `vp verify` EXIT 0 (test+lint+drift PASS); full `pytest -q` 591/2. · **Chưa verify:** 0-flake trên máy tải vô hạn (bất khả — nêu giới hạn); nhánh POSIX (giữ win32 skipif).

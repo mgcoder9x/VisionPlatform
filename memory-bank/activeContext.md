@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T16:30:00+07:00.
+**Cập nhật lúc:** 2026-07-10T17:30:00+07:00.
+**[✅ #288 — PHA2 CODE TDD `test-stability-hardening` HOÀN TẤT — ĐÓNG K-035 flaky (event-driven, test-only) — máy `k.nguyen.manh.toan`, verify 5/5 ổn định + full 591/2]**
+- §0 đúng: `git status` clean, HEAD=origin. Hiện thực design hardened 2 vòng (#286 hợp nhất + #287 review).
+- **Code (additive, test-only — KHÔNG đổi supervisor production):** `Supervisor.request_stop()` public (set cờ bool thread-safe) · `tests/_wait_helpers.py` (`wait_until` AN-TOÀN-NGOẠI-LỆ + `log_text`/`log_line_count`) · pyproject marker `slow` · viết-lại `test_step_09_shutdown.py`(6) + `test_supervisor_liveness.py`(3 cross-process) EVENT-DRIVEN (thread + wait_until(tiến-độ) + request_stop) + assert PROPERTY thay rate + `heartbeat_timeout_s` THỰC TẾ 2.0s thay 0.5s · `tests/test_wait_helpers.py`(7 test P8).
+- **VERIFY THẬT (bằng chứng đóng K-035):** `test_wait_helpers` 7 passed; **chạy LẶP 5 LẦN 2 file flaky = 10 passed/lần (5/5), 6-8s** — ỔN ĐỊNH (trước flaky fail 2-4 dưới tải, git-stash #284 xác nhận); `vp verify` EXIT 0 (test+lint+drift PASS); full `pytest -q` **591/2** (584→591 +7 helper). Full suite GIỜ XANH.
+- **Giới hạn trung thực:** event-driven diệt RACE thiết kế + 5/5 ổn định; KHÔNG chứng minh 0-flake máy tải VÔ HẠN (deadline 20s hữu hạn). Web-GPU-flaky (K-035 phần web) còn để lại (cần máy GPU). `startup_grace_s` defer YAGNI.
+- **Ghi sổ:** LOG #288 · +D-077 (✅) · K-035→✅ (supervisor/step_09) · INDEX #288/tổng 194 (D77·C20·T27·K70), baseline 591/2. Drift PASS.
+- **Trạng thái sản phẩm no-GPU:** capability-aware (#283) + metrics-exposition (#284) + CI-tin-cậy (K-035 đóng #288) — nền tảng verify vững. **Bước kế (chờ user):** (a) serving HTTP `/metrics` (follow-on metrics — route Flask/http.server) · (b) wire `--capabilities` in probe · (c) server-DB sink · (d) khi có GPU: verify nhánh CUDA + tune motion-gate-roi RTSP · (e) dừng mốc sạch.
+---
 **[🔵 #287 — REVIEW đối kháng design `test-stability-hardening` → fix 1 lỗ SỐNG-CÒN trước khi code — máy `k.nguyen.manh.toan`]**
 - §0 làm đúng (bài học #286): TỰ `git status` = clean, HEAD=origin `988ee07`. Đọc worker THẬT (`worker_funcs_for_step_09.py` + `liveness_workers.py`) + trace `run()`/`_cascade_shutdown` để validate + tự phản biện (pattern #280/#282).
 - **Lỗ SỐNG-CÒN:** `wait_until` với predicate đọc log CHƯA tạo (`open(log)` lúc worker chưa spawn/ghi) → `FileNotFoundError` → CRASH chính bản-fix event-driven. Fix: `_safe` bọc predicate (ngoại-lệ = "chưa thoả") + helper `log_text` (rỗng nếu chưa tạo). +Property 8.

@@ -99,6 +99,16 @@ class Supervisor:
         logger.warning("shutdown_signal_received", signal=signum)
         self._shutdown_requested = True
 
+    def request_stop(self) -> None:
+        """Yêu cầu dừng vòng giám sát từ LUỒNG KHÁC (spec test-stability-hardening, D-076).
+
+        Chỉ set cờ bool đọc trong vòng `run()` → thread-safe (GIL + gán bool đơn), additive: KHÔNG gọi →
+        hành vi cũ Y HỆT. Dùng để test đồng-bộ theo SỰ KIỆN (chạy run() trong thread nền, chờ tiến-độ rồi
+        request_stop) thay cửa-sổ-wall-clock; cũng hữu ích orchestration production (dừng ngoài signal).
+        KHÔNG đổi semantics liveness/heartbeat/backoff/cascade.
+        """
+        self._shutdown_requested = True
+
     def _is_hung(self, spec: WorkerSpec) -> bool:
         """True nếu worker (bật heartbeat) alive nhưng nhịp quá hạn. Startup grace: chưa beat → mốc = spawn time."""
         hb = self._heartbeats.get(spec.worker_id)
