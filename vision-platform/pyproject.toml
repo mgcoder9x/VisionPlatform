@@ -33,6 +33,9 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-v --tb=short"
+markers = [
+    "gpu: test cần CUDA thật — tự SKIP khi máy không có CUDA khả dụng (conftest gate)",
+]
 
 # ---- Layer boundary enforcement (import-linter) ----
 # Chạy: `lint-imports` (sau khi `pip install -e .[dev]`).

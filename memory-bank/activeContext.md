@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T12:30:00+07:00.
+**Cập nhật lúc:** 2026-07-10T13:15:00+07:00.
+**[✅ #283 — PHA2 CODE TDD `capability-aware-execution` HOÀN TẤT — chạy đúng máy hỗn tạp GPU/CPU (no-GPU verify) — máy `k.nguyen.manh.toan`, verify 573/2·5/0]**
+- Hiện thực design hardened 2 vòng (#281 mở + #282 review fix 4 lỗ). Đọc layout/API thật trước (kernel dir, pyproject, adapter setup, không có conftest).
+- **Code (4 file + 1 config, additive):** `kernel/capabilities.py` (`MachineCapabilities` DTO + `CapabilityError` + `resolve_device` THUẦN: auto→best / cuda-tường-minh-thiếu→fail-fast / ordinal cuda:N vs device_count / chuẩn hoá lower — KHÔNG import torch) · `adapters/capability_probe.py` (`probe_capabilities` bọc-an-toàn: torch/cv2 vắng→False không raise; has_cuda=is_available AND count>0) · wire `pipeline_factory._det_pt` (config→CapabilityError vào bulkhead) + `vision_slice_app._build_detector`/`_resolve_device_logged` (CLI, LOG device thực) + `main` bắt CapabilityError→stderr+exit2 · `tests/conftest.py` (marker `gpu`+autoskip theo probe) · pyproject `markers`.
+- **VERIFY THẬT:** `pytest tests/test_capability.py` 13 passed + 1 skipped (test `@gpu` bị conftest SKIP đúng ý đồ trên máy no-CUDA → chứng minh gate P6); full **573/2** (560/1→573/2 +14 additive); `vp lint` **5/0** (kernel không import torch, layer giữ); drift PASS.
+- **Ghi sổ:** LOG #283 · +D-073 (✅) · D-072 row → code · INDEX #283/tổng 189 (D73·C20·T27·K69). Baseline mới 573/2.
+- **Trạng thái sản phẩm:** đổi máy GPU↔không-GPU giờ có xử lý BẢN CHẤT — `device=auto` (tự chọn) / `cuda` thiếu→lỗi rõ / test GPU tự skip. Nhánh có-CUDA [chưa kiểm, cần máy GPU]; logic no-GPU đã verify đầy đủ (caps tiêm + ImportError thật).
+- **Bước kế (chờ user):** (a) code `metrics-exposition` (D-071, review #280 — parked, sẵn sàng) · (b) wire `--capabilities` in probe (follow-on nhỏ) · (c) serving HTTP `/metrics` (metrics follow-on) · (d) khi có máy GPU: verify nhánh CUDA + tune motion-gate-roi RTSP · (e) dừng mốc sạch.
+---
 **[🔵 #282 — REVIEW đối kháng design `capability-aware-execution` → fix 4 lỗ THIẾT KẾ trước khi code — máy `k.nguyen.manh.toan`]**
 - **Áp pattern #271/#275/#280** (đọc-lại-valid TRƯỚC code): đối chiếu chính sách `resolve_device` với PHẦN CỨNG thật + adapter `yolov5_pt_detector.setup`. Tìm 4 lỗ:
 - **Lỗ-A (bản chất):** chỉ kiểm `has_cuda` bool → `cuda:3` máy 1-GPU lọt resolve rồi fail mù torch. Fix: kiểm ORDINAL cuda:N vs `cuda_device_count` → CapabilityError. +P8.

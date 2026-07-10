@@ -75,8 +75,24 @@ def _build_detector(args):
         return DetectorPipeline(FakeDetector(), args.model_size, args.model_size)
     if args.detector == "pt":
         from vision_platform.adapters.yolov5_pt_detector import Yolov5PtDetector
-        return Yolov5PtDetector(args.weights, device=args.device)
+        dev = _resolve_device_logged(args.device)   # auto/cuda/cpu → device thật (fail-fast nếu ép cuda thiếu)
+        return Yolov5PtDetector(args.weights, device=dev)
     raise ValueError(f"detector không hỗ trợ: {args.detector}")
+
+
+def _resolve_device_logged(requested: str) -> str:
+    """Resolve device theo năng lực máy + LOG device THỰC TẾ đã chọn (R3.2: chống 'tưởng GPU mà chạy CPU').
+
+    probe 1 lần ở đây (đường CLI direct dựng 1 detector). Raise CapabilityError khi ép CUDA mà máy thiếu —
+    `main()` bắt → thông báo gọn + exit code (không traceback thô).
+    """
+    from vision_platform.kernel.capabilities import resolve_device
+    from vision_platform.adapters.capability_probe import probe_capabilities
+    caps = probe_capabilities()
+    resolved = resolve_device(requested, caps)
+    print(f"[device] yêu cầu={requested!r} → dùng={resolved!r} "
+          f"(has_cuda={caps.has_cuda}, gpu={caps.gpu_name})", file=sys.stderr)
+    return resolved
 
 
 def _validate(args, parser):
@@ -179,7 +195,8 @@ def main(argv=None) -> int:
     parser.add_argument("--source", choices=["fake", "noise", "video", "rtsp"], default="fake")
     parser.add_argument("--detector", choices=["fake", "pt"], default="fake")
     parser.add_argument("--weights", default=None, help="path .pt (khi --detector pt)")
-    parser.add_argument("--device", default="cpu", help="cpu|cuda (khi --detector pt)")
+    parser.add_argument("--device", default="cpu",
+                        help="auto|cpu|cuda|cuda:N (khi --detector pt). auto=tự chọn theo máy; cuda thiếu GPU→lỗi rõ")
     parser.add_argument("--model-size", type=int, default=640, help="model_h=model_w cho DetectorPipeline")
     parser.add_argument("--frames", type=int, default=20, help="max_frames cho fake/noise")
     parser.add_argument("--max-frames", type=int, default=None, help="giới hạn frame runner (rtsp/video)")
@@ -232,8 +249,13 @@ def main(argv=None) -> int:
 
     _validate(args, parser)
 
+    from vision_platform.kernel.capabilities import CapabilityError
     source = _build_source(args)
-    detector = _build_detector(args)
+    try:
+        detector = _build_detector(args)
+    except CapabilityError as e:
+        print(f"LỖI NĂNG LỰC (device): {e}", file=sys.stderr)
+        return 2
     stages = []
     if args.motion_gate:
         from vision_platform.runtime.stages.motion_gate_stage import MotionGateStage

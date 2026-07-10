@@ -5765,3 +5765,25 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - 2 spec đã hardened chờ code: `metrics-exposition` (D-071, review #280) + `capability-aware-execution` (D-072, review #282).
 
 **Đã verify (máy k.nguyen.manh.toan):** `get_diagnostics` design.md = **No diagnostics found** (sau fix); đối chiếu adapter `yolov5_pt_detector.setup` thật (`dev in ("cuda","gpu")→"cuda:0"`) xác nhận Lỗ-B có thật; `drift_check.py` chạy sau ghi sổ. · **Chưa verify:** hành vi resolve/ordinal/normalize (CHƯA code — PHA2); torch device_count đối chiếu máy GPU (máy này no-torch).
+
+### Entry #283 — 2026-07-10 — PHA2 code TDD `capability-aware-execution` HOÀN TẤT — chạy đúng máy hỗn tạp GPU/CPU (no-GPU verify) — Kiro-Opus
+
+**Bối cảnh:** Hiện thực design đã hardened 2 vòng (#281 mở + #282 review fix 4 lỗ). Đọc code/layout thật trước (kernel dir, pyproject markers, adapter `yolov5_pt_detector.setup`, không có conftest). Máy này no-GPU/no-CUDA/no-torch → verify được toàn bộ logic (tiêm caps + nhánh ImportError thật).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **Code (4 file + 1 config, additive):** `kernel/capabilities.py` (`MachineCapabilities` frozen DTO + `CapabilityError` + `resolve_device` THUẦN + `_parse_ordinal`, KHÔNG import torch) · `adapters/capability_probe.py` (`probe_capabilities()` bọc-an-toàn: torch/cv2 vắng→False, has_cuda=is_available AND device_count>0, KHÔNG raise) · wire `pipeline_factory._det_pt` (resolve device trước construct — CapabilityError ở đường config → bulkhead cô lập) · wire `vision_slice_app._build_detector`+`_resolve_device_logged` (CLI direct, LOG device thực) + `main` bắt CapabilityError→stderr gọn+exit 2 · `tests/conftest.py` (marker `gpu`+autoskip theo probe) · pyproject `markers=["gpu:..."]`.
+- 4 fix review #282 đều hiện thực: (A) ordinal cuda:N vs device_count; (B) chuẩn hoá lower; (C) has_cuda usable; (D) CLI phơi CapabilityError sạch.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (additive; default device "cpu" giữ nguyên — "auto" opt-in, T-027).
+
+**3. Trade-off đã cân nhắc:**
+- probe gọi trong `_det_pt` mỗi lần build pt-detector (import torch cached) vs cache module-level → chọn gọi-trực-tiếp (đơn giản, pt-detector build hiếm; tránh state ẩn). Test tiêm bằng monkeypatch `pipeline_factory.probe_capabilities`.
+- Test wire xác định MỌI máy: monkeypatch probe→no-cuda (thay vì phụ thuộc máy thật) → cuda→raise / auto→cpu-build-OK kiểm được cả trên máy GPU.
+
+**4. Điều bạn nên biết:**
+- **VERIFY THẬT:** `pytest tests/test_capability.py` = 13 passed + 1 skipped (test `@pytest.mark.gpu` bị conftest SKIP đúng ý đồ trên máy no-CUDA — chứng minh gate P6 chạy); full `pytest -q` = **573 passed/2 skipped** (560/1→573/2, +14 additive); `vp lint` **5 kept/0 broken** (kernel capabilities.py không import torch — contract giữ); drift PASS.
+- Nhánh has-CUDA của probe (`torch.cuda.device_count()`) CHƯA chạy được ở đây (no-torch) → [chưa kiểm trên GPU]; nhánh ImportError đã kiểm thật (probe trả has_torch=False). resolve_device phủ đủ bằng caps TIÊM (xác định, no-GPU).
+- Baseline mới: 573/2 (specs metrics-exposition/capability ghi "560/1" là mốc lúc viết — không phải drift).
+- Spec `metrics-exposition` (D-071) VẪN chờ code (parked).
+
+**Đã verify (máy k.nguyen.manh.toan, py3.11.9):** `pytest tests/test_capability.py` 13 passed/1 skipped; full `pytest -q` **573 passed/2 skipped**; `scripts\vp.cmd lint` 5 kept/0 broken; `drift_check.py` PASS — chạy thật, đọc output. · **Chưa verify:** nhánh probe khi CÓ torch/CUDA (cần máy GPU); hành vi `Yolov5PtDetector` device cuda thật (cần GPU+weights).

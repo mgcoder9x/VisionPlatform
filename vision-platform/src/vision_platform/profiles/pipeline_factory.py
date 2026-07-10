@@ -13,10 +13,12 @@ from __future__ import annotations
 from typing import Any, Callable, Mapping
 
 from vision_platform.kernel.config import PipelineConfig
+from vision_platform.kernel.capabilities import resolve_device
 from vision_platform.application.config_loader import ConfigError
 from vision_platform.runtime.sync_linear_executor import SyncLinearExecutor
 from vision_platform.runtime.pipeline_runner import PipelineRunner
 from vision_platform.runtime.composite_sink import CompositeSink
+from vision_platform.adapters.capability_probe import probe_capabilities
 
 
 # ---- Builders (mỗi cái lazy-import, khớp vision_slice_app._build_*) ----
@@ -52,7 +54,11 @@ def _det_fake(params: Mapping):
 def _det_pt(params: Mapping):
     from vision_platform.adapters.yolov5_pt_detector import Yolov5PtDetector
     _need(params, "weights", "detector pt")
-    return Yolov5PtDetector(params["weights"], device=params.get("device", "cpu"))
+    # Capability-aware: resolve device theo năng lực máy (auto→best / cuda-thiếu→CapabilityError fail-fast).
+    # probe TRƯỚC construct (construct không import torch → resolve raise được mà không kéo dep nặng).
+    # CapabilityError (RuntimeError) ở đường config → _run_from_config bulkhead cô lập (log + chạy tiếp cam kế).
+    dev = resolve_device(params.get("device", "cpu"), probe_capabilities())
+    return Yolov5PtDetector(params["weights"], device=dev)
 
 
 def _stage_detect(params: Mapping, detector: Any):
