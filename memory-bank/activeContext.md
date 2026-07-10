@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T15:00:00+07:00.
+**Cập nhật lúc:** 2026-07-10T15:45:00+07:00.
+**[🔵 #286 — HỢP NHẤT spec trùng K-035: giữ `test-stability-hardening`, XOÁ `supervisor-liveness-hardening` (đảo một phần D-075) — máy `k.nguyen.manh.toan`]**
+- **Phát hiện drift:** `git add -A` (#285) cuốn vào commit c736db5 file UNTRACKED `test-stability-hardening/requirements.md` — spec design-first CHẤT LƯỢNG CAO cho CÙNG K-035 (origin không chắc; đối chiếu code thật = đúng). → 2 spec trùng = drift.
+- **Tự phản biện (doubt-driven) → công nhận D-075/#285 OVER-REACH:** production default `heartbeat_timeout_s=2.0s` đã hấp thụ startup latency → flakiness thật do TEST dùng `0.5s` phi-thực-tế, KHÔNG phải bug supervisor. Đổi semantics supervisor (startup_grace) = over-engineer cho vấn-đề-thuộc-test.
+- **Hợp nhất:** GIỮ `test-stability-hardening` (test-only: assert PROPERTY thay rate + event-driven `wait_until`/`request_stop()` public additive + timeout test THỰC TẾ margin>>jitter; KHÔNG đụng `_is_hung`/cascade/backoff). XOÁ `supervisor-liveness-hardening`. `startup_grace_s` defer YAGNI. Viết `test-stability-hardening/design.md` (hợp nhất, 0-diag).
+- **Verify:** `get_diagnostics` test-stability-hardening 2 file = No diagnostics; supervisor-liveness-hardening đã xoá. Ghi sổ: LOG #286 · +D-076 (đảo phần D-075) · K-035→spec D-076 · INDEX #286/tổng 192 (D76·C20·T27·K69). Drift PASS.
+- **CHƯA code** (PHA1 — `test-stability-hardening` có đủ req+design). **Bước kế (CHỜ user valid design):** → PHA2 code TDD (`Supervisor.request_stop()` additive + `tests/_wait_helpers.py::wait_until` + viết-lại ~9 test theo property/event-driven + timeout thực tế + marker `slow`; verify chạy LẶP ≥5 lần ổn định = đóng K-035). Hoặc: serving HTTP `/metrics` (follow-on metrics) · wire `--capabilities` · dừng mốc sạch.
+- **Bài học:** `git add -A` cuốn file untracked lạ → §0 phải TỰ `git status` đầu lượt (lượt #285 tin hook thay vì tự chạy).
+---
 **[🔵 #285 — ĐIỀU TRA root-cause flaky K-035 + mở spec `supervisor-liveness-hardening` (PHA1 design-first) — máy `k.nguyen.manh.toan`]**
 - Flaky supervisor/liveness/step_09 (K-035) = rủi ro chất-lượng thật (xói mòn niềm tin CI). ĐIỀU TRA tận gốc (đọc `supervisor.py` + 2 test, khớp từng assertion với ngân sách thời gian) thay vì bump timeout.
 - **2 ROOT-CAUSE phân biệt (từ code thật):** (B production, bản chất) `_is_hung` dùng CHUNG `heartbeat_timeout_s` cho chờ-beat-ĐẦU-sau-spawn và khoảng-cách-steady-state → spawn chậm (Windows re-import + máy tải) > timeout → worker KHOẺ bị coi HANG → **restart OAN** (lỗ production node ~100 cam tải nặng). (A test) `sup.run(duration_s=X)` cố định RỒI assert side-effect = RACE (spawn chậm hơn X → side-effect chưa kịp).

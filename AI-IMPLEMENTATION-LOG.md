@@ -5837,3 +5837,25 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - 2 spec no-GPU đã CODE trước đó (capability #283, metrics #284) không đổi.
 
 **Đã verify (máy k.nguyen.manh.toan):** `get_diagnostics` requirements.md + design.md = **No diagnostics found**; chẩn đoán bám code thật (`_is_hung`/`_spawn`/`run`/assertion test đã đọc nguyên văn) + khớp failure + git-stash #284 chứng minh pre-existing; `drift_check.py` chạy sau ghi sổ. · **Chưa verify:** hiệu quả fix (startup_grace + chờ-sự-kiện ổn định) — CHƯA code (PHA2); nhánh POSIX (giữ win32).
+
+### Entry #286 — 2026-07-10 — HỢP NHẤT spec trùng K-035: giữ `test-stability-hardening`, XOÁ `supervisor-liveness-hardening` (đảo một phần #285/D-075) — Kiro-Opus
+
+**Bối cảnh:** Sau #285 (tạo spec `supervisor-liveness-hardening`), `git add -A` phát hiện + cuốn vào commit c736db5 một file UNTRACKED `test-stability-hardening/requirements.md` — spec design-first CHẤT LƯỢNG CAO cho CÙNG vấn đề K-035 (origin không chắc: có thể spec-session/phiên song song; đã đối chiếu code thật → nội dung CHÍNH XÁC). → 2 spec trùng cho 1 fix = DRIFT phải xử lý.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **Tự phản biện (doubt-driven) → công nhận spec #285 của tôi OVER-REACH:** `supervisor-liveness-hardening` đề xuất đổi SEMANTICS supervisor production (thêm `startup_grace_s` vào `_is_hung`). Nhưng production default `heartbeat_timeout_s=2.0s` ĐÃ hấp thụ startup latency; flakiness thật do TEST dùng `0.5s` (phi-thực-tế). → đổi production cho vấn-đề-thuộc-test = over-engineer + thêm bề mặt production đang đúng.
+- **HỢP NHẤT: giữ `test-stability-hardening` (test-only, ít xâm lấn, đúng root-attribution), XOÁ `supervisor-liveness-hardening`.** Cách test-only: (a) assert PROPERTY thay rate (`len>5`→"có output mới sau mốc crash"); (b) event-driven `wait_until` + `request_stop()` public additive thay cửa-sổ-wall-clock; (c) timeout test THỰC TẾ (margin>>jitter) thay 0.5s. KHÔNG đổi `_is_hung`/cascade/backoff.
+- Viết `test-stability-hardening/design.md` (hợp nhất, dùng lại phần chung wait_until/thread/request_stop từ design cũ; BỎ startup_grace). `startup_grace_s` = defer YAGNI (mở spec riêng nếu SAU có nhu cầu hang-detection-chặt + startup-chậm production thật).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** đảo một phần **D-075/#285** — KHÔNG đổi supervisor production (như D-075 định), mà fix test-only. Spec canonical đổi từ `supervisor-liveness-hardening` → `test-stability-hardening`.
+
+**3. Trade-off đã cân nhắc:**
+- Test-only (không đụng production đang đúng) vs đổi supervisor startup_grace → **test-only** (YAGNI, ít rủi ro, đúng attribution; production default 2.0s đã đủ). BÁC over-reach của chính mình.
+- Xoá spec trùng vs giữ cả 2 → xoá (2 spec/1 fix = drift + lẫn lộn).
+
+**4. Điều bạn nên biết:**
+- CHƯA code fix (PHA1 design). `test-stability-hardening` giờ có đủ requirements + design (0-diagnostic cả 2).
+- File `test-stability-hardening/requirements.md` origin không chắc (untracked trước #285) — nhưng nội dung đã đối chiếu code thật = đúng; đánh giá TRÊN MERIT, không tin mù.
+- Bài học: `git add -A` có thể cuốn file untracked lạ → nên `git status` đầu mỗi lượt (đã có trong §0 nhưng lượt #285 tin hook thay vì tự chạy) — sẽ chú ý.
+
+**Đã verify (máy k.nguyen.manh.toan):** `get_diagnostics` test-stability-hardening/{requirements,design}.md = **No diagnostics**; supervisor-liveness-hardening đã xoá (git D); `drift_check.py` chạy sau ghi sổ. · **Chưa verify:** hiệu quả fix test (chờ-sự-kiện ổn định ≥5 lần) — CHƯA code (PHA2).
