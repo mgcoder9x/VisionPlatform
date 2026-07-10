@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T19:00:00+07:00.
+**Cập nhật lúc:** 2026-07-10T20:00:00+07:00.
+**[✅ #291 — PHA2 CODE TDD `metrics-http-endpoint` HOÀN TẤT — exporter /metrics Prometheus scrape (no-GPU) — máy `k.nguyen.manh.toan`, verify 9×5 ổn định + full 600/2]**
+- §0 đúng: git clean, HEAD=origin. Hiện thực design hardened 2 vòng (#289 mở + #290 review deadlock). Hoàn tất chuỗi observability→SCRAPE.
+- **Code (additive):** `adapters/metrics_http_server.py::MetricsHttpExporter` (http.server ThreadingHTTPServer stdlib, daemon NON-BLOCKING; `/metrics`→200 render_prometheus(provider())+CT 0.0.4 / `/healthz`→200 / khác→404 / provider-lỗi→500-không-sập; **`_serving` Event CHỐNG DEADLOCK** stop-sớm; start()→cổng thực; stop() idempotent) + `is_loopback`. provider callable TIÊM (adapters leaf giữ). Wire inline `vision_slice_app`: `--metrics-port`/`--metrics-host` (MetricsObserver+InMemoryMetrics+exporter, `_CompositeObserver` nếu +observe, secure-default localhost + cảnh báo phơi-mạng).
+- **VERIFY THẬT:** `pytest test_metrics_http_endpoint.py` = 9 passed, **chạy LẶP 5/5 ổn định** (P4 500-server-sống, P5 stop-ngay-KHÔNG-deadlock, CLI wire smoke rc0); `vp verify` EXIT 0; full **600/2** (2 lần xanh; 591→600 +9). 1 lần full-suite tải-nặng có 1 flaky supervisor (KHÔNG phải metrics-http — đã kiểm 5/5; đúng giới hạn #288 không-0-flake-máy-tải-vô-hạn).
+- **Ghi sổ:** LOG #291 · +D-079 (✅) · D-078 row→code · INDEX #291/tổng 198 (D79·C20·T28·K71), baseline 600/2. Drift PASS.
+- **Chuỗi observability HOÀN CHỈNH no-GPU:** đo (MetricsObserver→InMemoryMetrics) → render (Prometheus text #284) → **serve /metrics (#291)** + CLI `--observe`/`--metrics-port`. + capability-aware (#283) + CI-tin-cậy K-035-đóng (#288).
+- **Bước kế (chờ user):** (a) config-path metrics-http (shared-metrics đa-pipeline — follow-on) · (b) server-DB sink (Postgres) · (c) khi có GPU: verify nhánh CUDA + tune motion-gate-roi RTSP · (d) dừng mốc sạch (nhiều tính năng no-GPU đã trọn).
+---
 **[🔵 #290 — REVIEW đối kháng design `metrics-http-endpoint` → fix 1 lỗ DEADLOCK trước khi code — máy `k.nguyen.manh.toan`]**
 - §0 đúng: `git status` clean, HEAD=origin. Đối chiếu design với hợp đồng `socketserver.BaseServer`/`http.server` thật (pattern #280/#282/#287).
 - **Lỗ-A (bản chất — deadlock):** `BaseServer.shutdown()` PHẢI gọi khi `serve_forever()` ĐANG chạy ở thread khác, nếu không DEADLOCK. `start()` return ngay → `stop()` gọi TRƯỚC khi thread vào serve_forever (test start→stop nhanh P5) → treo. Fix: `_serving = threading.Event()` set NGAY TRƯỚC serve_forever; `stop()` `wait()` (bounded 5s) rồi mới `shutdown()`. +`poll_interval=0.2`. +Property 5.

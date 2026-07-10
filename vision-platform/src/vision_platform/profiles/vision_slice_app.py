@@ -47,6 +47,22 @@ class _TrackSummarySink:
     def teardown(self) -> None: ...
 
 
+class _CompositeObserver:
+    """Fan-out snapshot tới nhiều observer (composition — vd vừa LoggingObserver vừa MetricsObserver).
+
+    Mỗi observer bọc riêng → 1 observer lỗi KHÔNG chặn observer khác (quan sát phụ trợ, isolation).
+    """
+    def __init__(self, observers):
+        self._observers = list(observers)
+
+    def on_snapshot(self, snapshot):
+        for o in self._observers:
+            try:
+                o.on_snapshot(snapshot)
+            except Exception:  # noqa: BLE001 — quan sát phụ trợ: lỗi 1 observer không chặn cái khác
+                pass
+
+
 def _build_source(args):
     if args.source == "fake":
         from vision_platform.adapters.fake_frame_source import FakeFrameSource
@@ -228,6 +244,10 @@ def main(argv=None) -> int:
                         help="giây giữa 2 snapshot (0=tắt theo-giờ). Bật --observe mà không set nhịp → mặc định 5s")
     parser.add_argument("--observe-every", type=int, default=0,
                         help="số frame giữa 2 snapshot (0=tắt theo-frame)")
+    parser.add_argument("--metrics-port", type=int, default=None,
+                        help="bật exporter HTTP /metrics (Prometheus scrape) ở cổng này (0=ephemeral). Bật → cũng emit snapshot định kỳ")
+    parser.add_argument("--metrics-host", default="127.0.0.1",
+                        help="địa chỉ bind exporter /metrics (mặc định 127.0.0.1 an toàn; 0.0.0.0=phơi mạng, KHÔNG auth → chỉ mạng nội bộ)")
     args = parser.parse_args(argv)
 
     if args.validate and not args.config:
@@ -238,7 +258,9 @@ def main(argv=None) -> int:
     # cả khi camera mất kết nối (fix Lỗ-A #275: emit theo-giờ ở đầu loop không cần frame chảy).
     obs_every = args.observe_every
     obs_interval = args.observe_interval
-    if args.observe and obs_every == 0 and obs_interval == 0.0:
+    # --metrics-port cũng cần emit định kỳ (để /metrics cập nhật), không chỉ --observe.
+    _want_periodic = args.observe or (args.metrics_port is not None)
+    if _want_periodic and obs_every == 0 and obs_interval == 0.0:
         obs_interval = 5.0
 
     if args.config:
@@ -301,13 +323,39 @@ def main(argv=None) -> int:
         sinks.append(track_summary)
     sink = CompositeSink(sinks)
 
-    observer = None
+    # Observer(s) + optional exporter /metrics (đường inline). Nhiều observer → composite.
+    observers_list = []
     if args.observe:
         from vision_platform.runtime.observers import LoggingObserver
-        observer = LoggingObserver()
+        observers_list.append(LoggingObserver())
+    exporter = None
+    if args.metrics_port is not None:
+        from vision_platform.runtime.observability import InMemoryMetrics
+        from vision_platform.runtime.observers import MetricsObserver
+        from vision_platform.adapters.metrics_http_server import MetricsHttpExporter, is_loopback
+        metrics = InMemoryMetrics()
+        observers_list.append(MetricsObserver(metrics))
+        if not is_loopback(args.metrics_host):
+            print(f"[metrics] CẢNH BÁO: /metrics bind {args.metrics_host} KHÔNG xác thực — chỉ dùng mạng nội bộ tin cậy",
+                  file=sys.stderr)
+        exporter = MetricsHttpExporter(metrics.iter_metrics, host=args.metrics_host, port=args.metrics_port)
+        _p = exporter.start()
+        print(f"[metrics] phục vụ http://{args.metrics_host}:{_p}/metrics", file=sys.stderr)
+
+    if len(observers_list) == 1:
+        observer = observers_list[0]
+    elif len(observers_list) >= 2:
+        observer = _CompositeObserver(observers_list)
+    else:
+        observer = None
+
     runner = PipelineRunner(source, executor, sink, observer=observer,
                             emit_every_n=obs_every, emit_interval_s=obs_interval)
-    stats = runner.run(max_frames=args.max_frames)
+    try:
+        stats = runner.run(max_frames=args.max_frames)
+    finally:
+        if exporter is not None:
+            exporter.stop()
 
     print("=== vision_slice summary ===", file=sys.stderr)
     print(f"  frames_read : {stats.frames_read}", file=sys.stderr)

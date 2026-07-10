@@ -5941,3 +5941,23 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Bài học K-071: review adapter I/O phải trace HỢP ĐỒNG THƯ VIỆN THẬT (thread/lifecycle http.server), không chỉ logic ứng dụng.
 
 **Đã verify (máy k.nguyen.manh.toan):** `git status` clean; `get_diagnostics` design.md = No diagnostics (sau fix); dựa hợp đồng stdlib `BaseServer.shutdown` (độ-chắc-chắn CAO — docs Python: "shutdown() must be called while serve_forever() is running in a different thread, otherwise it will deadlock"; đối chiếu lại docs/chạy lúc code PHA2); `drift_check.py` chạy sau ghi sổ. · **Chưa verify:** hành vi exporter thật (CHƯA code — PHA2); test start/stop no-deadlock (PHA2 chạy thật).
+
+### Entry #291 — 2026-07-10 — PHA2 code TDD `metrics-http-endpoint` HOÀN TẤT — exporter /metrics Prometheus scrape (no-GPU) — Kiro-Opus
+
+**Bối cảnh:** §0 đúng (`git status` clean, HEAD=origin cc5ec6d). Hiện thực design hardened 2 vòng (#289 mở + #290 review fix deadlock). Hoàn tất chuỗi observability→scrape.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **Code (additive):** `adapters/metrics_http_server.py::MetricsHttpExporter` (http.server ThreadingHTTPServer stdlib, daemon non-blocking, handler `/metrics`→200 `render_prometheus(provider())`+Content-Type 0.0.4 / `/healthz`→200 / khác→404 / provider-lỗi→500-không-sập; `_serving` Event CHỐNG DEADLOCK stop-sớm; `start()` trả cổng thực; `stop()` idempotent) + `is_loopback()` helper. Nhận `provider` callable TIÊM → adapters KHÔNG import runtime (leaf giữ).
+- **Wire inline `vision_slice_app`:** `--metrics-port`/`--metrics-host`; khi bật → tạo `InMemoryMetrics`+`MetricsObserver`+exporter(iter_metrics), start trước run, stop trong finally; `_CompositeObserver` (fan-out) nếu vừa `--observe` vừa `--metrics-port`; default-5s emit áp cả khi metrics-port; cảnh báo bind phi-loopback (không auth).
+- 2 fix review #290 hiện thực: `_serving` Event chống deadlock + poll_interval=0.2.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (additive; render/InMemoryMetrics/MetricsObserver giữ nguyên; wire chỉ đường inline — config-path metrics = follow-on).
+
+**3. Trade-off đã cân nhắc:** `_CompositeObserver` (vừa log vừa metrics) vs ép chọn 1 → composite (2 nhu cầu song song, isolation mỗi observer). Wire inline-only v1 vs cả config → inline (config cần shared-metrics đa-pipeline = follow-on, tránh scope creep).
+
+**4. Điều bạn nên biết — VERIFY THẬT (trung thực):**
+- `pytest tests/test_metrics_http_endpoint.py` = **9 passed**; **chạy LẶP 5 lần = 9 passed/lần (5/5) ỔN ĐỊNH** (gồm P4 provider-lỗi→500-server-sống, P5 start→stop-ngay KHÔNG deadlock, CLI wire smoke rc0). → code mới KHÔNG flaky.
+- `scripts\vp.cmd verify` = **EXIT 0** (test+lint 5/0+drift PASS); full `pytest -q` = **600 passed/2 skipped** (2 lần liên tiếp xanh; 591→600 +9 metrics-http).
+- **1 lần full-suite (tải nặng 73s) có 1 flaky fail** (không phải test metrics-http — đã kiểm 5/5 ổn định) = flaky hiếm supervisor/step_09 dưới tải cực đại. ĐÚNG giới hạn đã ghi #288 (event-driven diệt race + 5/5 ổn định NHƯNG không chứng minh 0-flake máy tải VÔ HẠN, deadline 20s hữu hạn). KHÔNG phải hồi-quy code mới.
+
+**Đã verify (máy k.nguyen.manh.toan, py3.11.9):** `git status` clean; `pytest test_metrics_http_endpoint.py` 9 passed ×5 ổn định; `vp verify` EXIT 0; full `pytest -q` 600/2 (×2 xanh). · **Chưa verify:** 0-flake supervisor máy tải vô hạn (giới hạn đã nêu); scrape qua RTSP/mạng thật (cần triển khai); config-path metrics-http (follow-on).
