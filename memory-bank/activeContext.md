@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T13:15:00+07:00.
+**Cập nhật lúc:** 2026-07-10T14:00:00+07:00.
+**[✅ #284 — PHA2 CODE TDD `metrics-exposition` HOÀN TẤT — phơi metrics ra Prometheus text (no-GPU) — máy `k.nguyen.manh.toan`, verify: test riêng 11 pass·lint 5/0]**
+- Hiện thực design hardened 2 vòng (#279 mở + #280 review fix 2 lỗ). Đọc `InMemoryMetrics` thật trước.
+- **Code (3 file + sửa 1, additive):** `kernel/metric_sample.py` (`MetricSample` DTO thuần) · `runtime/observability.py` (+`iter_metrics()` trả MetricSample SORTED dùng `_labelsets` ghi-lúc-write → KHÔNG parse-ngược lossy; **sửa `get_counter`/`get_histogram` `.get` không-mutate** = fix latent-bug getter + bất biến "key⟺đã-ghi") · `adapters/metrics_exposition.py` (`render_prometheus` THUẦN: TYPE/family + escape + fmt inf/nan→`+Inf`/`-Inf`/`NaN` + sorted xác định + raise ValueError xung đột name↔type).
+- **VERIFY (TRUNG THỰC):** `pytest tests/test_metrics_exposition.py` = **11 passed** (x2; P7 không-lossy nhãn `,`/`=` · P10 inf/nan · P11 xung đột · P9 tích hợp MetricsObserver end-to-end); `vp lint` **5/0** (layer sạch). Full-suite **581p/3-fail-flaky(K-035)/2s** — 3 fail = supervisor/liveness/step_09 timing-flaky dưới tải; **XÁC NHẬN pre-existing bằng git-stash** (baseline sạch `c927d5d` fail 4/6 — NẶNG hơn, KHÔNG do thay đổi này). Baseline "xanh khi flaky hợp tác" = 584/2. drift PASS.
+- **Ghi sổ:** LOG #284 · +D-074 (✅) · D-071 row → code · INDEX #284/tổng 190 (D74·C20·T27·K69).
+- **⚠️ Cần biết (track riêng):** supervisor/liveness/step_09 flaky dưới tải trên máy này (K-035) — không thuộc task metrics; khuyến nghị sau: tune timeout / đánh dấu / chạy máy rảnh để CI ổn định.
+- **Bước kế (chờ user):** (a) serving HTTP `/metrics` (follow-on metrics: route Flask `vision_web_app` / http.server cho camera_worker) · (b) wire `--capabilities` in probe · (c) hardening flaky K-035 (ổn định CI) · (d) khi có GPU: verify nhánh CUDA · (e) dừng mốc sạch.
+---
 **[✅ #283 — PHA2 CODE TDD `capability-aware-execution` HOÀN TẤT — chạy đúng máy hỗn tạp GPU/CPU (no-GPU verify) — máy `k.nguyen.manh.toan`, verify 573/2·5/0]**
 - Hiện thực design hardened 2 vòng (#281 mở + #282 review fix 4 lỗ). Đọc layout/API thật trước (kernel dir, pyproject, adapter setup, không có conftest).
 - **Code (4 file + 1 config, additive):** `kernel/capabilities.py` (`MachineCapabilities` DTO + `CapabilityError` + `resolve_device` THUẦN: auto→best / cuda-tường-minh-thiếu→fail-fast / ordinal cuda:N vs device_count / chuẩn hoá lower — KHÔNG import torch) · `adapters/capability_probe.py` (`probe_capabilities` bọc-an-toàn: torch/cv2 vắng→False không raise; has_cuda=is_available AND count>0) · wire `pipeline_factory._det_pt` (config→CapabilityError vào bulkhead) + `vision_slice_app._build_detector`/`_resolve_device_logged` (CLI, LOG device thực) + `main` bắt CapabilityError→stderr+exit2 · `tests/conftest.py` (marker `gpu`+autoskip theo probe) · pyproject `markers`.

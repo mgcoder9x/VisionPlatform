@@ -5787,3 +5787,27 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Spec `metrics-exposition` (D-071) VẪN chờ code (parked).
 
 **Đã verify (máy k.nguyen.manh.toan, py3.11.9):** `pytest tests/test_capability.py` 13 passed/1 skipped; full `pytest -q` **573 passed/2 skipped**; `scripts\vp.cmd lint` 5 kept/0 broken; `drift_check.py` PASS — chạy thật, đọc output. · **Chưa verify:** nhánh probe khi CÓ torch/CUDA (cần máy GPU); hành vi `Yolov5PtDetector` device cuda thật (cần GPU+weights).
+
+### Entry #284 — 2026-07-10 — PHA2 code TDD `metrics-exposition` HOÀN TẤT — phơi metrics ra Prometheus text (no-GPU) — Kiro-Opus
+
+**Bối cảnh:** Hiện thực design đã hardened 2 vòng (#279 mở + #280 review fix 2 lỗ). Đọc code thật `InMemoryMetrics` (`_key`/`snapshot`/`_counters`/`_gauges` defaultdict) trước khi code. Máy no-GPU/no-CUDA → verify đầy đủ (hàm thuần + tiêm dữ liệu).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **Code (3 file + sửa 1, additive):** `kernel/metric_sample.py` (`MetricSample` frozen DTO thuần: mtype/name/value/labels) · `runtime/observability.py` (+`iter_metrics()` trả MetricSample SORTED dùng `_labelsets` ghi-lúc-write → KHỎI parse-ngược lossy; +`_labelsets` dict; **sửa `get_counter`/`get_histogram` dùng `.get` KHÔNG mutate** → thiết lập bất biến "key trong store ⟺ đã ghi ⟺ có labelset") · `adapters/metrics_exposition.py` (`render_prometheus` THUẦN: TYPE/family + escape nhãn + fmt inf/nan→`+Inf`/`-Inf`/`NaN` + sorted xác định + raise ValueError khi xung đột name↔type).
+- 2 fix review #280 hiện thực: (A) xung đột name↔type → ValueError; (B) inf/nan → `+Inf`/`-Inf`/`NaN` (fmt_value). Fix gốc lossy: `_labelsets` cấu-trúc thay parse chuỗi.
+- **Cải tiến bản chất kèm theo (fix latent bug):** `get_counter`/`get_histogram` trước đây dùng `defaultdict[key]` → GETTER TẠO KEY RÁC (mutate lúc đọc). Đổi `.get(key, default)` → getter thuần-đọc + đảm bảo mọi key trong store đều có labelset (iter_metrics an toàn). Return value không đổi (0/[]).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (additive; đường-ghi MetricsObserver→InMemoryMetrics giữ nguyên; renderer là NGƯỜI-ĐỌC).
+
+**3. Trade-off đã cân nhắc:**
+- `_labelsets` map (thêm RAM O(số-key) bounded) vs parse-ngược chuỗi key → chọn map (đúng-tận-gốc, không lossy — T-026/D-071).
+- Sửa getter `.get` (latent-bug fix, behavior-return giữ) vs để nguyên defaultdict-mutate → sửa (getter mutate là sai bản chất + phá bất biến iter_metrics). Kiểm: test_step_08_observability (dùng get_counter/get_histogram) VẪN PASS.
+
+**4. Điều bạn nên biết (TRUNG THỰC về verify):**
+- **VERIFY code metrics-exposition:** `pytest tests/test_metrics_exposition.py` = **11 passed** (chạy 2 lần, gồm P7 không-lossy nhãn chứa `,`/`=` · P10 inf/nan · P11 xung đột → ValueError · P9 tích hợp MetricsObserver end-to-end); `vp lint` = **5 kept/0 broken** (kernel DTO thuần, adapters không import runtime — layer giữ).
+- **Full suite: KHÔNG xanh hoàn toàn** — 581 passed/3 failed/2 skipped. 3 fail = `test_step_09_shutdown` (x2) + `test_supervisor_liveness` (x1) — **flaky timing K-035** (máy tải nặng, test multiprocessing heartbeat/shutdown). **XÁC NHẬN pre-existing bằng git-stash:** stash toàn bộ thay đổi phiên này → chạy step_09 trên baseline SẠCH `c927d5d` = **4 failed/2 passed** (NẶNG HƠN, fail test khác nhau) → chứng minh flaky KHÔNG do thay đổi này (code tôi còn fail ÍT hơn). Failures đổi test mỗi lần chạy = chữ ký flaky, không phải hồi-quy.
+- Baseline "xanh" khi flaky hợp tác = **584 passed/2 skipped** (573→584, +11 metrics additive). test cũ liên quan (test_step_08 dùng getter đã đổi) PASS → thay đổi getter đúng.
+- K-035 tái khẳng định: supervisor/liveness/step_09 flaky dưới tải trên máy này (cần máy rảnh / tune timeout — track riêng, không thuộc task này).
+- Spec `metrics-exposition` (D-071) code XONG. Serving HTTP `/metrics` = follow-on (chưa làm).
+
+**Đã verify (máy k.nguyen.manh.toan):** `pytest tests/test_metrics_exposition.py` 11 passed (x2); `vp lint` 5/0; `drift_check.py` PASS; git-stash chứng minh 3 fail = flaky pre-existing (clean baseline fail 4/6). · **Chưa verify:** full-suite xanh-tuyệt-đối (bị chặn bởi flaky K-035 độc lập — cần máy rảnh); serving HTTP `/metrics` (follow-on, chưa code); byte-khớp prometheus_client (chưa cài).

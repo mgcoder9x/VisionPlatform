@@ -106,34 +106,60 @@ class InMemoryMetrics:
         self._counters: dict[str, int] = defaultdict(int)
         self._gauges: dict[str, float] = {}
         self._histograms: dict[str, list[float]] = defaultdict(list)
+        # (name, labels) CÓ CẤU TRÚC theo key — ghi lúc write để iter_metrics KHỎI parse-ngược chuỗi key
+        # (parse `name{k=v}` bị lossy khi value chứa ,/=/} — spec metrics-exposition D-071). Bounded (K-019).
+        self._labelsets: dict[str, tuple[str, dict]] = {}
 
     def counter(self, name: str, value: float = 1.0, **labels) -> None:
         key = self._key(name, labels)
         with self._lock:
             self._counters[key] += int(value)
+            self._labelsets[key] = (name, dict(labels))
 
     def gauge(self, name: str, value: float, **labels) -> None:
         key = self._key(name, labels)
         with self._lock:
             self._gauges[key] = value
+            self._labelsets[key] = (name, dict(labels))
 
     def histogram(self, name: str, value: float, **labels) -> None:
         key = self._key(name, labels)
         with self._lock:
             self._histograms[key].append(value)
+            self._labelsets[key] = (name, dict(labels))
 
     def get_counter(self, name: str, **labels) -> int:
+        # .get (KHÔNG mutate) → getter không tạo key rác (giữ bất biến: key trong store ⟺ đã ghi ⟺ có labelset).
         with self._lock:
-            return self._counters[self._key(name, labels)]
+            return self._counters.get(self._key(name, labels), 0)
 
     def get_gauge(self, name: str, **labels) -> float | None:
         with self._lock:
             return self._gauges.get(self._key(name, labels))
 
     def get_histogram(self, name: str, **labels) -> list[float]:
-        # PHẢI giữ lock — list() duyệt qua; histogram() append đồng thời sẽ race.
+        # PHẢI giữ lock — list() duyệt qua; histogram() append đồng thời sẽ race. .get → không mutate.
         with self._lock:
-            return list(self._histograms[self._key(name, labels)])
+            return list(self._histograms.get(self._key(name, labels), ()))
+
+    def iter_metrics(self) -> "list[MetricSample]":
+        """Snapshot CÓ CẤU TRÚC (counter+gauge) → list `MetricSample` SORTED, dưới lock.
+
+        Dùng (name, labels) đã lưu ở `_labelsets` (KHÔNG parse chuỗi key → không lossy). Histogram = Non-Goal
+        v1 (cần bucket → bỏ qua). Sort theo (name, sorted(labels)) → output renderer xác định (spec P5).
+        """
+        from vision_platform.kernel.metric_sample import MetricSample
+
+        out: list[MetricSample] = []
+        with self._lock:
+            for key, cval in self._counters.items():
+                name, labels = self._labelsets[key]
+                out.append(MetricSample("counter", name, float(cval), dict(labels)))
+            for key, gval in self._gauges.items():
+                name, labels = self._labelsets[key]
+                out.append(MetricSample("gauge", name, float(gval), dict(labels)))
+        out.sort(key=lambda s: (s.name, sorted(s.labels.items())))
+        return out
 
     def snapshot(self) -> dict[str, Any]:
         with self._lock:
