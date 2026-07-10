@@ -69,8 +69,8 @@ class CapabilityError(RuntimeError): ...
 _CUDA_REQUESTS = frozenset({"cuda", "gpu"})   # "cuda:N" xử bằng startswith("cuda")
 
 def resolve_device(requested: str, caps: MachineCapabilities) -> str:
-    """(requested, caps) → device dùng thật, HOẶC raise CapabilityError. THUẦN."""
-    r = (requested or "auto").strip().lower()
+    """(requested, caps) → device THẬT (đã chuẩn hoá lower), HOẶC raise CapabilityError. THUẦN."""
+    r = (requested or "auto").strip().lower()             # Lỗ-B: chuẩn hoá 1 dạng duy nhất
     if r == "cpu":
         return "cpu"
     if r == "auto":
@@ -78,13 +78,21 @@ def resolve_device(requested: str, caps: MachineCapabilities) -> str:
     if r in _CUDA_REQUESTS or r.startswith("cuda:"):
         if not caps.has_cuda:
             raise CapabilityError(
-                f"device={requested!r} yêu cầu CUDA nhưng máy này không có CUDA "
-                f"(has_torch={caps.has_torch}). Dùng device='auto' (tự về cpu) / 'cpu', "
-                f"hoặc chạy trên máy GPU.")
-        return requested          # giữ nguyên "cuda"/"cuda:N" (adapter tự chuẩn hoá "cuda"→"cuda:0")
+                f"device={requested!r} yêu cầu CUDA nhưng máy này KHÔNG có CUDA khả dụng "
+                f"(has_torch={caps.has_torch}). Dùng 'auto' (tự về cpu) / 'cpu', hoặc chạy máy GPU.")
+        if r.startswith("cuda:"):                          # Lỗ-A: kiểm ORDINAL vs số GPU thật
+            idx = _parse_ordinal(r)                        # sau "cuda:"; không phải số ≥0 → CapabilityError
+            if idx >= caps.cuda_device_count:
+                raise CapabilityError(
+                    f"device={requested!r} nhưng máy chỉ có {caps.cuda_device_count} GPU "
+                    f"(hợp lệ: cuda:0..cuda:{caps.cuda_device_count - 1}).")
+            return r                                        # "cuda:0" (đã lower)
+        return "cuda"                                       # bare cuda/gpu → "cuda" (adapter → cuda:0)
     raise CapabilityError(f"device không hợp lệ: {requested!r} (hợp lệ: auto|cpu|cuda|cuda:N)")
 ```
 - DTO immutable thuần Python → hợp `kernel`. `resolve_device` không I/O → test tiêm `MachineCapabilities(...)` xác định.
+- **Lỗ-A (fail-fast đầy đủ):** kiểm ORDINAL `cuda:N` vs `cuda_device_count` → `cuda:3` trên máy 1 GPU raise RÕ, không để fail mù sâu trong torch. `_parse_ordinal` bắt phần sau "cuda:" không phải số → CapabilityError.
+- **Lỗ-B (chuẩn hoá):** LUÔN trả dạng đã lower ("cuda"/"cuda:0"/"cpu") — 1 dạng chuẩn duy nhất xuống adapter (khớp `dev in ("cuda","gpu")`), không để "CUDA:0" gốc lọt.
 
 ### 2. adapters/capability_probe.py (dò THẬT, bọc an toàn — leaf)
 ```
@@ -94,10 +102,9 @@ def probe_capabilities() -> MachineCapabilities:
         import torch
         has_torch = True
         try:
-            has_cuda = bool(torch.cuda.is_available())
-            if has_cuda:
-                n = int(torch.cuda.device_count())
-                gpu = torch.cuda.get_device_name(0) if n > 0 else None
+            n = int(torch.cuda.device_count()) if torch.cuda.is_available() else 0
+            has_cuda = n > 0          # Lỗ-C: "CUDA khả dụng THẬT" = is_available AND có ≥1 GPU
+            gpu = torch.cuda.get_device_name(0) if has_cuda else None
         except Exception:            # truy vấn CUDA lỗi (driver/lib) → coi như không có
             has_cuda = False; n = 0; gpu = None
     except ImportError:
@@ -117,6 +124,7 @@ def probe_capabilities() -> MachineCapabilities:
   `dev = resolve_device(requested, caps)` (caps = probe 1 lần, tiêm được để test) → log
   `"device: auto→cpu (máy không CUDA)"` → `Yolov5PtDetector(weights, device=dev)`.
 - `validate_config` KHÔNG gọi resolve (giữ kiểm-tĩnh không-dựng-object — R3.4); resolve chỉ ở đường CHẠY thật.
+- **Lỗ-D (phơi lỗi sạch):** tầng CLI/`main` BẮT `CapabilityError` → in stderr GỌN + return exit code khác 0 (đúng mẫu `ConfigError`→`_validate_config_only` đã có) — KHÔNG để traceback thô đập vào user/ops. Ở đường config-declarative (bulkhead per-pipeline) thì `CapabilityError` lúc build 1 pipeline bị cô lập như lỗi build khác (log rõ, chạy tiếp pipeline kế) — nhất quán K-045.
 - CLI thêm tiện ích `--capabilities` (in probe) — follow-on nhỏ, không bắt buộc v1.
 
 ### 4. tests/conftest.py — marker `gpu` + autoskip
@@ -153,8 +161,12 @@ def pytest_collection_modifyitems(config, items):
 | `device` chuỗi lạ (vd "gpu0") | `resolve_device` raise `CapabilityError` (liệt kê hợp lệ) | R2.4 |
 | `device="auto"` máy không CUDA | trả "cpu" + LOG "auto→cpu" (không raise, không im lặng) | R2.1, R3.2, P1 |
 | `validate_config` trên máy no-GPU | KHÔNG gọi resolve (kiểm tĩnh) → config GPU vẫn validate được | R3.4 |
+| **`cuda:N` với N ≥ số GPU** (vd cuda:3 máy 1 GPU) | resolve raise `CapabilityError` báo dải hợp lệ (Lỗ-A) → không fail mù trong torch | R2.2, P8 |
+| **`cuda:xyz` (ordinal không phải số)** | `_parse_ordinal` → `CapabilityError` (device không hợp lệ) | R2.4 |
+| **`CapabilityError` nổi lên CLI** (Lỗ-D) | `main` bắt → stderr gọn + exit code≠0 (mẫu ConfigError); đường config = bulkhead cô lập, chạy tiếp pipeline kế | R2.2, R3.3 |
+| `is_available()`=True nhưng device_count=0 (ca lạ) | probe coi `has_cuda=False` (Lỗ-C: "khả dụng thật") → auto→cpu, không cuda-rồi-fail | R1.2 |
 
-- Nguyên tắc: **auto = êm (log rõ)**; **cuda tường minh = fail-fast (báo rõ)** — hai đường tách bạch, không nhập nhằng.
+- Nguyên tắc: **auto = êm (log rõ)**; **cuda tường minh = fail-fast (báo rõ, kể cả ordinal sai)** — hai đường tách bạch, không nhập nhằng. Lỗi phải RÕ ở tầng cao (CapabilityError), không fail mù sâu trong torch.
 
 ## Correctness Properties
 
@@ -186,6 +198,14 @@ Logic skip (hàm thuần nhận has_cuda): has_cuda=False → test `gpu` bị sk
 Không dùng "auto"/không ép cuda → hành vi + baseline 560/1 giữ; kernel không import torch/cv2; probe ở adapters; import-linter 5 kept/0 broken.
 **Validates: Requirements 3.3, 4.3, 5.1**
 
+### Property 8: fail-fast ordinal cuda:N vượt số GPU (fix Lỗ-A #282)
+`resolve_device("cuda:3", caps(has_cuda=True, cuda_device_count=1))` raise `CapabilityError` (báo dải hợp lệ cuda:0..cuda:0). `resolve_device("cuda:0", caps(count=1))` == "cuda:0". Ordinal không phải số → raise.
+**Validates: Requirements 2.2, 2.4**
+
+### Property 9: chuẩn hoá device về 1 dạng (fix Lỗ-B #282)
+`resolve_device("CUDA:0", caps(has_cuda=True, count=1))` == `"cuda:0"` (lower); `resolve_device("GPU", caps(has_cuda=True))` == `"cuda"`. Không trả dạng gốc hoa.
+**Validates: Requirements 2.1, 2.2**
+
 ## Testing Strategy
 
 - **resolve (P1,P2,P3,P5):** tiêm `MachineCapabilities` giả (has_cuda True/False) → assert auto→cuda/cpu; cuda-thiếu→CapabilityError (kiểm message có gợi ý); cpu→cpu; chuỗi lạ→raise. TẤT CẢ no-GPU.
@@ -193,6 +213,19 @@ Không dùng "auto"/không ép cuda → hành vi + baseline 560/1 giữ; kernel 
 - **gate test (P6):** tách hàm quyết-định-skip nhận `has_cuda` → test True/False; + 1 test đánh dấu `@pytest.mark.gpu` để xác nhận cơ chế skip chạy (trên máy no-CUDA test đó bị skip — đúng ý đồ).
 - **layer (P7):** lint `importlinter.api` 5 kept/0 broken; kiểm `kernel/capabilities.py` không import torch/cv2.
 - **Đối chiếu chuẩn (lúc code):** nếu torch cài được (máy GPU khác) → xác nhận probe khớp `torch.cuda.is_available()`; máy này (no-torch) → xác nhận nhánh ImportError. Ghi rõ [đã kiểm]/[chưa kiểm].
+
+## Review đối kháng vòng 2 (đọc-lại-valid #282 — trước khi code)
+Đối chiếu chính sách `resolve_device` với PHẦN CỨNG thật + adapter `yolov5_pt_detector.setup` → tìm 4 lỗ, fix ở
+tầng thiết kế TRƯỚC khi code:
+- **Lỗ-A (bản chất — vẫn fail mù):** chỉ kiểm `has_cuda` (bool) → `cuda:3` trên máy 1 GPU lọt resolve rồi fail
+  sâu trong torch. Fix: kiểm ORDINAL `cuda:N` vs `cuda_device_count` → CapabilityError báo dải hợp lệ. +P8.
+- **Lỗ-B (chuẩn hoá):** trả `requested` gốc ("CUDA:0") → adapter khớp chữ-thường không nhận. Fix: LUÔN trả dạng
+  lower ("cuda"/"cuda:0"/"cpu"). +P9.
+- **Lỗ-C (định nghĩa năng lực):** `has_cuda` = `is_available() AND device_count()>0` (chống ca is_available-True-count-0).
+- **Lỗ-D (UX/wire sản phẩm):** `CapabilityError` phải được CLI bắt → stderr gọn + exit code (mẫu ConfigError),
+  không traceback thô; đường config = bulkhead cô lập.
+> Bài học (củng cố K-065/K-067/K-068): "0 diagnostic" chứng nhận CẤU TRÚC, không chứng nhận tính-đúng-CHÍNH-SÁCH;
+> lỗ chỉ lộ khi đối chiếu POLICY với ràng buộc PHẦN CỨNG thật (số GPU) + adapter tiêu thụ thật (chuẩn hoá chữ).
 
 ## Doubt-driven review (tự phản biện — KHẮT KHE)
 - **Forces:** đổi-máy-không-ma-sát (auto) ⟂ không-chạy-sai-âm-thầm (log device thực + fail-fast cuda) ⟂ CI-xanh-mọi-máy

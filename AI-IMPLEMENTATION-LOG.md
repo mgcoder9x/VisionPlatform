@@ -5742,3 +5742,26 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Spec `metrics-exposition` (D-071, đã review #280) VẪN chờ code — parked, không bỏ.
 
 **Đã verify (máy k.nguyen.manh.toan):** `get_diagnostics` requirements.md + design.md = **No diagnostics found**; mọi tham chiếu code (`_det_pt` device chuỗi, `yolov5_pt_detector.setup`, `--device cpu`, KHÔNG có is_available trong src, `nvidia-smi` chỉ ở vp.cmd) đã đọc/grep file thật; `drift_check.py` chạy sau ghi sổ. · **Chưa verify:** hành vi probe/resolve/gate (CHƯA code — PHA1); torch API đối chiếu ở PHA2.
+
+### Entry #282 — 2026-07-10 — REVIEW đối kháng design `capability-aware-execution` → fix 4 lỗ THIẾT KẾ trước khi code — Kiro-Opus
+
+**Bối cảnh:** Trước PHA2 code (pattern đã thắng #271/#275/#280), tự phản biện design capability-aware-execution (D-072), đối chiếu chính sách `resolve_device` với PHẦN CỨNG thật + adapter `yolov5_pt_detector.setup`. CHƯA code (vẫn PHA1).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **Lỗ-A (bản chất — vẫn fail mù):** resolve chỉ kiểm `has_cuda` bool → `cuda:3` trên máy 1 GPU lọt resolve rồi fail sâu trong torch (đúng thứ spec muốn diệt). Fix: kiểm ORDINAL `cuda:N` vs `cuda_device_count` → CapabilityError báo dải hợp lệ (`_parse_ordinal` bắt non-số). +Property 8.
+- **Lỗ-B (chuẩn hoá):** resolve trả `requested` GỐC ("CUDA:0") → adapter chỉ khớp `dev in ("cuda","gpu")` chữ thường → "CUDA:0" lọt xuống yolov5.load không chắc nhận. Fix: LUÔN trả dạng lower ("cuda"/"cuda:0"/"cpu"). +Property 9.
+- **Lỗ-C (định nghĩa năng lực):** `has_cuda` = `is_available() AND device_count()>0` (chống ca lạ is_available-True-count-0 → auto→cuda rồi fail).
+- **Lỗ-D (UX/wire sản phẩm):** `CapabilityError` từ kernel phải được CLI/`main` BẮT → stderr gọn + exit code≠0 (mẫu `ConfigError`→`_validate_config_only`), không traceback thô; đường config-declarative = bulkhead cô lập (K-045), chạy tiếp pipeline kế.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (siết chính sách cho ĐÚNG + phơi-lỗi-sạch; chưa đụng code/yêu cầu).
+
+**3. Trade-off đã cân nhắc:**
+- Ordinal check: resolve kiểm N<count (fail-fast tầng cao) vs để torch tự fail → **kiểm ở resolve** (bản chất fail-fast của spec là bắt mismatch RỞ tầng cao, không mù trong torch). Vài dòng, không over-engineer.
+- Chuẩn hoá: trả lower vs giữ nguyên gốc → **lower** (1 dạng chuẩn duy nhất xuống adapter, chống case-mismatch).
+
+**4. Điều bạn nên biết:**
+- Vẫn CHƯA code (PHA1 design đã hardened 1 vòng). `get_diagnostics` design.md = No diagnostics (sau fix).
+- Bài học K-069: "0 diagnostic" chứng nhận CẤU TRÚC, không chứng nhận tính-đúng-CHÍNH-SÁCH; lỗ chỉ lộ khi đối chiếu policy với ràng buộc PHẦN CỨNG thật (số GPU) + adapter tiêu thụ thật (chuẩn hoá chữ).
+- 2 spec đã hardened chờ code: `metrics-exposition` (D-071, review #280) + `capability-aware-execution` (D-072, review #282).
+
+**Đã verify (máy k.nguyen.manh.toan):** `get_diagnostics` design.md = **No diagnostics found** (sau fix); đối chiếu adapter `yolov5_pt_detector.setup` thật (`dev in ("cuda","gpu")→"cuda:0"`) xác nhận Lỗ-B có thật; `drift_check.py` chạy sau ghi sổ. · **Chưa verify:** hành vi resolve/ordinal/normalize (CHƯA code — PHA2); torch device_count đối chiếu máy GPU (máy này no-torch).

@@ -1,7 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T11:45:00+07:00.
+**Cập nhật lúc:** 2026-07-10T12:30:00+07:00.
+**[🔵 #282 — REVIEW đối kháng design `capability-aware-execution` → fix 4 lỗ THIẾT KẾ trước khi code — máy `k.nguyen.manh.toan`]**
+- **Áp pattern #271/#275/#280** (đọc-lại-valid TRƯỚC code): đối chiếu chính sách `resolve_device` với PHẦN CỨNG thật + adapter `yolov5_pt_detector.setup`. Tìm 4 lỗ:
+- **Lỗ-A (bản chất):** chỉ kiểm `has_cuda` bool → `cuda:3` máy 1-GPU lọt resolve rồi fail mù torch. Fix: kiểm ORDINAL cuda:N vs `cuda_device_count` → CapabilityError. +P8.
+- **Lỗ-B:** trả device gốc "CUDA:0" ≠ adapter khớp chữ-thường → chuẩn hoá về lower 1 dạng. +P9.
+- **Lỗ-C:** `has_cuda` = `is_available() AND device_count()>0` (chống is_available-True-count-0).
+- **Lỗ-D (UX):** CLI bắt `CapabilityError` → stderr gọn + exit code (mẫu ConfigError); đường config = bulkhead cô lập.
+- **Verify:** `get_diagnostics` design.md = No diagnostics (sau fix). Ghi sổ: LOG #282 · +K-069 · INDEX #282/tổng 188 (D72·C20·T27·K69). Drift-check cuối = PASS.
+- **VẪN CHƯA code** (PHA1 đã hardened 1 vòng). **Bước kế (CHỜ user chọn):** vào PHA2 code TDD 1 trong 2 spec đã-hardened — (a) `capability-aware-execution` (D-072, review #282): DTO+resolve_device @kernel + probe @adapters + wire pt `auto` + conftest gpu-marker + 9 Property; (b) `metrics-exposition` (D-071, review #280): renderer Prometheus + iter_metrics + 11 Property. Cả hai no-GPU, kỳ vọng >560·5/0. Hoặc đổi hướng.
+---
 **[🔵 #281 — Mở spec `capability-aware-execution` (PHA1 design-first) — xử lý BẢN CHẤT đổi-máy-GPU↔không-GPU (tái diễn) — máy `k.nguyen.manh.toan`]**
 - **User nêu vấn đề tái diễn:** đổi máy giữa có-GPU và không-GPU (kể cả không CUDA) là ma sát lặp lại, "rất nhiều". Đọc code thật: `device` là chuỗi thủ công; KHÔNG có `torch.cuda.is_available()` nào trong `src` → ép `device=cuda` máy không-CUDA = fail runtime khó hiểu / chạy CPU tưởng GPU (mismatch NGẦM).
 - **Nguyên tắc gốc (không fix ngọn từng `--device`):** năng-lực máy = khái niệm HẠNG NHẤT: DÒ → DTO tường minh → mọi quyết-định tra 1 nguồn; 3 hành vi sạch: **auto** (chọn tốt-nhất-sẵn-có) / **fail-fast** (`cuda` tường-minh thiếu → báo rõ) / **skip êm** (test GPU trên máy không-GPU).

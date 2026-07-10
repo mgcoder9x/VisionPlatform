@@ -709,3 +709,12 @@ Evidence: design #279 (0-diagnostic) vẫn có 2 lỗ: (A) `InMemoryMetrics._cou
 Đóng khi: (bài học — luôn áp dụng)
 Nội dung: Review đối kháng design metrics-exposition tìm 2 lỗ tính-đúng: (A) xung đột name↔type → renderer raise ValueError (fail-fast, hàm thuần); (B) fmt_value guard inf/nan → `+Inf`/`-Inf`/`NaN`, số hữu hạn `repr(float)`. +Property 10/11.
 Vì sao ghi (bài học vận hành): củng cố K-065/K-067 — "0 diagnostic" chứng nhận CẤU TRÚC, KHÔNG chứng nhận tính-ĐÚNG output-chuẩn. 2 lỗ chỉ lộ khi TRACE ngữ nghĩa LƯU TRỮ thật (2 dict cùng key) + biên giá trị (inf/nan), không lộ khi đọc mô tả xuôi. Nguyên tắc: review adapter phơi-chuẩn phải kiểm cả (a) nguồn dữ liệu có thể sinh trạng thái bất hợp lệ nào + (b) biên giá trị đặc biệt map ra chuẩn ra sao.
+
+### K-069 — ✅ (2026-07-10) BÀI HỌC (củng cố K-065/K-067/K-068): review đối chiếu CHÍNH SÁCH với ràng buộc PHẦN CỨNG/ADAPTER thật lộ lỗ mà 0-diagnostic không bắt
+Status: ✅ (đã fix 4 lỗ design capability-aware-execution trước khi code)
+Scope: quy trình design-first · `.kiro/specs/capability-aware-execution/design.md` · LOG Entry #282
+Nguồn: LOG Entry #282
+Evidence: design #281 (0-diag) vẫn 4 lỗ: (A) resolve chỉ kiểm has_cuda bool → cuda:3 máy 1-GPU lọt rồi fail mù torch; (B) trả device gốc "CUDA:0" ≠ chữ-thường adapter khớp; (C) has_cuda chưa gồm device_count>0; (D) CapabilityError chưa phơi sạch ở CLI. Lộ khi đối chiếu policy với số-GPU thật + adapter `yolov5_pt_detector.setup` thật.
+Đóng khi: (bài học — luôn áp dụng)
+Nội dung: Review capability-aware-execution tìm 4 lỗ tính-đúng-chính-sách: (A) kiểm ordinal cuda:N vs cuda_device_count→fail-fast; (B) chuẩn hoá device về lower 1 dạng; (C) has_cuda = is_available AND count>0; (D) CLI bắt CapabilityError→stderr gọn+exit code (mẫu ConfigError). +Property 8/9.
+Vì sao ghi (bài học vận hành): củng cố K-065/K-067/K-068 — "0 diagnostic" chứng nhận CẤU TRÚC, KHÔNG chứng nhận tính-đúng-CHÍNH-SÁCH. Lỗ chỉ lộ khi đối chiếu POLICY (resolve_device) với (a) ràng buộc PHẦN CỨNG thật (số GPU hữu hạn) + (b) hợp đồng ADAPTER tiêu thụ thật (chuẩn hoá chữ). Nguyên tắc: review chính-sách phải trace tới đầu-vào-thực-tế (hardware) + đầu-ra-tiêu-thụ (adapter), không chỉ đọc policy cô lập.
