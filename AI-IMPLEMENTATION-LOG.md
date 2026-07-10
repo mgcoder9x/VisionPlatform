@@ -5980,3 +5980,22 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Không chốt được tên test flaky lần này (run xanh); pattern = supervisor/step_09 timing dưới tải (K-027/K-035).
 
 **Đã verify (máy k.nguyen.manh.toan):** `pytest test_capability.py` 14 passed/1 skipped; `--capabilities` chạy thật in JSON đúng; `vp verify` EXIT 0; full `pytest -q` 601/2 (run xanh). · **Chưa verify / TRUNG THỰC:** K-035 KHÔNG đóng tuyệt đối (flaky ~2/5 full-run tải cực đại — cần máy mạnh/CI để đo/đóng tiếp); tên test flaky chưa chốt (run xanh).
+
+### Entry #293 — 2026-07-10 — MỐC SẠCH: củng cố bộ nhớ + refresh `progress.md` (sửa drift bản ghi cũ) — Kiro-Opus
+
+**Bối cảnh:** §0 đúng (git clean, HEAD=origin 93fa56e). Sau chuỗi tính năng no-GPU trọn (#256-#292), các hướng lớn còn lại đều CHẶN điều kiện (GPU/DB/runtime-song-song/máy-mạnh-cho-K035) → làm tiếp = speculative/nửa vời. Chọn CHỐT MỐC SẠCH + củng cố "chân lý hiện tại" (§2.5) thay vì thêm feature speculative.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **KHÔNG implement `startup_grace_s` để đóng K-035 residual** dù đã suy ra root khả dĩ (startup-vs-steady-state trong hang-test): vì residual CHỈ xuất hiện dưới tải full-suite cực đại, KHÔNG tái hiện isolated (5/5 ổn định) → không verify được fix isolated → vá = speculative trên code production. Đúng nguyên tắc "không kiểm được + quan trọng → DỪNG, không đoán liều". Residual = bản chất môi-trường, đo/đóng cần máy mạnh/CI.
+- **Refresh `progress.md`** (đã DRIFT: dừng ~#233/#253 — baseline 369/436/465 cũ, "RULES_VERSION 14", "git on-hold 403/43-commit-chưa-push" SAI vì giờ push đều, thiếu toàn bộ #256-#292). Viết lại TÓM GỌN (không chồng bản cũ — §2.5): mốc 601/2·5/0·RULES 15, liệt kê no-GPU đã-xong (analytics/observability/capability/hạ-tầng/test-stability) + Còn-lại-CHẶN-điều-kiện (trung thực).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** sửa drift bản ghi progress.md (git-status cũ SAI, version/baseline cũ) cho khớp thực tế. Không đổi code.
+
+**3. Trade-off đã cân nhắc:** thêm feature (config-metrics/startup_grace/DB) vs chốt-mốc-sạch → chốt mốc (các feature còn lại chặn-điều-kiện hoặc speculative; thêm = drift khỏi giá-trị-thật). Đúng "fix gốc không vá ngọn" + "không over-engineer".
+
+**4. Điều bạn nên biết:**
+- Mốc no-GPU: chuỗi observability TRỌN (đo→render→serve /metrics) + analytics đầy đủ trục + capability-aware + CI + anti-drift journal/drift-check. Baseline 601/2·lint 5/0·drift PASS·RULES 15.
+- Còn lại đều CHẶN: K-035-tuyệt-đối (máy mạnh/CI) · GPU/CUDA/RTSP/benchmark (máy GPU) · DB sink (DB server) · config-metrics (runtime song song). Đã ghi rõ trong progress.md.
+- Không có việc dở giữa chừng — điểm dừng an toàn để user quyết hướng.
+
+**Đã verify (máy k.nguyen.manh.toan):** `drift_check.py` PASS (#293, Σ199, RULES_VERSION 15 khớp 4 mirror) — chạy thật, đọc output; baseline 601/2·5/0 từ #292 (vp verify EXIT 0). progress.md refresh khớp activeContext + INDEX. · **Chưa verify (trung thực):** K-035 tuyệt-đối/GPU/DB/parallel — chặn điều kiện, đã nêu.

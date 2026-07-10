@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T20:45:00+07:00.
+**Cập nhật lúc:** 2026-07-10T21:30:00+07:00.
+**[✅ #293 — MỐC SẠCH: củng cố bộ nhớ + refresh `progress.md` (sửa drift bản ghi cũ) — máy `k.nguyen.manh.toan`]**
+- §0 đúng: git clean, HEAD=origin. Sau chuỗi no-GPU trọn (#256-#292), hướng lớn còn lại đều CHẶN điều kiện (GPU/DB/runtime-song-song/máy-mạnh-cho-K035) → chốt MỐC SẠCH thay vì thêm feature speculative.
+- **KHÔNG vá `startup_grace_s`** dù suy ra root khả dĩ của K-035 residual — vì residual KHÔNG tái hiện isolated (5/5 ổn định), chỉ dưới tải full-suite cực đại → không verify được fix → vá = speculative. Đúng "không kiểm được + quan trọng → DỪNG".
+- **Refresh `progress.md`** (đã DRIFT: baseline 369/436/465 cũ, "RULES 14", "git on-hold 403/43-commit-chưa-push" SAI, thiếu #256-#292) → viết lại TÓM GỌN (§2.5, không chồng bản cũ): mốc 601/2·5/0·RULES 15·push-đều; no-GPU đã-xong (analytics/observability-trọn/capability/hạ-tầng/test-stability); Còn-lại-CHẶN-điều-kiện trung thực.
+- **Verify:** `drift_check.py` PASS (#293, Σ199, RULES 15). Ghi sổ: LOG #293 (memory hygiene, không +D/C/T/K) · INDEX #293. progress.md khớp activeContext+INDEX.
+- **Mốc no-GPU thương mại (chân lý):** hexagonal 6-layer + analytics chuỗi + observability TRỌN (đo→render→serve /metrics + --observe/--metrics-port/--capabilities) + capability-aware + CI + anti-drift journal/drift-check. Baseline **601/2 · lint 5/0 · drift PASS · RULES 15**.
+- **Bước kế (điểm dừng an toàn — chờ user):** (a) khi có **máy GPU**: verify nhánh CUDA + tune motion-gate-roi RTSP + benchmark + đo/đóng K-035 tuyệt đối · (b) khi có **DB server**: server-DB sink · (c) khi runtime **song song**: config-path metrics · (d) tiếp hướng no-GPU khác nếu user chỉ định. KHÔNG có việc dở giữa chừng.
+---
 **[✅ #292 — Lệnh operator `--capabilities` + SỬA TRUNG THỰC tuyên bố K-035 — máy `k.nguyen.manh.toan`, verify 601/2 (run xanh)]**
 - §0 đúng: git clean, HEAD=origin. Cân nhắc config-path metrics NHƯNG `_run_from_config` TUẦN TỰ (T-015) → /metrics giá trị hạn chế → HOÃN (tránh over-engineer). Chọn follow-on nhỏ giá-trị-thật.
 - **`--capabilities`** (`vision_slice_app`): dò+in JSON năng lực máy (has_torch/has_cuda/cuda_device_count/gpu_name/has_cv2) rồi thoát rc0 — operator kiểm máy TRƯỚC deploy (pain đổi-máy GPU/không-GPU). Chạy thật: `{"has_torch":false,"has_cuda":false,"cuda_device_count":0,"gpu_name":null,"has_cv2":true}` (khớp máy).

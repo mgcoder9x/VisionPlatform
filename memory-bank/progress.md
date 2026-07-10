@@ -1,25 +1,27 @@
 # progress.md — Xong gì / còn gì / bug (cập nhật mỗi phiên = chân lý hiện tại)
 
-## Đã xong
-- **[2026-07-08 máy `toann`] 🎯 Spec `backpressure-cross-process` HOÀN TẤT (Wave 1–5, đóng K-040 A2+A3):** Metric_DTO kernel (`backpressure_metrics.py`) + `ZmqInferenceClient` set HWM-trước-connect (A3) + đường async `submit()/poll_responses()/metrics_snapshot()` flow-control (đếm submitted-lúc-gửi K-051) + `FakeDetector.delay_s` + `PushFrameSource` + `camera_worker` async submit+drain+hạch toán backpressure 2-tầng (SHM ring ⊥ client-window, K-053) + guard cấm BLOCK+RTSP (R3, hàm thuần) + test overload cross-process assert bất biến bảo toàn. **Verify THẬT máy `toann` (venv py3.13.12): 465 passed/1 skipped · lint 5/0** (3 lần full sạch; 1 flake tạm K-035 shutdown = không hồi quy). ADDITIVE (infer() sync + 5 test cross-process cũ không đổi). Journal D-048..051/C-018..019/T-018..021/K-050..053. (Chi tiết per-turn: `activeContext.md`.)
-- **[2026-07-06] ✅ Sub-spec media-ref-port** (đóng seam K-038 phần 1): `kernel/media_ref.py::IMediaRef` (Protocol) + nới `MediaPacket.media_ref: IMediaRef`; InMemoryArrayRef không sửa. Verify THẬT **369 passed/1 skipped · lint 5/0**. (Chi tiết mới nhất xem `activeContext.md` — chân lý per-turn.)
-- Hệ điều hành học (Phase 0+1): luật 4 tool, skill, log (ở root), bộ nhớ, bản đồ học, **knowledge-base** (kiến thức tái dùng), hook chốt phiên.
-- Gia cố: PLAN-FIRST, Feynman gate, drift-check, RULES_VERSION **14** + `tests/test_rules_sync.py` (PASS #209), spec-kit templates ở `specs/`, lesson templates.
-- **Module 03 (vision-platform) TRIỂN KHAI XONG trên Windows:** hexagonal 6 layer + import-linter **5 contract** cưỡng chế + Stage pipeline + SHM/ZMQ/switchover/supervisor + real-detector (transform/nms/onnx/yolo) + sources (rtsp/video/noise) + web UI + IMediaRef port. Baseline **369 passed/1 skipped · lint 5/0** (verify thật #209). code-lessons #01–#10 (+05b/06b/09b) đủ mẩu.
-- **Phương pháp dạy PATTERN** (rút từ `pattern-study/`, gom trong `knowledge-base/_pattern-method/`): `00-PATTERN-METHOD.md` (5 cấp+4 bước), `_TEMPLATE-pattern.md` (POSA), `00-TAXONOMY.md`, `_TEMPLATE-quiz.md` + luật AGENTS §1.6 + bản portable trong kit.
-- ✅ Đã verify cấu trúc đầy đủ + linter → **SẴN SÀNG hoạt động**.
+> **Mốc hiện tại (2026-07-10, máy `k.nguyen.manh.toan`, LOG #293):** baseline **601 passed/2 skipped · lint 5 kept/0 broken · drift-check PASS · RULES_VERSION 15**. Nhánh `chore/dev-env-launcher-portable-hooks` push đều mỗi lượt (git HOẠT ĐỘNG — K-007 cũ đã hết on-hold). Chi tiết per-turn: `activeContext.md`; quyết định: `ai-decision-journal/`.
+
+## Đã xong (mốc no-GPU thương mại — verify THẬT)
+- **Nền tảng kiến trúc:** hexagonal 6 layer + import-linter **5 contract** cưỡng chế (5 kept/0 broken). SHM ring/epoch-switchover/supervisor-liveness/ZMQ inference/backpressure-cross-process (đóng K-040 A2+A3) + real-detector (transform/nms/onnx/yolo) + sources (rtsp/video/noise/fake) + web UI + `IMediaRef` port + `PipelineRunner`/Stage/`ISink`.
+- **Analytics no-GPU (chuỗi nghiệp vụ, deploy-by-config):** object-tracking-count (IoU-greedy, D-059) → line-crossing-count (D-060) → crossing-event-log JSONL (D-061) → config-declarative analytics (D-062) → crossing-event-sqlite-sink (D-063) → motion-gate (D-064/065) → motion-gate-roi (ROI+bền-illumination, D-066/067). Chuỗi: source→[motion_gate ROI+illum]→detect→track→line_crossing→count; sink JSONL/SQLite.
+- **Observability (chuỗi TRỌN no-GPU):** đo (`MetricsObserver`→`InMemoryMetrics`, D-069) → wire CLI `--observe` (D-069) + config `--observe` (D-070) → render Prometheus text (`render_prometheus`+`iter_metrics` không-lossy, D-074) → **serve `/metrics` HTTP** (`MetricsHttpExporter`, secure-default localhost, D-079). Live per-camera fps/skip_rate/errors.
+- **Capability-aware (đổi máy GPU/không-GPU):** `MachineCapabilities`+`resolve_device`(auto/fail-fast-cuda/ordinal) @kernel + `probe_capabilities` @adapters + gate test `@pytest.mark.gpu` + lệnh operator `--capabilities` (D-072/073/080).
+- **Hạ tầng dev/CI/anti-drift:** dev-env launcher `scripts/vp.cmd` cross-machine (D-057) + CI `verify.yml` (D-058) + **`ai-decision-journal/` 4 file (D/C/T/K) + `tests/drift_check.py` (memory consistency + RULES_VERSION sync) + hook agentStop tự chạy** (D-052/053/056) — cơ chế chống-drift máy-kiểm.
+- **test-stability-hardening (D-077):** viết lại test cross-process EVENT-DRIVEN (`wait_until` an-toàn-ngoại-lệ + `Supervisor.request_stop()` additive + timeout thực tế) → giảm-thiểu MẠNH flaky K-035 (5/5 ổn định isolated + vp verify xanh).
 
 ## Đang làm
-- **[2026-07-07 máy `k.nguyen.manh.toan`] ĐỔI MÁY + rebuild venv + re-verify:** working tree sync sang desktop mới (py3.11.9). `.venv` cũ (trỏ máy `endgame`/toann) hỏng → rebuild `py -3.11 -m venv` + `.[dev,onnx,cv2,web]` (KHÔNG pt). **Verify THẬT: `pytest -q`=436 passed/1 skipped · import-linter=5 kept/0 broken** — khớp #232/#233 dù đổi py 3.13→3.11. Fix K-044: gọi lint programmatic phải `import importlinter.api` trước (il 2.13 KeyError USER_OPTION_READERS nếu thiếu). Con trỏ đã đồng bộ #233 (torch CPU-only ở endgame; máy này chưa có torch). (Chi tiết per-turn: `activeContext.md`.)
-- **[2026-07-06 máy `endgame`] config-declarative + 2 lỗ review ĐÓNG:** D-042/D-043 (schema+loader+factory+wire+validate, đóng K-040 C2) ✅; **D-044 bulkhead per-pipeline (đóng K-045)** ✅; **D-045 strict-key params (đóng K-046)** ✅. Baseline verify THẬT máy `endgame` (scoop py3.13.12): **427 passed/1 skipped · lint 5/0** (LOG #230). Venv dựng lại (K-047 đóng). Sổ `ai-decision-journal/` đủ (123 entry). (Chi tiết per-turn: `activeContext.md`.)
-- **🔴 Còn nợ:** R3 guard cấm BLOCK+RTSP CHƯA wire end-to-end (config chưa mang policy per-source — D-050/T-021) · POSIX chưa verify (test cross-process guard win32) · K-035 shutdown flaky dưới tải · GPU end-to-end (pt/cuda/rtsp, máy no-GPU) · git on-hold K-007 · secret rotate K-031 · hướng scale còn (K-040 A1 batching/C1 metrics, K-041 benchmark).
+- (không có việc dở giữa chừng) — vừa chốt mốc sạch #293. Chờ user chọn hướng kế.
 
-## Còn lại (theo lộ trình)
-- **Nghiệp vụ (chờ user):** ALPR (biển+OCR) / tracking / face / storage / security — chưa bắt đầu (user chốt để sau).
-- **Khi có nghiệp vụ đầu tiên:** lấy `pipeline-runner` (design sẵn) ra code; cân nhắc ShmMediaRef (Stage chạy thật trên SHM) + bộ Stage vision + ports ITracker/IOcr/IEventSink (Gap-2 K-037).
-- **🔴 cần môi trường khác (không verify được trên Windows):** ARM (K-001) · POSIX teardown (K-003) · SLA threshold (K-004) · AccessDenied cross-priv (K-005) · throughput tải thật (K-014).
+## Còn lại — CHẶN bởi điều kiện (trung thực, KHÔNG làm speculative)
+- **🔴 K-035 flaky residual:** supervisor/step_09 flaky RẤT HIẾM (~2/5 full-run 80s+ dưới tải CỰC ĐẠI máy yếu) — event-driven đã diệt race THIẾT KẾ (5/5 isolated), residual là bản chất môi-trường. **Đo + đóng tuyệt đối cần máy mạnh/CI** (không bump-timeout che; startup_grace không verify được isolated nên chưa vá — D-080/#292).
+- **🔴 GPU/CUDA (máy không GPU + không CUDA):** nhánh `Yolov5PtDetector` device cuda · tune ngưỡng motion-gate-roi trên RTSP thật · node-capacity-benchmark (K-040 A1/R6.1) · verify `probe_capabilities` nhánh có-CUDA. Cần máy GPU.
+- **🔴 server-DB sink (Postgres nhiều-cam):** cần DB server để verify thật (SQLite đã có, no-GPU).
+- **🔴 config-path metrics/observability đa-cam:** `_run_from_config` TUẦN TỰ (T-015) → /metrics giá trị hạn chế tới khi runtime SONG SONG/async (việc scale tương lai, cần GPU + benchmark).
+- **🔴 môi trường khác:** ARM atomicity (K-001) · POSIX teardown/liveness (K-003) · SLA threshold (K-004) · tải thật (K-014).
+- **⚠️ bảo mật:** URL `origin` nhúng GitHub PAT plaintext (K-031/#256) → user NÊN rotate + dùng credential manager. Secret production trong config syn (K-031) → user nên rotate.
 
 ## Bug / nợ đã biết
-- **🔴 vận hành:** git on-hold + push 403 (K-007) → 43 commit chưa push + 82 working-tree chưa commit = CHƯA BACKUP. **🔴 bảo mật:** secret production lộ trong config syn (K-031) → user nên rotate.
-- Validate kiến thức là best-effort (không chống 100% hallucination); chỉ code validate khách quan bằng test.
-- Nợ kiến trúc (không phải bug): 4 profile trùng vòng lặp (đóng bởi pipeline-runner khi cần); artifacts stringly-typed (Gap-5 K-037).
+- K-035 residual (xem trên) — mitigated, chưa đóng tuyệt đối.
+- Validate kiến thức = best-effort (không chống 100% hallucination); chỉ CODE validate khách quan bằng test chạy thật.
+- Nợ kiến trúc (không phải bug): artifacts stringly-typed (Gap-5 K-037); 4 profile trùng vòng lặp (đóng dần bởi PipelineRunner).
