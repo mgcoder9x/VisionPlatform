@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T17:30:00+07:00.
+**Cập nhật lúc:** 2026-07-10T18:15:00+07:00.
+**[🔵 #289 — Mở spec `metrics-http-endpoint` (PHA1 design-first) — phục vụ /metrics Prometheus scrape (no-GPU) — máy `k.nguyen.manh.toan`]**
+- Sau #284 render được Prometheus text nhưng CHƯA phục vụ ra ngoài → Prometheus không kéo được. Exporter HTTP `/metrics` = mảnh khoá cuối hoàn tất chuỗi observability→metrics→exposition→**scrape**.
+- **Thiết kế:** `MetricsHttpExporter(provider, host="127.0.0.1", port=0)` @adapters (http.server ThreadingHTTPServer stdlib, daemon thread NON-BLOCKING, handler `/metrics`→200 `render_prometheus(provider())` /404 /500-không-sập, start()/stop()). Nhận `provider: ()->Iterable[MetricSample]` TIÊM → adapters KHÔNG import runtime (leaf giữ) + test provider giả no-GPU. **Secure-by-default: BIND 127.0.0.1**; 0.0.0.0=opt-in+LOG cảnh báo "không auth, chỉ mạng nội bộ" (T-028). zero-dep. port=0→ephemeral (test urllib).
+- **Verify:** `get_diagnostics` 2 file spec = No diagnostics. Ghi sổ: LOG #289 · +D-078 (🔵) +T-028 · INDEX #289/tổng 196 (D78·C20·T28·K70). Drift PASS.
+- **CHƯA code** (PHA1). ⚠️ An ninh: endpoint mạng — mặc định localhost an toàn; scrape mạng chỉ nội bộ tin cậy (không auth); Internet công cộng cần reverse-proxy auth/TLS (Non-Goal, đã cảnh báo). **Bước kế (CHỜ user valid):** review đối kháng design (như #280/#282/#287) HOẶC PHA2 code TDD (`MetricsHttpExporter` + wire `--metrics-port` + test ephemeral-port urllib GET; kỳ vọng >591·5/0). Hoặc: server-DB sink · khi có GPU verify CUDA · dừng mốc sạch.
+- **Sản phẩm no-GPU phiên này:** capability-aware(#283) + metrics-exposition(#284) + CI-tin-cậy/K-035-đóng(#288) + metrics-http design(#289). Nền tảng vững.
+---
 **[✅ #288 — PHA2 CODE TDD `test-stability-hardening` HOÀN TẤT — ĐÓNG K-035 flaky (event-driven, test-only) — máy `k.nguyen.manh.toan`, verify 5/5 ổn định + full 591/2]**
 - §0 đúng: `git status` clean, HEAD=origin. Hiện thực design hardened 2 vòng (#286 hợp nhất + #287 review).
 - **Code (additive, test-only — KHÔNG đổi supervisor production):** `Supervisor.request_stop()` public (set cờ bool thread-safe) · `tests/_wait_helpers.py` (`wait_until` AN-TOÀN-NGOẠI-LỆ + `log_text`/`log_line_count`) · pyproject marker `slow` · viết-lại `test_step_09_shutdown.py`(6) + `test_supervisor_liveness.py`(3 cross-process) EVENT-DRIVEN (thread + wait_until(tiến-độ) + request_stop) + assert PROPERTY thay rate + `heartbeat_timeout_s` THỰC TẾ 2.0s thay 0.5s · `tests/test_wait_helpers.py`(7 test P8).

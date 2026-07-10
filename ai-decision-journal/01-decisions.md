@@ -898,3 +898,12 @@ Evidence: `pytest test_wait_helpers.py` 7 passed; **chạy LẶP 5 lần** 2 fil
 Links: D-076 (design hợp nhất), K-070 (wait_until an-toàn-ngoại-lệ), K-035 (đóng), K-020/K-021 (liveness)
 Nội dung: Fix TEST-ONLY (KHÔNG đổi semantics supervisor production — chỉ +request_stop additive). Chạy `run()` trong THREAD → `wait_until(tiến-độ quan sát được)` → `request_stop()` → join → assert PROPERTY (sống-sót/cleanup/restart-count) thay rate/timing tuyệt đối. heartbeat-ok timeout THỰC TẾ 2.0s (margin>>nhịp 0.05s) thay 0.5s → hết false-hang startup. wait_until an-toàn-ngoại-lệ (predicate đọc log chưa-tạo = "chưa thoả"). marker `slow` (giữ phủ, không skip). startup_grace defer YAGNI.
 Vì sao: flaky K-035 xói mòn niềm tin CI. Fix bản chất = event-driven diệt RACE (không giả định tốc-độ-máy) + timeout thực tế + assert property; KHÔNG bump-bừa/skip/retry (fix ngọn/che). Bằng chứng 5/5 ổn định. Giới hạn trung thực: không chứng minh 0-flake máy tải vô hạn.
+
+### D-078 — 2026-07-10 — Mở spec `metrics-http-endpoint` (PHA1 design-first) — phục vụ /metrics Prometheus scrape (no-GPU)
+Status: 🔵 design-only (0 diagnostic 2 file — CHƯA code, chờ user valid)
+Scope: `.kiro/specs/metrics-http-endpoint/{requirements,design}.md` (`MetricsHttpExporter` @adapters — chưa hiện thực)
+Nguồn: LOG Entry #289 · hoàn tất chuỗi observability→metrics-exposition(#284)→scrape
+Evidence: `get_diagnostics` 2 file = No diagnostics found; bám code thật (render_prometheus/iter_metrics/MetricSample/adapters-leaf/http.server stdlib)
+Links: D-074 (render_prometheus), D-069/D-070 (observability), K-019 (bounded), T-028, K-031 (secret cẩn trọng)
+Nội dung: Exporter HTTP `/metrics` @adapters (http.server ThreadingHTTPServer + daemon thread non-blocking + handler 200 render_prometheus(provider())/404/500) nhận `provider: ()->Iterable[MetricSample]` TIÊM (adapters không import runtime → leaf giữ; test provider giả no-GPU). An toàn: default BIND 127.0.0.1 (localhost); 0.0.0.0=opt-in+cảnh báo không-auth. zero-dep stdlib. port=0→ephemeral (test). Additive (render/InMemoryMetrics giữ nguyên). Auth/TLS + push-gateway + framework nặng = Non-Goal.
+Vì sao: #284 render được nhưng chưa PHỤC VỤ → Prometheus không kéo → dashboard/cảnh báo chưa dùng được thật. Exporter = mảnh khoá cuối. provider callable giữ hexagonal (adapters leaf). Secure-by-default (localhost) chống vô tình phơi metrics ra mạng. Kiểm-chứng no-GPU (ephemeral port + urllib GET).

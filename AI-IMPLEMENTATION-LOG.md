@@ -5900,3 +5900,25 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Production supervisor KHÔNG đổi (chỉ +request_stop additive) → `startup_grace_s` vẫn defer YAGNI.
 
 **Đã verify (máy k.nguyen.manh.toan, py3.11.9):** `git status` clean; `pytest test_wait_helpers.py` 7 passed; **5/5 lần** 2 file flaky = 10 passed ổn định; `vp verify` EXIT 0 (test+lint+drift PASS); full `pytest -q` 591/2. · **Chưa verify:** 0-flake trên máy tải vô hạn (bất khả — nêu giới hạn); nhánh POSIX (giữ win32 skipif).
+
+### Entry #289 — 2026-07-10 — Mở spec `metrics-http-endpoint` (PHA1 design-first) — phục vụ /metrics cho Prometheus scrape (no-GPU) — Kiro-Opus
+
+**Bối cảnh:** §0 đúng (drift hook #288 xác nhận clean). Sau #284 render được Prometheus text nhưng CHƯA phục vụ ra ngoài → Prometheus không kéo được. Mở spec exporter HTTP `/metrics` hoàn tất chuỗi observability→scrape. CHỈ design (PHA1), CHƯA code.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- `MetricsHttpExporter(provider, host="127.0.0.1", port=0)` @adapters (http.server ThreadingHTTPServer + handler /metrics→200 render_prometheus(provider())/404/500 + daemon start()/stop()). Nhận **provider callable tiêm** (`()->Iterable[MetricSample]`) → adapters KHÔNG import runtime (leaf giữ) + test bằng provider giả no-GPU.
+- **An toàn (chủ động nêu):** `/metrics` chuẩn Prometheus KHÔNG auth → **default BIND 127.0.0.1 (localhost)**; bind 0.0.0.0 (scrape mạng) = OPT-IN + LOG cảnh báo "không auth, chỉ mạng nội bộ". KHÔNG bao giờ mặc định phơi mạng.
+- Non-blocking (daemon thread serve_forever) + handler lỗi→500 không sập server. zero-dep (http.server stdlib). port=0→ephemeral (test).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (spec mới thuần thêm; render/InMemoryMetrics giữ nguyên).
+
+**3. Trade-off đã cân nhắc (→ T-028):**
+- **bind default localhost vs 0.0.0.0** → localhost (an toàn mặc định — không vô tình phơi metrics ra mạng; 0.0.0.0 opt-in+cảnh báo). Đây là "secure-by-default".
+- http.server stdlib vs Flask/aiohttp → stdlib (zero-dep, đủ 1 endpoint; prometheus_client cũng http.server). Auth/TLS = sub-spec (không mặc định — scrape thường nội bộ, tránh over-engineer).
+
+**4. Điều bạn nên biết:**
+- CHƯA code (PHA1 design-first, chờ user valid). `get_diagnostics` 2 file = No diagnostics.
+- ⚠️ An ninh: exporter tạo endpoint MẠNG. Mặc định localhost an toàn; nếu vận hành scrape qua mạng → chỉ mạng nội bộ tin cậy (endpoint không auth); qua Internet công cộng cần reverse-proxy auth/TLS (ngoài phạm vi, đã cảnh báo trong spec).
+- Khẳng định http.server API + Content-Type 0.0.4 = độ-chắc-chắn CAO (stdlib+chuẩn); đối chiếu docs lúc code.
+
+**Đã verify (máy k.nguyen.manh.toan):** `get_diagnostics` requirements.md + design.md = **No diagnostics found**; tham chiếu (render_prometheus/iter_metrics/MetricSample/adapters-leaf) đã đọc code thật; `drift_check.py` chạy sau ghi sổ. · **Chưa verify:** hành vi exporter (CHƯA code — PHA2); http.server đối chiếu docs lúc code.

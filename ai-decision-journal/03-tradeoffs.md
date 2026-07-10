@@ -278,3 +278,10 @@ Bối cảnh: spec `capability-aware-execution` (D-072) — thêm `device="auto"
 - **Phương án B (bác) — default "auto":** tiện hơn (đổi máy không cần sửa) NHƯNG đổi HÀNH VI NGẦM: config/lệnh cũ mặc định "cpu" bỗng chạy GPU nếu máy có → bất ngờ (khác kết quả, khác tải, khác số). Thay đổi ngầm = rủi ro.
 - **Vì sao A (bản chất):** nguyên tắc "không đổi hành vi ngầm khi nâng cấp"; auto là NĂNG LỰC MỚI (opt-in) không phải đổi mặc-định. Cái mất: user phải gõ `device=auto` để hưởng tiện ích (chấp nhận — tường minh > ngầm).
 - Kèm quyết định con: `cuda` TƯỜNG MINH thiếu CUDA = **fail-fast** (báo rõ) ⟂ `auto` = **fallback êm + log** — 2 ý định khác nhau, 2 đường khác nhau (chống "chạy CPU mà tưởng GPU").
+
+### T-028 — 2026-07-10 — Exporter /metrics: bind default localhost (secure) vs 0.0.0.0 (tiện scrape mạng) + http.server stdlib vs framework
+Bối cảnh: spec `metrics-http-endpoint` (D-078) — endpoint HTTP phơi metrics; `/metrics` chuẩn Prometheus KHÔNG auth.
+- **Bind default: `127.0.0.1` (CHỌN) vs `0.0.0.0`** → **localhost** (secure-by-default: không vô tình phơi metrics/thông-tin-vận-hành ra mạng). Bind 0.0.0.0 (cho Prometheus scrape qua mạng nội bộ) = OPT-IN tường minh + LOG cảnh báo "không auth, chỉ mạng nội bộ tin cậy". Cái mất: phải khai thêm cờ khi scrape mạng — chấp nhận (an toàn > tiện; tường minh > ngầm-phơi).
+- **http.server stdlib (CHỌN) vs Flask/aiohttp** → stdlib (zero-dep, đủ 1 endpoint /metrics; prometheus_client cũng http.server). Cái mất: tự viết handler nhỏ (không routing/middleware) — không cần cho 1 endpoint.
+- **Auth/TLS: KHÔNG mặc định (Non-Goal v1)** vs bắt buộc → không mặc định (chuẩn Prometheus scrape nội bộ không auth; ép TLS/auth = over-engineer khi mạng nội bộ tin cậy). Qua Internet công cộng → reverse-proxy auth/TLS (cảnh báo, sub-spec nếu cần).
+- Vì sao (bản chất): "secure-by-default + opt-in-có-cảnh-báo" đúng nguyên tắc an toàn (không phơi ngầm); zero-dep nhất quán triết lý dự án; không over-engineer auth khi ngữ cảnh chuẩn là scrape nội bộ.
