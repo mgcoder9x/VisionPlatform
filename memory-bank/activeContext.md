@@ -1,7 +1,13 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T09:30:00+07:00.
+**Cập nhật lúc:** 2026-07-10T10:15:00+07:00.
+**[🔵 #279 — Mở spec `metrics-exposition` (PHA1 design-first) — phơi metrics ra Prometheus text format (no-GPU) — máy `k.nguyen.manh.toan`]**
+- **Chọn bước kế có lý do chính xác:** observability (D-069/D-070) đã đo được nhưng metrics NHỐT trong `InMemoryMetrics` (RAM/tiến-trình) → ~100 cam đa-tiến-trình vẫn "mù ở tầng fleet" (không dashboard/cảnh báo tập trung). Phơi ra chuẩn Prometheus = mảnh khoá để observability DÙNG ĐƯỢC THẬT. Chọn thay Postgres (cần DB server → verify yếu) / torch (chặn phần cứng/mạng).
+- **Thiết kế (bám code thật `runtime/observability.py`):** renderer THUẦN `render_prometheus(samples)->str` @adapters (nhận DTO thuần, stdlib-only → giữ adapters=leaf) → Prometheus text 0.0.4 (counter+gauge; TYPE/family + escape nhãn + sorted xác định). **Fix GỐC rủi ro lossy:** thêm accessor `InMemoryMetrics.iter_metrics()` trả `MetricSample(mtype,name,labels,value)` CÓ-CẤU-TRÚC (lưu kèm labelset lúc ghi) thay vì parse-ngược chuỗi key `name{k=v}` (sai khi value chứa `,`/`=`/`}`). DTO `MetricSample` @kernel (thuần). Hand-roll (không prometheus_client — T-026). Histogram bucket + HTTP `/metrics` = Non-Goal/follow-on.
+- **Verify:** `get_diagnostics` 2 file spec = No diagnostics. Ghi sổ: LOG #279 · +D-071 (🔵 design-only) +T-026 · INDEX #279/tổng 184 (D71·C20·T26·K67). Drift-check cuối = PASS.
+- **CHƯA code** (PHA1). Khẳng định format 0.0.4 = độ-chắc-chắn CAO (chuẩn công khai); byte-khớp đối chiếu prometheus_client/docs ở PHA2. **Bước kế (CHỜ user valid design):** → PHA2 code TDD (DTO kernel + iter_metrics additive + renderer adapters + test xác định, gồm P7 không-lossy + P9 tích hợp MetricsObserver), kỳ vọng >560 · lint 5/0. Hoặc: (a) serving HTTP `/metrics` follow-on · (b) cài torch (mirror) → tune motion-gate-roi RTSP · (c) server-DB sink · (d) dừng mốc sạch.
+---
 **[✅ #278 — Wire observability vào đường CONFIG-DECLARATIVE (deploy nhiều-cam qua TOML) — máy `k.nguyen.manh.toan`, verify 560/1·5/0]**
 - Hoàn tất phần còn lại của D-069 (ghi ở #277: "wire config CHƯA làm"). Đường `--config` trước đây gọi `build_runner` KHÔNG có observer → deploy production = bay mù. Giờ wire observer xuyên suốt: `build_runner` (+observer/emit_every_n/emit_interval_s keyword-only) → `_run_from_config` (+observe flags → lambda dựng LoggingObserver RIÊNG mỗi pipeline) → `main` (tính observe settings 1 lần, dùng chung config+inline → DRY).
 - **Quyết định (D-070):** observe = cờ TOÀN-FLEET cho 1 lần chạy config, KHÔNG đưa vào schema TOML (source_id đã phân biệt cam → per-pipeline toggle là over-engineer). Additive tuyệt đối (không `--observe` = NoopObserver, hành vi #265/#277 giữ).

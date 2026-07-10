@@ -5674,3 +5674,26 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Prometheus adapter (production scrape) vẫn Non-Goal (adapters sub-spec sau).
 
 **Đã verify (CHẠY THẬT máy k.nguyen.manh.toan):** `pytest tests/test_pipeline_observability.py` = **14 passed** (thêm 3: `test_build_runner_wires_observer` [emit tại bội-số qua đường build_runner], `test_build_runner_default_no_observer_backward_compat`, `test_cli_config_observe_smoke` [`main(--config tmp.toml --observe --observe-every 2)` → rc 0]); full `pytest -q` = **560 passed/1 skipped** (557→560 +3 additive, test cũ không vỡ); `scripts\vp.cmd lint` = **5 kept/0 broken** (layer giữ); `drift_check.py` = PASS. · **Chưa verify:** observer trên RTSP thật (cần camera); Prometheus adapter (Non-Goal).
+
+### Entry #279 — 2026-07-10 — Mở spec `metrics-exposition` (PHA1 design-first) — phơi metrics ra Prometheus text format (no-GPU) — Kiro-Opus
+
+**Bối cảnh:** Sau khi observability wire xong cả 2 đường (D-069/D-070), metrics vẫn bị NHỐT trong `InMemoryMetrics` (RAM, trong-tiến-trình) → ~100 cam đa-tiến-trình không dashboard/cảnh báo tập trung được. Mở sub-spec phơi metrics ra chuẩn Prometheus để hệ giám sát scrape. CHỈ design (PHA1), CHƯA code.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Chọn `metrics-exposition` làm bước kế (thay vì Postgres sink / torch): (a) là mảnh khoá để observability *dùng được thật* (đo mà không phơi = vẫn mù ở tầng fleet); (b) cắm đúng port đã thiết kế (MetricsObserver ghi, renderer đọc cùng registry — không đường-ghi mới, không đụng runner); (c) verify được KHÔNG cần GPU/mạng (exposition text là hàm thuần xác định). Postgres cần DB server → verify yếu ở máy này; torch bị chặn phần cứng/mạng.
+- **Fix GỐC (không ngọn) cho rủi ro lossy:** `InMemoryMetrics._key` lưu key `name{k=v}` (không escape) → parse-ngược chuỗi sẽ SAI nếu value nhãn chứa `,`/`=`/`}`. Thay vì renderer tự parse (ngọn, mong manh), THÊM accessor `iter_metrics()` trả dữ-liệu-CÓ-CẤU-TRÚC `MetricSample(mtype,name,labels,value)` (additive ở runtime, lưu kèm labelset lúc ghi) → renderer khỏi parse → đúng tuyệt đối.
+- Renderer đặt ở `adapters` (exposition = giao thức ngoài), nhận DỮ LIỆU THUẦN → không import runtime (giữ adapters=leaf). DTO `MetricSample` đặt ở `kernel` (thuần, giống PipelineSnapshot) để cả runtime lẫn adapters dùng chung không đảo hướng.
+- Phạm vi v1: counter + gauge (map thẳng Prom GAUGE/COUNTER). Histogram (cần bucket) + HTTP `/metrics` endpoint = Non-Goal/follow-on.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (spec mới, thuần thêm; đường-ghi observability giữ nguyên).
+
+**3. Trade-off đã cân nhắc (→ T-026):**
+- **hand-roll renderer vs `prometheus_client`** → chọn **hand-roll**: dữ liệu đã có trong InMemoryMetrics → chỉ cần format nhỏ/thuần/test-byte-khớp-được; prometheus_client có REGISTRY RIÊNG (dùng nó = bỏ InMemoryMetrics hoặc bắc cầu phức tạp + dep); multiprocess/bucket của nó v1 chưa cần. Cái mất: tự bảo trì format (0.0.4 ổn định nhiều năm → rủi ro thấp).
+- Phương án B (accessor cấu trúc) vs A (parse chuỗi) → B (đúng-tận-gốc, thêm ~O(số-key) RAM bounded).
+
+**4. Điều bạn nên biết:**
+- CHƯA code (PHA1 design-first, chờ user valid). `get_diagnostics` 2 file spec = No diagnostics.
+- Khẳng định về Prometheus format 0.0.4 gắn độ-chắc-chắn CAO (chuẩn công khai); lúc code sẽ đối chiếu `prometheus_client.generate_latest` (nếu cài được) hoặc docs để xác nhận byte-khớp — không tự tin mù.
+- Serving HTTP `/metrics` là follow-on (cần server → verify yếu ở máy no-server): phương án (a) route trong `vision_web_app` Flask, (b) `http.server` tối giản cho camera_worker headless. Chọn khi tới bước đó.
+
+**Đã verify (máy k.nguyen.manh.toan):** `get_diagnostics` requirements.md + design.md = **No diagnostics found**; mọi tham chiếu code (`snapshot()`/`_key`/`_counters`/`MetricsObserver` chỉ-gauge-nhãn-source) đã đọc file thật `runtime/observability.py`+`runtime/observers.py`; `drift_check.py` sẽ chạy sau ghi sổ. · **Chưa verify:** hành vi renderer (CHƯA code — PHA1); byte-khớp exposition với prometheus_client (đối chiếu ở PHA2); serving HTTP (follow-on).
