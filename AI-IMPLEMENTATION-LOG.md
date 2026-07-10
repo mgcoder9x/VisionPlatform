@@ -5652,3 +5652,25 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Prometheus adapter (production scrape) = Non-Goal (adapters sub-spec).
 
 **Đã verify (CHẠY THẬT máy toann):** `pytest tests/test_pipeline_observability.py` = **11 passed** (thêm `test_cli_observe_smoke`: `main(--source fake --frames 6 --observe --observe-every 2)` → rc 0); full `pytest -q` = **557 passed/1 skipped** (556→557 +1 additive); `scripts\vp.cmd lint` = **5 kept/0 broken**. · **Chưa verify:** wire đường config-declarative (chưa làm); observer trên RTSP thật (cần camera).
+
+### Entry #278 — 2026-07-10 — Wire observability vào ĐƯỜNG CONFIG-DECLARATIVE (`build_runner`/`_run_from_config`/`--observe`) — deploy nhiều-cam qua TOML quan sát được — Kiro-Opus
+
+**Bối cảnh:** Đóng nốt lỗ còn lại của D-069 (ghi ở #277: "wire đường config CHƯA làm"). Đường `--config` (deploy ~100 cam qua TOML) trước đây GỌI `_run_from_config` → `build_runner` mà KHÔNG truyền observer → chạy config = "bay mù". Lượt này wire observer xuyên suốt đường config-declarative.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- `build_runner` nhận thêm 3 tham số keyword-only opt-in: `observer=None`, `emit_every_n=0`, `emit_interval_s=0.0` → truyền thẳng xuống `PipelineRunner`. Không truyền = NoopObserver (backward-compat #265 tuyệt đối).
+- `_run_from_config` nhận `observe`/`observe_interval_s`/`observe_every_n`; khi `build` KHÔNG được tiêm (đường chạy thật) + `observe=True` → dựng `build = lambda pcfg: build_runner(pcfg, observer=LoggingObserver(), ...)` — **mỗi pipeline 1 LoggingObserver RIÊNG** (snapshot mang source_id phân biệt cam). Nếu test tiêm `build` (bulkhead) → tôn trọng, observe bỏ qua.
+- `main()`: tính observe settings (gồm default-5s) MỘT LẦN trước nhánh `if args.config` → dùng CHUNG cả đường config lẫn inline (bỏ đoạn default-5s trùng lặp ở inline → DRY, 1 nguồn sự thật).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (additive thuần — không `--observe` thì observer=None→NoopObserver, hành vi #265/#277 giữ nguyên).
+
+**3. Trade-off đã cân nhắc:**
+- Observe theo-CỜ toàn-fleet (1 lần chạy config) vs thêm toggle `observe` per-pipeline trong SCHEMA TOML → chọn **cờ toàn-fleet** (source_id đã label per-camera trong snapshot → không cần per-pipeline toggle; thêm schema = mở rộng bề mặt + over-engineer cho quyết-định-VẬN-HÀNH không phải cấu-hình). Ghi rõ lý do trong docstring build_runner.
+- Mỗi pipeline 1 `LoggingObserver` mới (trong lambda) vs 1 observer dùng chung → chọn **mới mỗi pipeline** (sạch, không chia sẻ state; LoggingObserver rẻ — chỉ ôm 1 logger).
+
+**4. Điều bạn nên biết:**
+- Đường config giờ quan sát được: `--config x.toml --observe [--observe-every N | --observe-interval S]`. Default bật `--observe` không set nhịp → 5s/snapshot (theo-giờ, thấy cả lúc cam chết — fix Lỗ-A #275).
+- Chưa đưa observe vào schema TOML (chủ ý — xem trade-off). Nếu sau này cần per-pipeline observability khác nhau → mới thêm field.
+- Prometheus adapter (production scrape) vẫn Non-Goal (adapters sub-spec sau).
+
+**Đã verify (CHẠY THẬT máy k.nguyen.manh.toan):** `pytest tests/test_pipeline_observability.py` = **14 passed** (thêm 3: `test_build_runner_wires_observer` [emit tại bội-số qua đường build_runner], `test_build_runner_default_no_observer_backward_compat`, `test_cli_config_observe_smoke` [`main(--config tmp.toml --observe --observe-every 2)` → rc 0]); full `pytest -q` = **560 passed/1 skipped** (557→560 +3 additive, test cũ không vỡ); `scripts\vp.cmd lint` = **5 kept/0 broken** (layer giữ); `drift_check.py` = PASS. · **Chưa verify:** observer trên RTSP thật (cần camera); Prometheus adapter (Non-Goal).

@@ -217,8 +217,15 @@ def validate_config(app, *, registry: Mapping = DEFAULT_REGISTRY) -> None:
             raise ConfigError(f"pipeline {p.id!r}: {e}") from e
 
 
-def build_runner(pcfg: PipelineConfig, *, registry: Mapping = DEFAULT_REGISTRY) -> PipelineRunner:
-    """Dựng `PipelineRunner` từ 1 `PipelineConfig`. Type lạ → `ConfigError` (liệt kê type hợp lệ)."""
+def build_runner(pcfg: PipelineConfig, *, registry: Mapping = DEFAULT_REGISTRY,
+                 observer=None, emit_every_n: int = 0, emit_interval_s: float = 0.0) -> PipelineRunner:
+    """Dựng `PipelineRunner` từ 1 `PipelineConfig`. Type lạ → `ConfigError` (liệt kê type hợp lệ).
+
+    `observer`/`emit_every_n`/`emit_interval_s` (opt-in, mặc định = không quan sát → NoopObserver trong
+    PipelineRunner): wire quan sát vận hành vào ĐƯỜNG CONFIG-DECLARATIVE (deploy ~100 cam qua TOML). Không
+    truyền → hành vi #265 giữ nguyên (backward-compat tuyệt đối). KHÔNG đưa vào schema TOML: quan sát là quyết
+    định VẬN HÀNH toàn-fleet cho 1 lần chạy (source_id đã label per-camera), không phải cấu hình per-pipeline.
+    """
     # _check_params TRƯỚC khi gọi builder → typo bị chặn trước cả lazy-import (torch/cv2) → an toàn máy no-GPU.
     detector = None
     if pcfg.detector is not None:
@@ -244,4 +251,5 @@ def build_runner(pcfg: PipelineConfig, *, registry: Mapping = DEFAULT_REGISTRY) 
 
     executor = SyncLinearExecutor(stages)
     sink = CompositeSink(sinks)
-    return PipelineRunner(source, executor, sink)
+    return PipelineRunner(source, executor, sink, observer=observer,
+                          emit_every_n=emit_every_n, emit_interval_s=emit_interval_s)

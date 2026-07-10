@@ -195,3 +195,72 @@ def test_cli_observe_smoke():
     from vision_platform.profiles.vision_slice_app import main
     rc = main(["--source", "fake", "--frames", "6", "--observe", "--observe-every", "2"])
     assert rc == 0
+
+
+# ============ wire observer vào ĐƯỜNG CONFIG-DECLARATIVE (deploy-by-config) ============
+
+def test_build_runner_wires_observer():
+    """build_runner truyền observer/emit xuống PipelineRunner → observer NHẬN snapshot (đường config)."""
+    from vision_platform.kernel.config import (
+        PipelineConfig, SourceConfig, DetectorConfig, StageConfig,
+    )
+    from vision_platform.profiles.pipeline_factory import build_runner
+
+    pcfg = PipelineConfig(
+        id="camCfg",
+        source=SourceConfig("fake", {"max_frames": 6}),
+        detector=DetectorConfig("fake", {"model_size": 64}),
+        stages=[StageConfig("detect"), StageConfig("count")],
+        sinks=(),
+    )
+    obs = CollectingObserver()
+    runner = build_runner(pcfg, observer=obs, emit_every_n=2)
+    stats = runner.run(max_frames=6)
+    assert stats.frames_read == 6
+    periodic = [s for s in obs.snapshots if not s.is_final]
+    finals = [s for s in obs.snapshots if s.is_final]
+    assert [s.frames_read for s in periodic] == [2, 4, 6]   # emit tại bội số 2 (wire truyền đúng)
+    assert len(finals) == 1                                  # snapshot cuối vẫn phát
+
+
+def test_build_runner_default_no_observer_backward_compat():
+    """Không truyền observer → build_runner giữ hành vi #265 (NoopObserver, không crash)."""
+    from vision_platform.kernel.config import (
+        PipelineConfig, SourceConfig, DetectorConfig, StageConfig,
+    )
+    from vision_platform.profiles.pipeline_factory import build_runner
+
+    pcfg = PipelineConfig(
+        id="camPlain",
+        source=SourceConfig("fake", {"max_frames": 4}),
+        detector=DetectorConfig("fake", {"model_size": 64}),
+        stages=[StageConfig("detect"), StageConfig("count")],
+        sinks=(),
+    )
+    stats = build_runner(pcfg).run(max_frames=4)
+    assert stats.frames_read == 4 and stats.processed == 4
+
+
+def test_cli_config_observe_smoke(tmp_path):
+    """CLI đường --config + --observe: dựng+chạy pipeline qua TOML với quan sát bật → rc 0."""
+    from vision_platform.profiles.vision_slice_app import main
+
+    cfg = tmp_path / "obs.toml"
+    cfg.write_text(
+        "[[pipelines]]\n"
+        'id = "camA"\n'
+        "max_frames = 5\n"
+        "[pipelines.source]\n"
+        'type = "fake"\n'
+        "params = { max_frames = 5 }\n"
+        "[pipelines.detector]\n"
+        'type = "fake"\n'
+        "params = { model_size = 64 }\n"
+        "[[pipelines.stages]]\n"
+        'type = "detect"\n'
+        "[[pipelines.stages]]\n"
+        'type = "count"\n',
+        encoding="utf-8",
+    )
+    rc = main(["--config", str(cfg), "--observe", "--observe-every", "2"])
+    assert rc == 0

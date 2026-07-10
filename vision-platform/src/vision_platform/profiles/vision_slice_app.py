@@ -120,7 +120,9 @@ def _validate_config_only(path: str) -> int:
     return 0
 
 
-def _run_from_config(path: str, *, build=None) -> int:
+def _run_from_config(path: str, *, build=None,
+                     observe: bool = False, observe_interval_s: float = 0.0,
+                     observe_every_n: int = 0) -> int:
     """Đường declarative (config-declarative): file TOML → dựng + chạy từng pipeline tuần tự (v1 sync).
 
     BULKHEAD per-pipeline (K-045): mỗi pipeline chạy trong khoang CÔ LẬP — lỗi khi BUILD (constructor thiếu
@@ -133,12 +135,22 @@ def _run_from_config(path: str, *, build=None) -> int:
 
     `build` (DI, mặc định `build_runner`): hàm dựng runner từ 1 PipelineConfig — tiêm được để test bulkhead
     xác định (không cần adapter thật lỗi).
+
+    `observe`/`observe_interval_s`/`observe_every_n` (opt-in): bật quan sát vận hành cho MỌI pipeline của lần
+    chạy config này (mỗi pipeline 1 `LoggingObserver` riêng — snapshot mang source_id phân biệt cam). Chỉ áp
+    khi `build` KHÔNG được tiêm (đường chạy thật); nếu test tiêm `build` thì tôn trọng build đó (observe bỏ qua).
     """
     from vision_platform.application.config_loader import load_app_config
     from vision_platform.profiles.pipeline_factory import build_runner
 
     if build is None:
-        build = build_runner
+        if observe:
+            from vision_platform.runtime.observers import LoggingObserver
+            build = lambda pcfg: build_runner(  # noqa: E731 — LoggingObserver MỚI mỗi pipeline (per-camera)
+                pcfg, observer=LoggingObserver(),
+                emit_every_n=observe_every_n, emit_interval_s=observe_interval_s)
+        else:
+            build = build_runner
 
     app = load_app_config(path)
     print(f"=== vision_slice (config: {path}) — {len(app.pipelines)} pipeline ===", file=sys.stderr)
@@ -204,10 +216,19 @@ def main(argv=None) -> int:
     if args.validate and not args.config:
         parser.error("--validate cần --config <file.toml>")
 
+    # Observe settings tính MỘT LẦN (dùng chung cả đường config-declarative lẫn đường inline).
+    # Default thông minh: bật --observe mà không set nhịp → 5s/snapshot (theo-giờ) → thấy sức khỏe
+    # cả khi camera mất kết nối (fix Lỗ-A #275: emit theo-giờ ở đầu loop không cần frame chảy).
+    obs_every = args.observe_every
+    obs_interval = args.observe_interval
+    if args.observe and obs_every == 0 and obs_interval == 0.0:
+        obs_interval = 5.0
+
     if args.config:
         if args.validate:
             return _validate_config_only(args.config)
-        return _run_from_config(args.config)
+        return _run_from_config(args.config, observe=args.observe,
+                                observe_interval_s=obs_interval, observe_every_n=obs_every)
 
     _validate(args, parser)
 
@@ -259,15 +280,11 @@ def main(argv=None) -> int:
     sink = CompositeSink(sinks)
 
     observer = None
-    emit_every = args.observe_every
-    emit_interval = args.observe_interval
     if args.observe:
         from vision_platform.runtime.observers import LoggingObserver
         observer = LoggingObserver()
-        if emit_every == 0 and emit_interval == 0.0:
-            emit_interval = 5.0   # mặc định: snapshot mỗi 5s (thấy sức khỏe cả khi camera mất kết nối)
     runner = PipelineRunner(source, executor, sink, observer=observer,
-                            emit_every_n=emit_every, emit_interval_s=emit_interval)
+                            emit_every_n=obs_every, emit_interval_s=obs_interval)
     stats = runner.run(max_frames=args.max_frames)
 
     print("=== vision_slice summary ===", file=sys.stderr)

@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T03:10:00+07:00.
+**Cập nhật lúc:** 2026-07-10T09:30:00+07:00.
+**[✅ #278 — Wire observability vào đường CONFIG-DECLARATIVE (deploy nhiều-cam qua TOML) — máy `k.nguyen.manh.toan`, verify 560/1·5/0]**
+- Hoàn tất phần còn lại của D-069 (ghi ở #277: "wire config CHƯA làm"). Đường `--config` trước đây gọi `build_runner` KHÔNG có observer → deploy production = bay mù. Giờ wire observer xuyên suốt: `build_runner` (+observer/emit_every_n/emit_interval_s keyword-only) → `_run_from_config` (+observe flags → lambda dựng LoggingObserver RIÊNG mỗi pipeline) → `main` (tính observe settings 1 lần, dùng chung config+inline → DRY).
+- **Quyết định (D-070):** observe = cờ TOÀN-FLEET cho 1 lần chạy config, KHÔNG đưa vào schema TOML (source_id đã phân biệt cam → per-pipeline toggle là over-engineer). Additive tuyệt đối (không `--observe` = NoopObserver, hành vi #265/#277 giữ).
+- **VERIFY THẬT (máy này, py3.11.9):** `pytest tests/test_pipeline_observability.py` = 14 passed (+3: build_runner wire observer + backward-compat + CLI config observe smoke); full `pytest -q` = **560/1** (557→560 +3 additive); `vp lint` **5/0**; drift PASS.
+- **Ghi sổ:** LOG #278 · +D-070 (✅) · D-069 row → wire config · INDEX #278/tổng 182 (D70·C20·T25·K67). Drift-check cuối = PASS.
+- **Trạng thái sản phẩm (no-GPU, deploy-by-config đầy đủ trục + quan sát cả 2 đường):** source→[motion_gate ROI+illum]→detect→track→line_crossing→count; sink JSONL/SQLite; +observability live per-camera qua CẢ `--observe` (inline) LẪN `--config ... --observe` (declarative, deploy nhiều-cam).
+- **Bước kế (chờ user):** (a) adapter Prometheus (adapters sub-spec — production scrape) · (b) cài torch (mirror/mạng) → tune motion-gate-roi RTSP thật · (c) server-DB sink (Postgres nhiều-cam) · (d) dừng mốc sạch.
+---
 **[✅ #277 — Wire observability vào CLI `vision_slice_app` (`--observe`) — quan sát end-to-end — máy `toann`, verify 557/1·5/0]**
 - Hoàn tất phần wire của D-069: 3 cờ `--observe`/`--observe-interval`/`--observe-every`; default thông minh (bật --observe không set nhịp → 5s/snapshot, thấy sức khỏe cả khi camera mất kết nối). Dùng `LoggingObserver` (log JSON) cho đường demo/dev.
 - **VERIFY THẬT:** +`test_cli_observe_smoke` (main --observe --observe-every 2 → rc0); full **557/1** (556→557 +1 additive); `vp lint` **5/0**.
