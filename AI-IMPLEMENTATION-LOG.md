@@ -5697,3 +5697,24 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Serving HTTP `/metrics` là follow-on (cần server → verify yếu ở máy no-server): phương án (a) route trong `vision_web_app` Flask, (b) `http.server` tối giản cho camera_worker headless. Chọn khi tới bước đó.
 
 **Đã verify (máy k.nguyen.manh.toan):** `get_diagnostics` requirements.md + design.md = **No diagnostics found**; mọi tham chiếu code (`snapshot()`/`_key`/`_counters`/`MetricsObserver` chỉ-gauge-nhãn-source) đã đọc file thật `runtime/observability.py`+`runtime/observers.py`; `drift_check.py` sẽ chạy sau ghi sổ. · **Chưa verify:** hành vi renderer (CHƯA code — PHA1); byte-khớp exposition với prometheus_client (đối chiếu ở PHA2); serving HTTP (follow-on).
+
+### Entry #280 — 2026-07-10 — REVIEW đối kháng design `metrics-exposition` → fix 2 lỗ THIẾT KẾ trước khi code — Kiro-Opus
+
+**Bối cảnh:** Trước PHA2 code (đúng triết lý "đọc lại valid thiết kế rồi mới triển khai" + pattern đã thắng #271/#275), tự phản biện design metrics-exposition (D-071), đối chiếu NGỮ NGHĨA THẬT của `InMemoryMetrics`. Máy user xác nhận không GPU + không CUDA → hướng no-GPU này càng đúng (verify không phụ thuộc torch). CHƯA code (vẫn PHA1).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **Lỗ-A (bản chất):** `_counters` và `_gauges` là 2 dict RIÊNG cùng kiểu key → code có thể `counter("foo")` + `gauge("foo")` cùng tên → renderer phát 2 `# TYPE foo` mâu thuẫn = exposition HỎNG (scraper lỗi). Fix: hợp đồng "1 name = 1 type" → renderer phát hiện xung đột → **raise ValueError (fail-fast)** ở hàm thuần (bug lộ ở dev/test); serving follow-on tự quyết bắt+log để không sập `/metrics`. +Property 11.
+- **Lỗ-B:** value `inf`/`nan` qua Python `str()` → `'inf'`/`'nan'` chữ thường = KHÔNG hợp lệ Prometheus (chuẩn cần `+Inf`/`-Inf`/`NaN`). Renderer là adapter TỔNG QUÁT → phải `fmt_value()` chuẩn hoá inf/nan + số hữu hạn dùng `repr(float)` giữ đủ độ chính xác. +Property 10.
+- Lỗ-C (ghi chú, không critical): counter nên hậu tố `_total` + int-vs-float → v1 không tự sửa tên (giả định code nội bộ hợp lệ), render int gọn; sanitize = sub-spec sau (tránh over-engineer).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (siết thiết kế cho ĐÚNG chuẩn exposition; chưa đụng code/yêu cầu).
+
+**3. Trade-off đã cân nhắc:**
+- Xung đột name↔type: raise (fail-fast, hàm thuần) vs log+skip vs emit-cả-hai → **raise** ở renderer thuần (bug lập trình phải lộ; emit-cả-hai = output hỏng; log+skip = giấu bug). Tách bạch: renderer thuần STRICT/đúng; tầng serving quyết resilience (bắt+log tránh 500).
+- fmt inf/nan: guard `math.isinf/isnan` (vài dòng, chặn output hỏng) vs bỏ qua (giả định luôn finite) → **guard** (renderer tổng quát không được giả định đầu vào; đúng-đắn > tối-thiểu-dòng). KHÔNG phải over-engineer — là tính-đúng cốt lõi.
+
+**4. Điều bạn nên biết:**
+- Vẫn CHƯA code (PHA1 design đã hardened 1 vòng). `get_diagnostics` design.md + requirements.md = No diagnostics (sau sửa 1 cảnh báo Property-Validates do chú thích trong ngoặc).
+- Bài học K-068: "0 diagnostic" chứng nhận CẤU TRÚC, không chứng nhận tính-ĐÚNG-exposition; 2 lỗ chỉ lộ khi TRACE ngữ nghĩa lưu trữ thật (2 dict cùng key + biên inf/nan), không lộ khi đọc mô tả xuôi.
+
+**Đã verify (máy k.nguyen.manh.toan):** `get_diagnostics` design.md + requirements.md = **No diagnostics found** (sau fix); đối chiếu code thật `InMemoryMetrics` (`_counters`/`_gauges` 2 dict riêng cùng key) để xác nhận Lỗ-A có thật; `drift_check.py` chạy sau ghi sổ. · **Chưa verify:** hành vi renderer + fmt inf/nan + raise xung đột (CHƯA code — PHA2); byte-khớp prometheus_client (PHA2).

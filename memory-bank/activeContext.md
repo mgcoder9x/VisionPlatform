@@ -1,7 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T10:15:00+07:00.
+**Cập nhật lúc:** 2026-07-10T11:00:00+07:00.
+**[🔵 #280 — REVIEW đối kháng design `metrics-exposition` → fix 2 lỗ THIẾT KẾ trước khi code — máy `k.nguyen.manh.toan`]**
+- **Áp pattern đã thắng #271/#275** (đọc-lại-valid TRƯỚC code): đối chiếu design D-071 với NGỮ NGHĨA THẬT `InMemoryMetrics`. Tìm 2 lỗ tính-đúng-exposition:
+- **Lỗ-A (bản chất):** `_counters`/`_gauges` là 2 dict RIÊNG cùng key → cùng tên vừa counter vừa gauge → renderer phát 2 `# TYPE` mâu thuẫn = exposition HỎNG. Fix: hợp đồng "1 name=1 type" → **raise ValueError (fail-fast)** ở hàm thuần; serving follow-on tự bắt+log. +Property 11.
+- **Lỗ-B:** value inf/nan qua `str()` = `'inf'`/`'nan'` chữ thường ≠ chuẩn Prometheus. Fix: `fmt_value()` → `+Inf`/`-Inf`/`NaN`; số hữu hạn `repr(float)`. +Property 10.
+- Lỗ-C (ghi chú, không critical): counter `_total` + int-vs-float → v1 không tự sửa (tránh over-engineer).
+- **User xác nhận máy KHÔNG GPU + KHÔNG CUDA** → hướng metrics-exposition (verify thuần no-GPU, không torch) càng đúng.
+- **Verify:** `get_diagnostics` 2 file spec = No diagnostics (sau fix 1 cảnh báo Property-Validates). Ghi sổ: LOG #280 · +K-068 · INDEX #280/tổng 185 (D71·C20·T26·K68). Drift-check cuối = PASS.
+- **VẪN CHƯA code** (PHA1 đã hardened 1 vòng). **Bước kế (CHỜ user valid design):** → PHA2 code TDD (DTO `MetricSample` @kernel + `iter_metrics()` additive @runtime + renderer @adapters gồm fmt inf/nan + raise xung đột + escape + sorted; 11 Property gồm P7 không-lossy/P9 tích hợp/P10 inf-nan/P11 xung đột), kỳ vọng >560 · lint 5/0 — tất cả no-GPU/no-CUDA. Hoặc đổi hướng (serving HTTP follow-on / server-DB sink / dừng mốc sạch).
+---
 **[🔵 #279 — Mở spec `metrics-exposition` (PHA1 design-first) — phơi metrics ra Prometheus text format (no-GPU) — máy `k.nguyen.manh.toan`]**
 - **Chọn bước kế có lý do chính xác:** observability (D-069/D-070) đã đo được nhưng metrics NHỐT trong `InMemoryMetrics` (RAM/tiến-trình) → ~100 cam đa-tiến-trình vẫn "mù ở tầng fleet" (không dashboard/cảnh báo tập trung). Phơi ra chuẩn Prometheus = mảnh khoá để observability DÙNG ĐƯỢC THẬT. Chọn thay Postgres (cần DB server → verify yếu) / torch (chặn phần cứng/mạng).
 - **Thiết kế (bám code thật `runtime/observability.py`):** renderer THUẦN `render_prometheus(samples)->str` @adapters (nhận DTO thuần, stdlib-only → giữ adapters=leaf) → Prometheus text 0.0.4 (counter+gauge; TYPE/family + escape nhãn + sorted xác định). **Fix GỐC rủi ro lossy:** thêm accessor `InMemoryMetrics.iter_metrics()` trả `MetricSample(mtype,name,labels,value)` CÓ-CẤU-TRÚC (lưu kèm labelset lúc ghi) thay vì parse-ngược chuỗi key `name{k=v}` (sai khi value chứa `,`/`=`/`}`). DTO `MetricSample` @kernel (thuần). Hand-roll (không prometheus_client — T-026). Histogram bucket + HTTP `/metrics` = Non-Goal/follow-on.

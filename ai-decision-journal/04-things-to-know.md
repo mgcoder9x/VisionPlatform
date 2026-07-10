@@ -700,3 +700,12 @@ Evidence: design #274 (0-diagnostic) vẫn có lỗ: emit-theo-giờ đặt sau 
 Đóng khi: (bài học — luôn áp dụng)
 Nội dung: Review đối kháng design pipeline-observability tìm 3 lỗ: (A) emit-theo-giờ phải ở ĐẦU vòng lặp (không sau frames_read++) → nếu không, mất-camera = mù đúng lúc cần quan sát; (B) "emit-cuối chỉ khi khác no-op" = isinstance coupling → luôn emit, noop là guard; (C) fps tích-luỹ che sự cố → dùng interval-fps.
 Vì sao ghi (bài học vận hành): củng cố K-065 — "0 diagnostic" chứng nhận CẤU TRÚC, KHÔNG chứng nhận LOGIC. Lỗ A đặc biệt tinh vi: chỉ lộ khi đọc-lại theo LUỒNG THỰC THI (nhánh no-data/continue), không lộ khi đọc từng phần. Nguyên tắc: review design phải TRACE luồng thật (gồm nhánh edge: no-data, reconnecting, raise) đối chiếu code nền, KHÔNG chỉ đọc mô tả xuôi. Fix ở tầng design rẻ hơn sau khi code.
+
+### K-068 — ✅ (2026-07-10) BÀI HỌC (củng cố K-065/K-067): review đối chiếu NGỮ NGHĨA LƯU TRỮ lộ lỗ tính-đúng-exposition mà 0-diagnostic không bắt
+Status: ✅ (đã fix 2 lỗ design metrics-exposition trước khi code)
+Scope: quy trình design-first · `.kiro/specs/metrics-exposition/design.md` · LOG Entry #280
+Nguồn: LOG Entry #280
+Evidence: design #279 (0-diagnostic) vẫn có 2 lỗ: (A) `InMemoryMetrics._counters`/`_gauges` là 2 dict RIÊNG cùng key → cùng tên vừa counter vừa gauge → 2 `# TYPE` mâu thuẫn = exposition hỏng; (B) value inf/nan qua `str()` = `'inf'`/`'nan'` chữ thường ≠ chuẩn `+Inf`/`-Inf`/`NaN`. Lộ khi đối chiếu ngữ nghĩa lưu trữ thật + biên số học; sau fix get_diagnostics vẫn 0.
+Đóng khi: (bài học — luôn áp dụng)
+Nội dung: Review đối kháng design metrics-exposition tìm 2 lỗ tính-đúng: (A) xung đột name↔type → renderer raise ValueError (fail-fast, hàm thuần); (B) fmt_value guard inf/nan → `+Inf`/`-Inf`/`NaN`, số hữu hạn `repr(float)`. +Property 10/11.
+Vì sao ghi (bài học vận hành): củng cố K-065/K-067 — "0 diagnostic" chứng nhận CẤU TRÚC, KHÔNG chứng nhận tính-ĐÚNG output-chuẩn. 2 lỗ chỉ lộ khi TRACE ngữ nghĩa LƯU TRỮ thật (2 dict cùng key) + biên giá trị (inf/nan), không lộ khi đọc mô tả xuôi. Nguyên tắc: review adapter phơi-chuẩn phải kiểm cả (a) nguồn dữ liệu có thể sinh trạng thái bất hợp lệ nào + (b) biên giá trị đặc biệt map ra chuẩn ra sao.

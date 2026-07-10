@@ -128,8 +128,11 @@ def render_prometheus(samples: Iterable[MetricSample]) -> str:
 | mtype ngoài {counter,gauge} (vd histogram) | v1 BỎ QUA family đó (Non-Goal) — không raise, không phát TYPE sai | Non-Goal |
 | name không hợp lệ Prometheus | v1 giả định name do code nội bộ đặt (đã hợp lệ); KHÔNG tự ý sửa (nếu cần, sanitize = sub-spec) | 1.1 |
 | gọi `iter_metrics` khi đang ghi | dưới `Lock` (như `snapshot`) → nhất quán, không race | R4.2 |
+| **xung đột name↔type** (cùng tên `foo` vừa counter vừa gauge — vì `_counters`/`_gauges` là 2 dict riêng cùng key) → phát 2 `# TYPE foo` mâu thuẫn = exposition HỎNG | renderer coi "1 name = 1 type" là hợp đồng Prometheus → phát hiện xung đột → **raise ValueError (fail-fast)**; đây là bug lập trình phải lộ ở dev/test. Tầng serving follow-on tự quyết bắt+log để không sập `/metrics` | **Lỗ-A #280**, P11 |
+| **value inf/nan** (`str(inf)`=`'inf'`, `str(nan)`=`'nan'` — chữ thường, KHÔNG hợp lệ Prometheus) | `fmt_value()`: `math.isinf`→`+Inf`/`-Inf`, `math.isnan`→`NaN`; số hữu hạn → `repr(float)` (giữ đủ độ chính xác, chấp nhận exponent Go-style hợp lệ) | **Lỗ-B #280**, P10 |
 
-- Renderer THUẦN → không nuốt lỗi ngầm; lỗi lập trình (kiểu sai) để raise tự nhiên lúc test (fail nhanh).
+- Renderer THUẦN → không nuốt lỗi ngầm; lỗi lập trình (kiểu sai / xung đột type) để raise tự nhiên lúc test (fail nhanh).
+- **Ghi chú Lỗ-C (không critical, để sau):** quy ước Prometheus khuyên counter hậu tố `_total`; `_counters` lưu `int` (render thành `N.0` hoặc `N`). v1 KHÔNG tự sửa tên (giả định code nội bộ đặt hợp lệ) + render int gọn — sanitize/`_total` = sub-spec nếu cần (tránh over-engineer).
 
 ## Correctness Properties
 
@@ -169,6 +172,14 @@ Với source_id chứa ký tự phân tách (vd `cam,x=1`), qua `iter_metrics()`
 Chạy pipeline fake + `MetricsObserver(m)` → `render_prometheus(m.iter_metrics())` chứa `pipeline_fps{source="..."}` + `pipeline_skip_rate{source="..."}` đúng camera.
 **Validates: Requirements 5.4**
 
+### Property 10: Value hợp lệ với inf/nan (fix Lỗ-B #280)
+Gauge value `+inf`/`-inf`/`nan` → output là `+Inf`/`-Inf`/`NaN` (đúng chuẩn Prometheus), KHÔNG phải `inf`/`nan` chữ thường. Số hữu hạn giữ đủ độ chính xác (vd 0.005 không thành 0).
+**Validates: Requirements 1.1, 1.3**
+
+### Property 11: Phát hiện xung đột name↔type (fix Lỗ-A #280)
+Cùng tên metric đăng ký vừa là counter vừa là gauge → `render_prometheus` **raise ValueError** (không phát 2 `# TYPE` mâu thuẫn = exposition hỏng — giữ tính hợp lệ exposition).
+**Validates: Requirements 1.2**
+
 ## Testing Strategy
 
 - **Format cơ bản (P1,P2):** dựng `MetricSample` gauge/counter có/không nhãn → assert dòng `# TYPE` + sample đúng.
@@ -179,6 +190,8 @@ Chạy pipeline fake + `MetricsObserver(m)` → `render_prometheus(m.iter_metric
 - **Không lossy (P7):** nhãn value chứa `,`/`=` qua `iter_metrics` → render đúng nhãn (đối chiếu với rủi ro parse-ngược).
 - **Layer (P8):** lint `importlinter.api` 5 kept/0 broken; kiểm adapters không import runtime.
 - **Tích hợp (P9):** pipeline fake + MetricsObserver → iter_metrics → render → assert có metric pipeline_* nhãn source.
+- **Value inf/nan (P10):** gauge = `float('inf')`/`-inf`/`nan` → assert output `+Inf`/`-Inf`/`NaN`; gauge=0.005 → giữ "0.005".
+- **Xung đột name↔type (P11):** đăng ký `counter("x")` + `gauge("x")` → `render_prometheus` raise ValueError.
 - **Đối chiếu chuẩn (lúc code):** nếu `prometheus_client` cài được → so 1 mẫu output với `generate_latest` để xác nhận byte-khớp; nếu không → đối chiếu docs (ghi rõ [đã kiểm]/[chưa kiểm]).
 
 ## Doubt-driven review (tự phản biện — KHẮT KHE)
@@ -200,6 +213,19 @@ Chạy pipeline fake + `MetricsObserver(m)` → `render_prometheus(m.iter_metric
   không cần renderer riêng. (b) cần histogram bucket/summary quantile → v1 chưa đủ (sub-spec sau). (c) gộp
   cross-process → cần push-gateway/federation (tầng cụm), renderer per-process không đủ một mình.
 - **Recognize (dấu hiệu cần):** "đo được metrics nhưng không có gì scrape/dashboard được" = triệu chứng thiếu exposition.
+
+## Review đối kháng vòng 2 (đọc-lại-valid #280 — trước khi code)
+Đối chiếu design với NGỮ NGHĨA THẬT của `InMemoryMetrics` (2 dict `_counters`/`_gauges` riêng, cùng kiểu key) →
+tìm 2 lỗ tính-đúng-exposition, fix ở tầng thiết kế TRƯỚC khi code (rẻ):
+- **Lỗ-A (bản chất):** cùng tên metric có thể tồn tại vừa ở `_counters` vừa ở `_gauges` → renderer phát 2 dòng
+  `# TYPE` mâu thuẫn = exposition HỎNG. Fix: hợp đồng "1 name = 1 type" → phát hiện xung đột → **raise ValueError**
+  (fail-fast; hàm thuần lộ bug ở test/dev). Serving follow-on tự quyết bắt+log. +Property 11 + test.
+- **Lỗ-B:** value `inf`/`nan` qua `str()` ra `'inf'`/`'nan'` chữ thường = KHÔNG hợp lệ Prometheus. Fix: `fmt_value()`
+  chuẩn hoá `+Inf`/`-Inf`/`NaN`; số hữu hạn dùng `repr(float)` giữ đủ độ chính xác. +Property 10 + test.
+- **Lỗ-C (ghi chú, không critical):** counter nên hậu tố `_total` + int-vs-float — v1 không tự sửa tên (giả định
+  code nội bộ hợp lệ), render int gọn; sanitize = sub-spec sau (tránh over-engineer).
+> Bài học (củng cố K-065/K-067): "0 diagnostic" chứng nhận CẤU TRÚC, không chứng nhận tính-ĐÚNG-exposition;
+> chỉ lộ khi TRACE ngữ nghĩa lưu trữ thật (2 dict cùng key + biên inf/nan), không lộ khi đọc mô tả xuôi.
 
 ## Non-Goals (nhắc lại)
 Histogram/summary bucket · HTTP `/metrics` endpoint (follow-on) · dependency prometheus_client · gộp
