@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T14:00:00+07:00.
+**Cập nhật lúc:** 2026-07-10T15:00:00+07:00.
+**[🔵 #285 — ĐIỀU TRA root-cause flaky K-035 + mở spec `supervisor-liveness-hardening` (PHA1 design-first) — máy `k.nguyen.manh.toan`]**
+- Flaky supervisor/liveness/step_09 (K-035) = rủi ro chất-lượng thật (xói mòn niềm tin CI). ĐIỀU TRA tận gốc (đọc `supervisor.py` + 2 test, khớp từng assertion với ngân sách thời gian) thay vì bump timeout.
+- **2 ROOT-CAUSE phân biệt (từ code thật):** (B production, bản chất) `_is_hung` dùng CHUNG `heartbeat_timeout_s` cho chờ-beat-ĐẦU-sau-spawn và khoảng-cách-steady-state → spawn chậm (Windows re-import + máy tải) > timeout → worker KHOẺ bị coi HANG → **restart OAN** (lỗ production node ~100 cam tải nặng). (A test) `sup.run(duration_s=X)` cố định RỒI assert side-effect = RACE (spawn chậm hơn X → side-effect chưa kịp).
+- **Thiết kế fix (design-first, chưa code):** (B) tách `WorkerSpec.startup_grace_s`(rộng, spawn) khỏi `heartbeat_timeout_s`(chặt, steady-state); default None→=heartbeat_timeout_s (backward-compat). (A) chạy supervisor trong THREAD + `wait_until(điều kiện, cap rộng)` + `request_shutdown()` public → assert theo SỰ KIỆN, xác định mọi tốc độ máy. KHÔNG bump-timeout/skip/retry (fix ngọn/che). Verify chống-flaky = chạy lặp ≥5 lần.
+- **Verify:** `get_diagnostics` 2 file spec = No diagnostics. Ghi sổ: LOG #285 · +D-075 (🔵) · K-035→🔵(có spec) · INDEX #285/tổng 191 (D75·C20·T27·K69). Drift PASS.
+- **CHƯA code** (PHA1). **Bước kế (CHỜ user valid design):** → PHA2 code TDD (`startup_grace_s`+`_is_hung`+`request_shutdown` @supervisor + `wait_until` helper + viết-lại ~9 test theo chờ-sự-kiện + in-process test `_is_hung`; verify chạy lặp ≥5 lần ổn định). Hoặc: serving HTTP `/metrics` (follow-on metrics) · wire `--capabilities` · dừng mốc sạch.
+- **Trạng thái sản phẩm no-GPU:** capability-aware (#283) + metrics-exposition (#284) đã code+verify; observability/motion-gate-roi/analytics chuỗi đầy đủ. 3 spec design-ready chờ: metrics HTTP-serving (follow-on), supervisor-liveness-hardening (D-075).
+---
 **[✅ #284 — PHA2 CODE TDD `metrics-exposition` HOÀN TẤT — phơi metrics ra Prometheus text (no-GPU) — máy `k.nguyen.manh.toan`, verify: test riêng 11 pass·lint 5/0]**
 - Hiện thực design hardened 2 vòng (#279 mở + #280 review fix 2 lỗ). Đọc `InMemoryMetrics` thật trước.
 - **Code (3 file + sửa 1, additive):** `kernel/metric_sample.py` (`MetricSample` DTO thuần) · `runtime/observability.py` (+`iter_metrics()` trả MetricSample SORTED dùng `_labelsets` ghi-lúc-write → KHÔNG parse-ngược lossy; **sửa `get_counter`/`get_histogram` `.get` không-mutate** = fix latent-bug getter + bất biến "key⟺đã-ghi") · `adapters/metrics_exposition.py` (`render_prometheus` THUẦN: TYPE/family + escape + fmt inf/nan→`+Inf`/`-Inf`/`NaN` + sorted xác định + raise ValueError xung đột name↔type).

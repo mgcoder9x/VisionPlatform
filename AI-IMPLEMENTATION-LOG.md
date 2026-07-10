@@ -5811,3 +5811,29 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Spec `metrics-exposition` (D-071) code XONG. Serving HTTP `/metrics` = follow-on (chưa làm).
 
 **Đã verify (máy k.nguyen.manh.toan):** `pytest tests/test_metrics_exposition.py` 11 passed (x2); `vp lint` 5/0; `drift_check.py` PASS; git-stash chứng minh 3 fail = flaky pre-existing (clean baseline fail 4/6). · **Chưa verify:** full-suite xanh-tuyệt-đối (bị chặn bởi flaky K-035 độc lập — cần máy rảnh); serving HTTP `/metrics` (follow-on, chưa code); byte-khớp prometheus_client (chưa cài).
+
+### Entry #285 — 2026-07-10 — Điều tra ROOT-CAUSE flaky K-035 + mở spec `supervisor-liveness-hardening` (PHA1 design-first) — Kiro-Opus
+
+**Bối cảnh:** Flaky supervisor/liveness/step_09 (K-035) là rủi ro chất-lượng thật (xói mòn niềm tin CI = mâu thuẫn nền tảng "verify bằng chạy thật"). ĐIỀU TRA tận gốc (đọc `supervisor.py` + 2 test, khớp từng assertion với ngân sách thời gian) thay vì bump timeout. Mở sub-spec fix bản chất. CHỈ design (PHA1), CHƯA code.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **Chẩn đoán 2 root-cause PHÂN BIỆT (từ code thật, không đoán):**
+  - **(B, production, bản chất):** `Supervisor._is_hung` dùng CHUNG `heartbeat_timeout_s` cho (a) chờ beat-ĐẦU sau spawn và (b) khoảng-cách steady-state giữa 2 beat. Spawn (Windows re-import + node tải) lâu hơn nhịp steady-state → worker KHOẺ bị coi HANG lúc khởi động → **restart OAN**. Lỗ THẬT khi vận hành ~100 cam node chậm/tải, không chỉ test. Fix: tách `WorkerSpec.startup_grace_s` (rộng, cho spawn) khỏi `heartbeat_timeout_s` (chặt, steady-state); default None→=heartbeat_timeout_s (backward-compat).
+  - **(A, test):** test `sup.run(duration_s=X)` cố định RỒI assert side-effect → spawn chậm hơn X thì side-effect chưa kịp → RACE. Fix: chạy supervisor trong THREAD + `wait_until(điều kiện, cap rộng)` → assert khi thoả rồi `request_shutdown()`. Xác định mọi tốc độ máy.
+- Thêm `Supervisor.request_shutdown()` public (additive) để test dừng theo SỰ KIỆN (không đợi duration); helper `tests/_wait_helpers.py::wait_until`.
+- Đối chiếu từng failure quan sát (#284): `'alive_' in 'cleanup_done'` (chưa beat), `4>5` (thiếu dòng), `counts!=0` (restart oan) — tất cả khớp chẩn đoán. git-stash #284 đã chứng minh pre-existing.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (spec mới; startup_grace_s default-tương-thích; chỉ viết-lại test không xoá).
+
+**3. Trade-off đã cân nhắc:**
+- **Chờ-sự-kiện (thread+wait_until) vs bump-duration-cố-định** → chờ-sự-kiện (diệt RACE tận gốc, pass sớm/fail rõ; bump chỉ dời ngưỡng + chậm suite = fix ngọn).
+- **Tách startup_grace vs dựa heartbeat_timeout rộng** → tách (startup ≠ steady-state là 2 khái niệm; gộp = mất khả năng bắt hang chặt HOẶC restart oan).
+- **KHÔNG retry-tự-động test** (che flaky) vì xác-định-hoá ĐƯỢC (chờ-sự-kiện) → retry là né gốc.
+
+**4. Điều bạn nên biết:**
+- CHƯA code (PHA1 design-first, chờ user valid). `get_diagnostics` 2 file spec = No diagnostics.
+- Đây là hardening spec `supervisor-liveness` cũ (không đụng cascade E-10/backoff/bulkhead — đã đúng).
+- Verify chống-flaky = chạy LẶP ≥5 lần (bằng chứng đóng K-035) — làm ở PHA2.
+- 2 spec no-GPU đã CODE trước đó (capability #283, metrics #284) không đổi.
+
+**Đã verify (máy k.nguyen.manh.toan):** `get_diagnostics` requirements.md + design.md = **No diagnostics found**; chẩn đoán bám code thật (`_is_hung`/`_spawn`/`run`/assertion test đã đọc nguyên văn) + khớp failure + git-stash #284 chứng minh pre-existing; `drift_check.py` chạy sau ghi sổ. · **Chưa verify:** hiệu quả fix (startup_grace + chờ-sự-kiện ổn định) — CHƯA code (PHA2); nhánh POSIX (giữ win32).
