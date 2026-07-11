@@ -6393,3 +6393,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết (K-078):** quy tắc network cho phiên remote-cẩn-trọng: NHẸ (push/pull KB, git ls-remote) = OK; NẶNG (pip install lớn, tải weight GB, clone lớn) = chờ user OK rõ. nvidia-smi/probe/pytest/drift = local, luôn OK. Verify nhánh GPU vẫn chờ torch-install (nặng → cần user bật đèn xanh).
 
 **Đã verify:** không đổi code (612.../623 giữ); ghi sổ thuần. `vp check` PASS (#314). git push #313+#314 = op nhẹ (vài KB text). · **Chưa verify:** nhánh CUDA (chờ torch-install nặng-mạng, user OK).
+
+### Entry #315 — 2026-07-11 — VERIFY TRIỆT ĐỂ (no-heavy-network): torch KHÔNG tồn tại ở BẤT KỲ interpreter nào trên máy `toann` (không chỉ venv) — bác bỏ giả định "đã cài hết" — Kiro-Opus
+
+**Bối cảnh:** User khẳng định "đã cài hết rồi, kiểm tra đi". #313/K-077 mới chỉ kiểm venv (`--capabilities` → torch=False). Lần này kiểm TRIỆT ĐỂ mọi nơi torch có thể nằm, để không tin mù lời khẳng định (luật §5: bên-thứ-3 khẳng định = [chưa kiểm] tới khi tự đọc nguồn).
+
+**1. Quyết định AI tự ra:** thay vì cài lại torch (nặng-mạng, cấm bởi K-078) hoặc tin lời user, tôi TỰ dò mọi interpreter + site-packages read-only (thăm dò 1-lần, §3.1 cho phép): (a) `where python`/`py -0p` → chỉ 1 Python thật = scoop python313, không conda/CONDA_PREFIX, không py-launcher; (b) probe torch ở base scoop python = False; (c) `pip list` venv = onnx/onnxruntime, KHÔNG torch/cuda/nvidia; (d) user-site Roaming Python313 tồn tại nhưng rỗng torch; (e) quét đệ quy `torch\version.py` dưới `C:\Users\toann` depth 6 = RỖNG. Kết luận: torch KHÔNG có ở đâu.
+
+**2. Chỗ phải đổi so với hiểu biết trước:** K-077 kết luận "torch chưa cài trong VENV" (đúng nhưng hẹp). #315 mở rộng: torch KHÔNG tồn tại ở BẤT KỲ interpreter/site nào máy `toann` → lời user "đã cài hết" bị verify BÁC BỎ (có thể user cài ở máy/phiên khác, hoặc install trước đó thất bại — CDN pytorch chậm từng thấy ở #273/K-066). Không suy đoán lý do; chỉ ghi fact verify được.
+
+**3. Trade-off đã cân nhắc:** (a) tin user + tự chạy nhánh CUDA → sẽ CRASH `import torch` (bịa "đã verify" trên nền sai) — LOẠI; (b) tự `vp setup` extras torch ~GB → op NẶNG-mạng, rớt session remote (K-078) — LOẠI, chờ đèn xanh; (c) DỪNG + báo trung thực + hỏi user muốn cài không → CHỌN (đúng "không kiểm được việc quan trọng thì DỪNG/HỎI").
+
+**4. Điều bạn nên biết (K-079):** trên máy `toann`, GPU phần cứng CÓ (nvidia-smi OK) nhưng torch VẮNG MẶT toàn hệ (venv + base + user-site + không conda). Muốn verify nhánh CUDA (D-073) BẮT BUỘC cài torch = op nặng-mạng → cần user bật đèn xanh rõ. Lệnh đúng khi có phép: `set VP_EXTRAS=dev,onnx,cv2,web,pt` (env.local.cmd) rồi `vp setup`, LƯU Ý K-066 (Windows `pip install .[pt]` dễ kéo torch CPU-only → cần index CUDA wheel `+cu124`). **[chưa kiểm]** wheel torch có hỗ trợ Python 3.13.12 hay không (không verify được offline — pytorch.org wheel matrix cần mạng); đây là RỦI RO cần lường trước khi cài.
+
+**Đã verify:** torch=False ở venv + base scoop python + user-site rỗng + filesystem scan rỗng (đọc/chạy thật, đọc output); GPU-HW có (nvidia-smi). Không đổi code (623/2 giữ); `vp check` sẽ PASS (#315). · **Chưa verify:** nhánh CUDA D-073 (chặn bởi torch-vắng → cài = nặng-mạng, chờ user); torch có wheel cho Python 3.13.12 không.

@@ -1,8 +1,18 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T19:15:00+07:00.
-**[🔒 GIT CHECKPOINT] #313+#314 push DỒN lượt này (op NHẸ vài KB — user làm rõ network=cẩn-trọng-bandwidth, không cấm tuyệt đối). Sau push: local==origin. §0 phiên sau: git clean.**
+**Cập nhật lúc:** 2026-07-11T20:30:00+07:00.
+**[🔒 GIT] #315 ghi-sổ thuần (verify triệt để torch) — sẽ commit + push NHẸ (vài KB text, K-078 cho phép). Chưa đổi code (623/2 giữ).**
+**[✅ #315 — VERIFY TRIỆT ĐỂ: torch KHÔNG có ở BẤT KỲ interpreter/site nào máy `toann` — bác bỏ lời "đã cài hết" — +K-079]**
+- User khẳng định "đã cài hết rồi, kiểm tra đi". Không tin mù (§5) → dò TRIỆT ĐỂ read-only (thăm dò 1-lần, no-heavy-network):
+  - `where python`/`py -0p` → CHỈ scoop python313 (không conda/CONDA_PREFIX, không py-launcher khác).
+  - base scoop python: `find_spec('torch')` = **False**. venv `pip list` = chỉ onnx/onnxruntime (KHÔNG torch/cuda/nvidia). `--capabilities` = `{has_torch:false, gpu_name:null, has_cv2:true}`.
+  - user-site `AppData\Roaming\Python\Python313\site-packages` tồn tại nhưng RỖNG torch. Quét đệ quy `torch\version.py` dưới `C:\Users\toann` depth 6 = **RỖNG**.
+  - `vp env` → GPU=co (nvidia-smi OK). ⇒ **GPU-HW CÓ, torch VẮNG toàn hệ.**
+- **Kết luận:** lời user "đã cài hết" bị verify BÁC BỎ (mở rộng K-077 vốn chỉ kiểm venv → K-079: torch vắng MỌI NƠI). Không suy đoán lý do.
+- **Ghi sổ:** LOG #315 · +K-079 · INDEX #315/Σ216/K79 + dòng K-079 · block này. Không đổi code.
+- **Bước kế (CHỜ user — điểm quyết định):** verify nhánh CUDA (D-073) BẮT BUỘC cài torch = op NẶNG-mạng (K-078 ⛔) → **cần user bật đèn xanh RÕ mới cài** (`set VP_EXTRAS=...,pt` → `vp setup`; nhớ K-066 cu124-wheel; [chưa kiểm] torch có wheel Python 3.13.12). Nếu không muốn cài lúc remote → GPU/CUDA giữ trạng thái CHẶN (frontier no-GPU trọn vẫn đúng).
+---
 **[✅ #314 — LÀM RÕ ràng-buộc network remote: cẩn-trọng-bandwidth (không cấm tuyệt đối) — sửa K-077 — máy `toann`]**
 - User làm rõ: "không network" = CẨN TRỌNG để không RỚT remote, KHÔNG cấm hẳn. Phân loại: NHẸ (push/pull KB, local) = OK; NẶNG (torch install ~GB, tải weight) = chờ đèn xanh.
 - **Sửa K-077** (ghi "cấm git push" over-strict) → K-078: push nhẹ OK. → push commit #313 (đang ahead 1) + #314 dồn 1 lần (nhẹ) → resync origin, đóng rủi ro sync-đè.

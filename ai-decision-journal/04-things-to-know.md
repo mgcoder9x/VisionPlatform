@@ -784,3 +784,14 @@ Vì sao ghi: (1) preserve kết luận review → phiên/máy sau KHÔNG review 
 - ⛔ **NẶNG (chờ user OK rõ):** `pip install` lớn (torch CUDA ~GB), tải model/weight, clone repo lớn — ngốn băng thông → nguy cơ rớt session remote.
 **Sửa K-077:** K-077 ghi "CẤM git push" (theo cách hiểu ban đầu "đừng đụng mạng") → thực tế push NHẸ OK; chỉ cấm op nặng-băng-thông. (Append-only: K-077 giữ nguyên, K-078 supersede phần này.)
 **Hệ quả nhánh GPU:** verify CUDA cần `vp setup` extras torch (~GB, NẶNG) → thuộc nhóm ⛔ → chờ user bật đèn xanh rõ ràng trước khi cài.
+
+### K-079 — ✅ (2026-07-11) VERIFY TRIỆT ĐỂ: torch KHÔNG tồn tại ở BẤT KỲ interpreter/site nào máy `toann` (không chỉ venv) — bác bỏ lời "đã cài hết"
+**Bối cảnh:** User khẳng định torch đã cài. Kiểm triệt để thay vì tin mù (§5: bên-thứ-3 khẳng định = [chưa kiểm] tới khi tự đọc nguồn).
+**Bằng chứng (đọc/chạy thật, read-only, no-heavy-network):**
+- `where python` → chỉ scoop python313 (`C:\Users\toann\scoop\apps\python313\current\python.exe`) + Windows Store stub; `py -0p` = "No installed Pythons"; không conda (`where conda` fail, `$CONDA_PREFIX` rỗng).
+- base scoop python: `find_spec('torch')` = False.
+- venv `pip list` (loc torch|cuda|nvidia|ultralytics) = chỉ onnx 1.22.0 / onnxruntime 1.27.0. `--capabilities` = `{"has_torch":false,...,"gpu_name":null,"has_cv2":true}`.
+- user-site `C:\Users\toann\AppData\Roaming\Python\Python313\site-packages` TỒN TẠI nhưng KHÔNG có torch/nvidia/cuda.
+- quét đệ quy `torch\version.py` dưới `C:\Users\toann` (depth 6) = RỖNG.
+**Kết luận:** torch VẮNG toàn hệ (mở rộng K-077 vốn chỉ kiểm venv). GPU phần cứng vẫn CÓ (nvidia-smi OK). Lời user "đã cài hết" bị verify BÁC BỎ — không suy đoán lý do.
+**Hệ quả:** verify nhánh CUDA (D-073) BẮT BUỘC cài torch = op NẶNG-mạng (K-078 nhóm ⛔) → chờ user bật đèn xanh. Khi có phép: `set VP_EXTRAS=dev,onnx,cv2,web,pt` (trong `scripts/env.local.cmd`) → `vp setup`; nhớ K-066 (Windows dễ kéo torch CPU-only → cần CUDA wheel `+cu124`). **[chưa kiểm]** torch có wheel cho Python 3.13.12 không (cần mạng để tra pytorch.org — rủi ro cần lường trước khi cài).
