@@ -6199,3 +6199,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - K-074 nâng: fact per-event durability giờ [đã kiểm] (test chạy) thay vì chỉ [đọc-code].
 
 **Đã verify (CHẠY + ĐỌC output):** `pytest test_sink_durability.py` = **3 passed** (0.53s); `cmd /c scripts\vp.cmd verify` = **612 passed/2 skipped** (609→612 +3) · **lint 5 kept/0 broken** · **drift PASS**. · **Chưa verify:** SIGTERM-subprocess thực (cố ý KHÔNG làm — lý do ở mục 3; kết luận dựa fact per-event đã test observable).
+
+### Entry #304 — 2026-07-11 — Đóng drift TÍNH-ĐẦY-ĐỦ của 4-file journal: bổ sung trade-off T-029/T-030 vào `03-tradeoffs.md` — Kiro-Opus
+
+**Bối cảnh:** User lặp yêu cầu duy trì 4-file journal ("nếu có rồi thì cập nhật vào"). Rà thật: `01-decisions.md`(việc 1) + `04-things-to-know.md`(việc 4) cập nhật đều tới #303, NHƯNG `03-tradeoffs.md`(việc 3) DỪNG ở T-028 (#289) → các trade-off thực của #297–#303 chỉ nằm trong entry D/LOG, chưa vào file chuyên trách = drift tính-đầy-đủ (đúng loại file này sinh ra để chống).
+
+**1. Quyết định AI tự ra:** thêm **T-029** (config-observability: cờ-CLI-vs-TOML + exporter-dùng-chung-vs-riêng) + **T-030** (shutdown: không-graceful-shutdown + test-durability-vs-SIGTERM) vào `03-tradeoffs.md` + INDEX §3. KHÔNG thêm C-entry (việc 2) vì phiên này KHÔNG có thay đổi so với yêu-cầu-GỐC của user (spec mới additive; #298 chỉ sửa bản-nháp-design của AI, không đổi điều user yêu cầu) — không bịa "thay đổi yêu cầu" không tồn tại.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không.
+
+**3. Trade-off đã cân nhắc:** thêm T-entry (đầy đủ ledger) vs để trade-off chỉ trong D/LOG (gọn) → **thêm** vì user yêu cầu RÕ file trade-off chuyên trách; nhưng CHỈ 2 trade-off THỰC-SỰ-SUBSTANTIVE (không pad kit-sync D-083 thành T riêng — đã đủ trong D + reasoning, tránh inflation).
+
+**4. Điều bạn nên biết:** 4-file journal giờ khớp: 01(D-083)/02(C-020, không đổi)/03(T-030)/04(K-074) + INDEX Σ207 (D83·C20·T30·K74). Drift-check C3-T/C5-T sẽ kiểm T liên tục + khớp INDEX.
+
+**Đã verify:** `vp check` sẽ xác nhận C3-T (30 ID max T-030) + C5-T khớp INDEX + C4 total Σ207 — chạy bước kế. · **Chưa verify:** không (thuần ghi sổ, không đụng code — 612/2 giữ).

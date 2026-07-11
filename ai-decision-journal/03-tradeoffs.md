@@ -285,3 +285,27 @@ Bối cảnh: spec `metrics-http-endpoint` (D-078) — endpoint HTTP phơi metri
 - **http.server stdlib (CHỌN) vs Flask/aiohttp** → stdlib (zero-dep, đủ 1 endpoint /metrics; prometheus_client cũng http.server). Cái mất: tự viết handler nhỏ (không routing/middleware) — không cần cho 1 endpoint.
 - **Auth/TLS: KHÔNG mặc định (Non-Goal v1)** vs bắt buộc → không mặc định (chuẩn Prometheus scrape nội bộ không auth; ép TLS/auth = over-engineer khi mạng nội bộ tin cậy). Qua Internet công cộng → reverse-proxy auth/TLS (cảnh báo, sub-spec nếu cần).
 - Vì sao (bản chất): "secure-by-default + opt-in-có-cảnh-báo" đúng nguyên tắc an toàn (không phơi ngầm); zero-dep nhất quán triết lý dự án; không over-engineer auth khi ngữ cảnh chuẩn là scrape nội bộ.
+
+### T-029 — 2026-07-11 — Observability cho đường `--config`: (a) CỜ CLI vs field TOML; (b) 1 metrics/exporter DÙNG CHUNG vs mỗi pipeline riêng
+Status: ✅ (đã code + verify — 612/2 · lint 5/0 · drift PASS; LOG #297–#299)
+Scope: spec `config-observability` · `profiles/vision_slice_app.py` (`_build_config_observability`/`_run_from_config`/`main`)
+Nguồn: LOG Entry #297 (mở design) · #298 (review sửa 6 lỗ) · #299 (code)
+Links: D-082, D-069 (nợ wire config), D-070, D-044 (bulkhead), T-015 (tuần tự), K-073
+Chọn (a): **CỜ CLI** (`--observe`/`--metrics-port`/`--metrics-host`...) trên đường `--config` — KHÔNG thêm field observability vào schema TOML (v1).
+- Cái mất: observability chưa khai-báo-được thuần trong file TOML (deploy GitOps thuần-config phải truyền cờ). Ghi Non-Goal + follow-on.
+- Vì sao (bản chất): mô hình deploy = "1 process/1 camera, mỗi process 1 lệnh có cờ riêng" → cờ CLI đủ. Thêm field = schema frozen + loader + validate + strict-key = bề mặt lớn cho nhu cầu CHƯA tồn tại (over-engineer, trái T-015/nguyên tắc user). Trừu tượng đúng lúc thực sự cần.
+Chọn (b): **1 `InMemoryMetrics` + 1 `MetricsHttpExporter` DÙNG CHUNG** cho mọi pipeline trong 1 process (aggregate theo `source_id`).
+- Cái mất: nhiều-pipeline/process KHÔNG có `/metrics` realtime SONG SONG (aggregate tuần tự — gauge giữ giá trị cuối mỗi source). Chấp nhận (Non-Goal scale — cần runtime song song + benchmark GPU, T-015).
+- Vì sao (bản chất): "1 process = 1 scrape target" là mô hình Prometheus chuẩn; `MetricsObserver` đọc `snapshot.source_id` → 1 observer dùng chung TỰ aggregate (VERIFIED đọc code). Mỗi pipeline 1 exporter = N cổng/process = sai mô hình + phức tạp thừa.
+
+### T-030 — 2026-07-11 — Shutdown an-toàn: (a) KHÔNG cài graceful-shutdown (SIGTERM) vs cài; (b) chứng minh bằng test durability-không-teardown vs test SIGTERM-subprocess-kill
+Status: ✅ (review SOUND #302 + guard máy-kiểm #303 — 612/2 · lint 5/0)
+Scope: đường `--config`/`PipelineRunner`/sinks · `tests/test_sink_durability.py`
+Nguồn: LOG Entry #302 (review shutdown SOUND) · #303 (test guard)
+Links: K-074, D-082, D-052/053/083 (máy-kiểm-thay-kỷ-luật)
+Chọn (a): **KHÔNG cài graceful-shutdown** (SIGTERM→should_stop→teardown) ở v1.
+- Cái mất: trên SIGTERM (default terminate, không unwind finally) thì `teardown()`/`exporter.stop()` không chạy — nhưng KHÔNG mất dữ liệu (durability per-event) + không rò (OS thu hồi fd/daemon-thread).
+- Vì sao (bản chất): điều tra CODE THẬT → durability đạt Ở TẦNG SINK (JSONL flush/dòng · SQLite commit/frame) → vấn-đề-mất-dữ-liệu KHÔNG tồn tại → cài graceful-shutdown = fix cái không tồn tại. Ghi ĐIỀU KIỆN đảo (K-074): CHỈ khi sink chuyển BATCH/bỏ flush-per-event mới cần (pattern `should_stop` sẵn ở `supervisor.py`).
+Chọn (b): **test durability-không-teardown** (ghi→đọc-lại bằng handle/connection khác khi CHƯA teardown) thay vì test SIGTERM-subprocess-kill.
+- Cái mất: không kiểm trực tiếp hành vi kill-process thật (OS page cache survives) — nhưng đó là guarantee của OS/stdlib, không phải code mình.
+- Vì sao (bản chất): test durability-không-teardown chứng đúng FACT tải-trọng (per-event durable, code-mình-kiểm-soát), cross-platform + deterministic (SIGTERM Windows=TerminateProcess≠POSIX → subprocess-kill dễ flake — tránh vết K-035). Đồng thời mechanize "điều kiện đảo" thành regression tự-bắt (đổi sink bỏ flush → test FAIL).

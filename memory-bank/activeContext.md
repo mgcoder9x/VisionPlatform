@@ -1,8 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T13:30:00+07:00.
-**[🔒 GIT CHECKPOINT] #295→#302 đã push (`1b8f934`). #303 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau 1b8f934.**
+**Cập nhật lúc:** 2026-07-11T14:00:00+07:00.
+**[🔒 GIT CHECKPOINT] #295→#303 đã push (`c009a55`). #304 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau c009a55.**
+**[✅ #304 — Đóng drift TÍNH-ĐẦY-ĐỦ 4-file journal: bổ sung T-029/T-030 vào `03-tradeoffs.md` — máy `toann`]**
+- Rà theo yêu cầu lặp của user (duy trì 4 file): `01-decisions`(1)+`04-things-to-know`(4) cập nhật đều tới #303, nhưng `03-tradeoffs`(3) DỪNG ở T-028 → trade-off #297–#303 chỉ trong D/LOG, chưa vào file chuyên trách = drift tính-đầy-đủ.
+- **Thêm:** T-029 (config-observability: cờ-CLI-vs-TOML + exporter-dùng-chung) · T-030 (shutdown: không-graceful-shutdown + test-durability-vs-SIGTERM). KHÔNG thêm C-entry (việc 2) — phiên này KHÔNG đổi yêu-cầu-GỐC user (không bịa).
+- **Ghi sổ:** LOG #304 · +T-029/T-030 · INDEX §3 +2 dòng, Σ205→207 (T28→30), Log canonical #303→#304 · block này. Không đụng code (612/2 giữ). Drift sẽ PASS.
+- **Bước kế (CHỜ user):** điểm dừng sạch; hoặc GPU/DB/máy-mạnh cho nhánh 🔴; hoặc observability-trong-TOML (follow-on).
+---
 **[✅ #303 — Nâng K-074 [đã biết]→[đã kiểm]: test MÁY-KIỂM durability-per-event — máy `toann`, verify 612/2·5/0]**
 - Kiểm-chứng-lại (#302) kết luận shutdown SOUND dựa fact "sink bền per-event" — nhưng mới ĐỌC-CODE. Nâng thành BẰNG CHỨNG chạy + biến "điều kiện đảo" K-074 thành regression tự-bắt.
 - **Test (`tests/test_sink_durability.py`, 3):** `handle()` xong (CHƯA `teardown()`) → đọc-lại bằng handle/connection KHÁC thấy dữ liệu → durability ở TẦNG SINK per-event (JsonlEventSink flush/dòng · CrossingEventJsonlSink · CrossingEventSqliteSink commit/frame). Deterministic (không subprocess/timing → không flake, tránh vết K-035).
