@@ -1,8 +1,17 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T13:00:00+07:00.
-**[🔒 GIT CHECKPOINT] Việc #295→#302 đã commit + push (`5488f4c`) trên `chore/dev-env-launcher-portable-hooks`; memory-note này commit ngay sau → working tree về SẠCH. Persist chống sync-đè đa-máy. §0 phiên sau: git phải clean, HEAD ở/sau 5488f4c.**
+**Cập nhật lúc:** 2026-07-11T13:30:00+07:00.
+**[🔒 GIT CHECKPOINT] #295→#302 đã push (`1b8f934`). #303 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau 1b8f934.**
+**[✅ #303 — Nâng K-074 [đã biết]→[đã kiểm]: test MÁY-KIỂM durability-per-event — máy `toann`, verify 612/2·5/0]**
+- Kiểm-chứng-lại (#302) kết luận shutdown SOUND dựa fact "sink bền per-event" — nhưng mới ĐỌC-CODE. Nâng thành BẰNG CHỨNG chạy + biến "điều kiện đảo" K-074 thành regression tự-bắt.
+- **Test (`tests/test_sink_durability.py`, 3):** `handle()` xong (CHƯA `teardown()`) → đọc-lại bằng handle/connection KHÁC thấy dữ liệu → durability ở TẦNG SINK per-event (JsonlEventSink flush/dòng · CrossingEventJsonlSink · CrossingEventSqliteSink commit/frame). Deterministic (không subprocess/timing → không flake, tránh vết K-035).
+- **Vai trò regression:** đổi sink sang BATCH/bỏ flush-per-event → 3 test FAIL → buộc xét lại graceful-shutdown (mechanize điều-kiện-đảo K-074, triết lý máy-kiểm-thay-kỷ-luật).
+- **Trade-off:** chọn test durability-không-teardown thay SIGTERM-subprocess-kill (cross-platform + deterministic + chứng đúng fact code-mình-kiểm-soát; SIGTERM Windows=TerminateProcess khác POSIX → subprocess dễ flake, giá trị thấp).
+- **VERIFY THẬT:** `pytest test_sink_durability.py` 3 passed; `vp verify` = **612/2** (609→612 +3) · lint 5/0 · drift PASS. K-074 fact per-event → [đã kiểm].
+- **Ghi sổ:** LOG #303 (củng cố K-074, không +ID mới) · INDEX K-074 row +guard · Log canonical #302→#303 (Σ205 giữ) · block này. Sẽ commit+push.
+- **Bước kế (CHỜ user):** điểm dừng sạch; hoặc GPU/DB/máy-mạnh cho nhánh 🔴; hoặc observability-trong-TOML (follow-on).
+---
 **[✅ #302 — REVIEW an-toàn SHUTDOWN/toàn-vẹn-dữ-liệu (SIGTERM) đường `--config` = SOUND, KHÔNG vá — máy `toann`]**
 - Soi "an toàn + thương mại": service chạy dài bị SIGTERM (systemd/docker) — giả thuyết mất-dữ-liệu vì không teardown. ĐIỀU TRA code THẬT (chống bịa) TRƯỚC khi kết luận.
 - **Bằng chứng (đọc nguồn 4 file):** `PipelineRunner.run()` nested try/finally → teardown LUÔN chạy khi kết thúc/raise (gồm Ctrl+C); `JsonlEventSink`/`CrossingEventJsonlSink` **flush mỗi dòng**; `CrossingEventSqliteSink` **commit mỗi frame**; exporter daemon-thread. ⇒ SIGTERM (không unwind finally) KHÔNG mất dữ liệu (durability per-event) + không rò (OS thu hồi fd/thread).

@@ -6181,3 +6181,21 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - **ĐIỀU KIỆN cần graceful-shutdown (chưa cần nay):** nếu sau này có sink DEFER/BATCH ghi (không flush/commit per-event) → SIGTERM sẽ mất batch chưa-ghi → LÚC ĐÓ mới cài SIGTERM handler → `should_stop` (PipelineRunner ĐÃ có param) → break → finally teardown. Pattern có sẵn ở `supervisor.py` (`signal.signal(SIGTERM, ...)`).
 
 **Đã verify (ĐỌC nguồn thật 4 file):** `pipeline_runner.py` (nested finally teardown), `jsonl_event_sink.py`/`crossing_event_sink.py` (flush/dòng), `crossing_event_sqlite_sink.py` (commit/frame) — durability per-event XÁC NHẬN. Không đổi code → baseline 609/2·5/0 giữ. · **Chưa verify (chưa cần):** hành vi SIGTERM thực tế bằng subprocess (không cần vì kết luận dựa hợp-đồng flush/commit đã đọc + hành vi Python default SIGTERM đã biết); nhánh sink-defer tương lai.
+
+### Entry #303 — 2026-07-11 — Nâng K-074 [đã biết]→[đã kiểm]: test MÁY-KIỂM durability-per-event (guard "SIGTERM không mất dữ liệu") — Kiro-Opus
+
+**Bối cảnh:** Kiểm-chứng-lại (#302 review) kết luận shutdown SOUND dựa FACT tải-trọng "sink bền per-event, không cần teardown" — nhưng fact đó mới ĐỌC-CODE. User "cực sâu chính xác nhất" → nâng thành BẰNG CHỨNG chạy được + biến "điều kiện đảo" của K-074 thành regression tự-bắt.
+
+**1. Quyết định AI tự ra:** thêm `tests/test_sink_durability.py` (3 test) chứng minh OBSERVABLE: sau `handle()` (CHƯA `teardown()`) → đọc-lại bằng handle/connection KHÁC thấy dữ liệu → durability đạt ở TẦNG SINK per-event. Deterministic (không subprocess/không timing → không flake, tránh vết xe K-035).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (thuần thêm test, không đụng production).
+
+**3. Trade-off đã cân nhắc:**
+- Test durability-không-teardown (đọc-lại observable) vs test SIGTERM-subprocess-kill → chọn **durability-không-teardown**: (a) chứng đúng FACT tải-trọng (per-event durable, không phụ thuộc shutdown); (b) cross-platform + deterministic (SIGTERM trên Windows = TerminateProcess, khác POSIX → subprocess-kill dễ flake + nhiễu nền-tảng); (c) test OS-page-cache-survives-kill = test stdlib/OS, giá trị thấp. Fact "sink flush/commit per-event" mới là thứ CODE MÌNH kiểm soát → guard đúng chỗ đó.
+
+**4. Điều bạn nên biết:**
+- 3 test: `JsonlEventSink` (flush/dòng → đọc file khi CHƯA teardown, chạy được cả trên Windows share-read) · `CrossingEventJsonlSink` · `CrossingEventSqliteSink` (commit/frame → connection MỚI đọc thấy row trước teardown).
+- **Vai trò regression (mechanize điều-kiện-đảo K-074):** nếu tương lai đổi sink sang BATCH/bỏ flush-per-event → 3 test FAIL → buộc xét lại graceful-shutdown. = máy-kiểm thay kỷ luật (triết lý D-052/053/083).
+- K-074 nâng: fact per-event durability giờ [đã kiểm] (test chạy) thay vì chỉ [đọc-code].
+
+**Đã verify (CHẠY + ĐỌC output):** `pytest test_sink_durability.py` = **3 passed** (0.53s); `cmd /c scripts\vp.cmd verify` = **612 passed/2 skipped** (609→612 +3) · **lint 5 kept/0 broken** · **drift PASS**. · **Chưa verify:** SIGTERM-subprocess thực (cố ý KHÔNG làm — lý do ở mục 3; kết luận dựa fact per-event đã test observable).

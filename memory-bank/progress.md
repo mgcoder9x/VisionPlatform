@@ -1,6 +1,6 @@
 # progress.md — Xong gì / còn gì / bug (cập nhật mỗi phiên = chân lý hiện tại)
 
-> **Mốc hiện tại (2026-07-11, máy `toann`, LOG #300):** baseline **609 passed/2 skipped · lint 5 kept/0 broken · drift-check PASS · RULES_VERSION 16 (5 file: AGENTS + 3 mirror + kit)**. Nhánh `chore/dev-env-launcher-portable-hooks` push đều. Chi tiết per-turn: `activeContext.md`; quyết định: `ai-decision-journal/`.
+> **Mốc hiện tại (2026-07-11, máy `toann`, LOG #303):** baseline **612 passed/2 skipped · lint 5 kept/0 broken · drift-check PASS · RULES_VERSION 16 (5 file: AGENTS + 3 mirror + kit)**. Nhánh `chore/dev-env-launcher-portable-hooks` push đều. Chi tiết per-turn: `activeContext.md`; quyết định: `ai-decision-journal/`.
 
 ## Đã xong (mốc no-GPU thương mại — verify THẬT)
 - **Nền tảng kiến trúc:** hexagonal 6 layer + import-linter **5 contract** cưỡng chế (5 kept/0 broken). SHM ring/epoch-switchover/supervisor-liveness/ZMQ inference/backpressure-cross-process (đóng K-040 A2+A3) + real-detector (transform/nms/onnx/yolo) + sources (rtsp/video/noise/fake) + web UI + `IMediaRef` port + `PipelineRunner`/Stage/`ISink`.
