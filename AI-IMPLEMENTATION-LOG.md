@@ -6327,3 +6327,24 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - VẪN design-only, CHƯA code (PHA1 hardened 1 vòng). Bài học K-076: đổi argparse default của tham số đi qua HÀM DÙNG CHUNG → blast-radius mọi đường gọi hàm đó, phải resolve default tại HÀM (1 chỗ) không tại từng call-site.
 
 **Đã verify:** đọc lại `_build_config_observability` (truyền host thẳng vào MetricsHttpExporter) + `MetricsHttpExporter.__init__/start` (ThreadingHTTPServer((host,port))) → xác nhận host=None crash; design.md sửa mục review. · **Chưa verify:** hành vi runtime (PHA2 — chưa code); "0-diag" spec-lint (không có tool). **CHỜ user valid.**
+
+### Entry #311 — 2026-07-11 — PHA2 code TDD `config-observability-toml` HOÀN TẤT — observability khai báo trong TOML (GitOps, no-GPU) — Kiro-Opus
+
+**Bối cảnh:** Hiện thực design hardened 2 vòng (#309 mở + #310 review fix host-sentinel). Đóng follow-on T-029/D-082: observability khai báo TRONG file TOML (`[observability]` top-level) — deploy GitOps thuần-file.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- `ObservabilityConfig` DTO frozen @kernel + `AppConfig.observability: Optional[...] = None` (backward-compat).
+- `_parse_observability` @loader: validate KIỂU tường minh (chặn `bool` lọt `int` — `isinstance(True,int)` True trong Python).
+- `_merge_observability` @profiles (thuần): precedence CLI-explicit>TOML>default (sentinel None/0.0; observe OR).
+- `_build_config_observability` resolve `host = metrics_host or "127.0.0.1"` TẠI HÀM (#310/K-076 — phủ cả 2 đường qua hàm chung).
+
+**2. Chỗ phải đổi so với hành vi #299 (ghi C-021):** `main` config-branch giờ truyền **RAW** `args.observe_interval`/`args.observe_every` (không pre-compute) + `--metrics-host default None`; smart-default 5s DỜI từ main → sau-merge trong `_run_from_config`. Hành vi END-TO-END KHÔNG đổi (runner vẫn nhận 5.0) — chỉ hợp-đồng-trung-gian main→_run_from_config đổi (đường CLI-direct giữ smart-default riêng). Test #299 `test_main_routes_metrics_flags_to_config` cập nhật assertion 5.0→0.0 (giá-trị-trung-gian; end-to-end verify qua trace).
+
+**3. Trade-off đã cân nhắc:** load app TRƯỚC merge (cần app.observability) — exporter dựng SAU load (tốt hơn: không mở HTTP nếu config hỏng). Reorder `_run_from_config` (try chỉ bọc loop; load+merge ngoài try; finally vẫn stop exporter).
+
+**4. Điều bạn nên biết:**
+- File đổi: `kernel/config.py` (+ObservabilityConfig +AppConfig.observability) · `application/config_loader.py` (+_parse_observability +wire) · `profiles/vision_slice_app.py` (+_merge_observability, _build_config_observability resolve host, reorder _run_from_config, main RAW+host-sentinel). Test mới: `tests/test_config_observability_toml.py` (11: parse×3 · merge×4 · host-sentinel×1 · e2e-merge×2 · backward-compat×1).
+- Hạn chế TRUNG THỰC (Non-Goal v1, đã ghi design): không `--no-observe` (TOML bật → CLI không tắt); sentinel 0.0/0 → không đè-tường-minh-0.
+- 1 test-fix trong lúc chạy: `test_merge_none_toml_gives_defaults` kỳ vọng host None — SAI (merge dùng ObservabilityConfig() default → "127.0.0.1"); sửa test, code đúng.
+
+**Đã verify (CHẠY + ĐỌC output):** `pytest test_config_observability_toml.py` = 11 passed; `cmd /c scripts\vp.cmd verify` = **623 passed/2 skipped** (612→623 +11) · **lint 5/0** (layer giữ: DTO@kernel thuần) · **drift PASS** (C1–C7 + self-test). · **Chưa verify:** scrape `/metrics` thật khi deploy song song (Non-Goal); nhánh GPU.

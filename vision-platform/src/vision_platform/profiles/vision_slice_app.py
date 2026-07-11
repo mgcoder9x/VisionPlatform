@@ -70,7 +70,9 @@ def _build_config_observability(observe, metrics_port, metrics_host):
     `metrics_port=0` → OS cấp cổng ephemeral (test). DÙNG CHUNG **1** `InMemoryMetrics` → `MetricsObserver` gắn nhãn
     `source=snapshot.source_id` → `/metrics` aggregate MỌI pipeline trong 1 process (mỗi camera 1 series gauge).
     Điều kiện wire = `observe OR metrics_port is not None` (metrics đơn lẻ, không cần --observe, vẫn lên).
+    `metrics_host=None` → resolve "127.0.0.1" (sentinel merge #310/K-076: phủ cả 2 đường qua HÀM CHUNG này, chống CLI-direct host=None crash ThreadingHTTPServer).
     """
+    metrics_host = metrics_host or "127.0.0.1"   # #310/K-076: resolve default TẠI HÀM CHUNG (1 chỗ, phủ mọi call-site)
     observers_list = []
     if observe:
         from vision_platform.runtime.observers import LoggingObserver
@@ -95,6 +97,26 @@ def _build_config_observability(observe, metrics_port, metrics_host):
     else:
         observer = None
     return observer, exporter
+
+
+def _merge_observability(cli: dict, toml_obs) -> dict:
+    """Hợp nhất observability TỪ cờ CLI ↔ section `[observability]` TOML (spec config-observability-toml, D-086).
+
+    Precedence: **CLI-explicit > TOML > built-in default** (cờ = tinh chỉnh ad-hoc, TOML = mặc-định-deploy GitOps).
+    Sentinel "CLI không set": metrics_port/metrics_host=None · observe_interval_s=0.0 · observe_every_n=0.
+    `observe` = OR-semantics (store_true không phân biệt not-set/false → `--observe` HOẶC TOML observe=true → bật).
+    Hạn chế v1 (Non-Goal, ghi rõ): không tắt-observe-qua-CLI khi TOML bật; không đè-tường-minh-0 qua CLI.
+    `toml_obs` = ObservabilityConfig | None (None → chỉ dùng CLI/default).
+    """
+    from vision_platform.kernel.config import ObservabilityConfig
+    t = toml_obs or ObservabilityConfig()
+    return {
+        "observe": bool(cli.get("observe")) or t.observe,
+        "metrics_port": cli.get("metrics_port") if cli.get("metrics_port") is not None else t.metrics_port,
+        "metrics_host": cli.get("metrics_host") if cli.get("metrics_host") is not None else t.metrics_host,
+        "observe_interval_s": cli.get("observe_interval_s") if cli.get("observe_interval_s") else t.observe_interval_s,
+        "observe_every_n": cli.get("observe_every_n") if cli.get("observe_every_n") else t.observe_every_n,
+    }
 
 
 def _build_source(args):
@@ -189,7 +211,7 @@ def _validate_config_only(path: str) -> int:
 def _run_from_config(path: str, *, build=None,
                      observe: bool = False, observe_interval_s: float = 0.0,
                      observe_every_n: int = 0,
-                     metrics_port: int | None = None, metrics_host: str = "127.0.0.1") -> int:
+                     metrics_port: int | None = None, metrics_host: str | None = None) -> int:
     """Đường declarative (config-declarative): file TOML → dựng + chạy từng pipeline tuần tự (v1 sync).
 
     BULKHEAD per-pipeline (K-045): mỗi pipeline chạy trong khoang CÔ LẬP — lỗi khi BUILD (constructor thiếu
@@ -211,23 +233,27 @@ def _run_from_config(path: str, *, build=None,
     from vision_platform.application.config_loader import load_app_config
     from vision_platform.profiles.pipeline_factory import build_runner
 
-    # Smart-default nhịp emit: bật quan sát mà chưa set nhịp → 5s (self-consistent kể cả khi gọi TRỰC TIẾP,
-    # không qua main) → /metrics cập nhật định kỳ, không chỉ snapshot cuối.
-    if (observe or metrics_port is not None) and observe_every_n == 0 and observe_interval_s == 0.0:
-        observe_interval_s = 5.0
+    app = load_app_config(path)   # LOAD TRƯỚC: cần app.observability để merge cờ-CLI↔TOML (D-086)
 
     exporter = None
     if build is None:
-        observer, exporter = _build_config_observability(observe, metrics_port, metrics_host)
+        # Hợp nhất cờ CLI (tham số) ↔ section [observability] TOML (precedence CLI-explicit>TOML>default, D-086).
+        m = _merge_observability(
+            {"observe": observe, "metrics_port": metrics_port, "metrics_host": metrics_host,
+             "observe_interval_s": observe_interval_s, "observe_every_n": observe_every_n},
+            app.observability)
+        # Smart-default nhịp emit SAU merge: (observe∨metrics) & chưa set nhịp → 5s (self-consistent).
+        if (m["observe"] or m["metrics_port"] is not None) and m["observe_every_n"] == 0 and m["observe_interval_s"] == 0.0:
+            m["observe_interval_s"] = 5.0
+        observer, exporter = _build_config_observability(m["observe"], m["metrics_port"], m["metrics_host"])
         if observer is not None:
             build = lambda pcfg: build_runner(  # noqa: E731 — observer DÙNG CHUNG mọi pipeline (source_id từ snapshot)
                 pcfg, observer=observer,
-                emit_every_n=observe_every_n, emit_interval_s=observe_interval_s)
+                emit_every_n=m["observe_every_n"], emit_interval_s=m["observe_interval_s"])
         else:
             build = build_runner
 
     try:
-        app = load_app_config(path)
         print(f"=== vision_slice (config: {path}) — {len(app.pipelines)} pipeline ===", file=sys.stderr)
         ok = 0
         failed = 0
@@ -292,8 +318,8 @@ def main(argv=None) -> int:
                         help="số frame giữa 2 snapshot (0=tắt theo-frame)")
     parser.add_argument("--metrics-port", type=int, default=None,
                         help="bật exporter HTTP /metrics (Prometheus scrape) ở cổng này (0=ephemeral). Bật → cũng emit snapshot định kỳ")
-    parser.add_argument("--metrics-host", default="127.0.0.1",
-                        help="địa chỉ bind exporter /metrics (mặc định 127.0.0.1 an toàn; 0.0.0.0=phơi mạng, KHÔNG auth → chỉ mạng nội bộ)")
+    parser.add_argument("--metrics-host", default=None,
+                        help="địa chỉ bind exporter /metrics (không set → 127.0.0.1 an toàn; 0.0.0.0=phơi mạng, KHÔNG auth → chỉ mạng nội bộ). Sentinel None để merge với [observability] TOML")
     parser.add_argument("--capabilities", action="store_true",
                         help="IN năng lực máy hiện tại (torch/cuda/cv2/gpu) dạng JSON rồi thoát — kiểm máy TRƯỚC khi deploy (đổi máy GPU/không-GPU)")
     args = parser.parse_args(argv)
@@ -326,7 +352,7 @@ def main(argv=None) -> int:
         if args.validate:
             return _validate_config_only(args.config)
         return _run_from_config(args.config, observe=args.observe,
-                                observe_interval_s=obs_interval, observe_every_n=obs_every,
+                                observe_interval_s=args.observe_interval, observe_every_n=args.observe_every,
                                 metrics_port=args.metrics_port, metrics_host=args.metrics_host)
 
     _validate(args, parser)

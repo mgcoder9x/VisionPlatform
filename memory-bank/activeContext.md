@@ -1,8 +1,18 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T17:00:00+07:00.
-**[🔒 GIT CHECKPOINT] #295→#309 đã push (`b9b7bcc`). #310 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau b9b7bcc.**
+**Cập nhật lúc:** 2026-07-11T17:45:00+07:00.
+**[🔒 GIT CHECKPOINT] #295→#310 đã push (`631af34`). #311 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau 631af34.**
+**[✅ #311 — PHA2 code TDD `config-observability-toml` HOÀN TẤT — observability trong TOML (GitOps) — máy `toann`, verify 623/2·5/0]**
+- Hiện thực design hardened 2 vòng (#309 mở + #310 review host-sentinel). Đóng follow-on T-029/D-082.
+- **Code (additive):** `kernel/config.py` (+`ObservabilityConfig` DTO frozen +`AppConfig.observability`) · `config_loader.py` (+`_parse_observability` validate-kiểu-tường-minh chặn bool-lọt-int +wire) · `vision_slice_app.py` (+`_merge_observability` precedence CLI>TOML>default · `_build_config_observability` resolve host #310 · reorder `_run_from_config` load→merge→smart-default · main RAW+`--metrics-host default None`).
+- **C-021 (đổi hành vi #299):** main truyền RAW observe_interval (smart-default dời vào `_run_from_config` sau-merge); end-to-end KHÔNG đổi (runner vẫn 5.0); test #299 cập nhật assert 5.0→0.0.
+- **Test mới:** `tests/test_config_observability_toml.py` (11): parse×3 · merge×4 · host-sentinel×1 · e2e-merge×2 · backward-compat×1. (1 test-fix trong lúc chạy: merge-none-toml kỳ vọng host sai → sửa test, code đúng.)
+- **VERIFY THẬT:** `pytest test_config_observability_toml.py` 11 passed; `vp verify` = **623/2** (612→623 +11) · lint 5/0 · drift PASS.
+- **Ghi sổ:** LOG #311 · D-086→✅ code · +C-021 · INDEX #311/Σ213/C21 + dòng · block này. Sẽ commit+push.
+- **Chuỗi observability TRỌN:** đo→render→serve `/metrics` → wire `--config` (CLI, #299) → **khai báo trong TOML (#311)**. GitOps thuần-file xong.
+- **Bước kế (CHỜ user):** điểm dừng sạch (no-GPU trọn); hoặc GPU/DB/máy-mạnh cho nhánh 🔴.
+---
 **[🔵 #310 — REVIEW đối kháng design `config-observability-toml` → fix 1 lỗ CRASH (host-sentinel) trước code — máy `toann`]**
 - Áp pattern đọc-lại-VALID (#271/#275/#280/#298): soi design #309 với CODE THẬT.
 - **Lỗ-1 CRASH:** design đề xuất `--metrics-host default None` + "resolve sau merge" → nhưng `_build_config_observability` dùng CHUNG 2 đường, truyền host thẳng vào `MetricsHttpExporter`→`ThreadingHTTPServer((host,port))`; CLI-direct (`--metrics-port` không kèm host) → host=None → CRASH. **Fix GỐC:** resolve `host = metrics_host or "127.0.0.1"` TRONG `_build_config_observability` (1 chỗ, phủ 2 đường; backward-compat vì test #299 truyền host tường minh). +K-076.

@@ -75,9 +75,25 @@ class PipelineConfig:
 
 
 @dataclass(frozen=True)
+class ObservabilityConfig:
+    """Khai báo observability TOP-LEVEL (fleet/tiến-trình) — spec config-observability-toml (D-086).
+
+    Ánh xạ 1:1 tới bộ tham số observability của `_run_from_config` (#299). TOP-LEVEL (không per-pipeline):
+    observability là quyết định tiến-trình ("1 process = 1 scrape target"; `source_id` đã phân biệt cam).
+    Mặc định = TẮT hoàn toàn (không section → AppConfig.observability=None → hành vi #299 giữ nguyên).
+    """
+    observe: bool = False
+    metrics_port: Optional[int] = None
+    metrics_host: str = "127.0.0.1"
+    observe_interval_s: float = 0.0
+    observe_every_n: int = 0
+
+
+@dataclass(frozen=True)
 class AppConfig:
-    """Toàn bộ file config: danh sách pipeline (mỗi cái 1 camera/luồng)."""
+    """Toàn bộ file config: danh sách pipeline (mỗi cái 1 camera/luồng) + observability (optional, top-level)."""
     pipelines: Sequence[PipelineConfig] = ()
+    observability: Optional[ObservabilityConfig] = None   # None = không khai báo (backward-compat)
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "pipelines", tuple(self.pipelines))

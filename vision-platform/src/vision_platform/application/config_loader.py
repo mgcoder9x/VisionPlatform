@@ -13,7 +13,7 @@ import tomllib
 from typing import Any
 
 from vision_platform.kernel.config import (
-    AppConfig, PipelineConfig, SourceConfig, StageConfig, SinkConfig, DetectorConfig,
+    AppConfig, PipelineConfig, SourceConfig, StageConfig, SinkConfig, DetectorConfig, ObservabilityConfig,
 )
 from vision_platform.kernel.backpressure import BackpressurePolicy
 
@@ -61,6 +61,36 @@ def _typed(raw: Any, what: str) -> tuple[str, dict]:
     return t, params
 
 
+def _parse_observability(raw: Any) -> ObservabilityConfig:
+    """Parse table top-level `[observability]` → `ObservabilityConfig`. Validate KIỂU từng field (fail-fast).
+
+    KHÔNG dùng bool vô-tình cho int (isinstance(True,int) là True trong Python) → kiểm loại tường minh."""
+    _require(isinstance(raw, dict), f"observability phải là bảng, nhận {type(raw).__name__}")
+
+    observe = raw.get("observe", False)
+    _require(isinstance(observe, bool), f"observability.observe phải là bool (nhận {observe!r})")
+
+    port = raw.get("metrics_port")
+    _require(port is None or (isinstance(port, int) and not isinstance(port, bool)),
+             f"observability.metrics_port phải là số nguyên hoặc vắng (nhận {port!r})")
+
+    host = raw.get("metrics_host", "127.0.0.1")
+    _require(isinstance(host, str) and host != "", f"observability.metrics_host phải là chuỗi không rỗng (nhận {host!r})")
+
+    interval = raw.get("observe_interval_s", 0.0)
+    _require(isinstance(interval, (int, float)) and not isinstance(interval, bool),
+             f"observability.observe_interval_s phải là số (nhận {interval!r})")
+
+    every = raw.get("observe_every_n", 0)
+    _require(isinstance(every, int) and not isinstance(every, bool),
+             f"observability.observe_every_n phải là số nguyên (nhận {every!r})")
+
+    return ObservabilityConfig(
+        observe=observe, metrics_port=port, metrics_host=host,
+        observe_interval_s=float(interval), observe_every_n=every,
+    )
+
+
 def parse_app_config(raw: dict) -> AppConfig:
     """Dựng `AppConfig` từ dict đã đọc + validate CẤU TRÚC. Sai → `ConfigError`.
 
@@ -104,7 +134,9 @@ def parse_app_config(raw: dict) -> AppConfig:
             detector=detector, max_frames=max_frames,
         ))
 
-    return AppConfig(pipelines=pipelines)
+    obs_raw = raw.get("observability")
+    observability = _parse_observability(obs_raw) if obs_raw is not None else None
+    return AppConfig(pipelines=pipelines, observability=observability)
 
 
 def load_app_config(path: str) -> AppConfig:

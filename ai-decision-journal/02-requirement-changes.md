@@ -206,3 +206,12 @@ Links: D-052, D-036, K-054
 Đổi gì: file `01-decisions.md` nhảy D-035 → D-037 (thiếu heading `### D-036`) dù INDEX đã có dòng D-036 (drift bản-ghi, nghi mất khi sync đa-máy). → khôi phục detail D-036 (Yolov5PtDetector) từ nguồn canonical LOG #198 — KHÔNG bịa (mọi dữ kiện: names car/moto/truck, patch weights_only, 364/1 lint 5/0 đều lấy nguyên từ #198).
 Vì sao: journal là chỉ-mục-kiểm-chứng; INDEX trỏ D-036 mà không có detail = gãy audit. Khôi phục từ LOG (nguồn sự thật) là fix gốc, không phải xoá dòng INDEX (fix ngọn).
 
+
+### C-021 — 2026-07-11 — `main`→`_run_from_config` routing: pre-compute smart-default (5s) → truyền RAW cờ CLI; smart-default DỜI vào `_run_from_config` (sau merge TOML)
+Status: ✅ (verify — full 623/2, lint 5/0; test #299 cập nhật assertion 5.0→0.0)
+Scope: `profiles/vision_slice_app.py::main` (config-branch) + `_run_from_config` · spec config-observability-toml (D-086)
+Nguồn: LOG Entry #311 · D-086/#309/#310 · đối chiếu test #299 fail
+Evidence: `test_config_observability.py::test_main_routes_metrics_flags_to_config` đổi assert `observe_interval_s` 5.0→0.0; full `vp verify` 623/2·5/0·drift PASS; trace end-to-end runner vẫn nhận emit_interval_s=5.0
+Links: D-086, D-082 (#299 hành vi cũ), T-029
+Đổi: TỪ (#299) `main` tính `obs_interval=5.0` (smart-default) RỒI truyền xuống `_run_from_config` → SANG `main` truyền **RAW** `args.observe_interval` (0.0 khi không set) + `--metrics-host default None`; **smart-default 5s DỜI vào `_run_from_config`** (áp SAU khi merge với `[observability]` TOML).
+Vì sao (bản chất): để merge precedence CLI↔TOML đúng, `_run_from_config` PHẢI biết "CLI có set interval không" (sentinel 0.0) TRƯỚC khi áp smart-default — nếu main pre-compute 5.0 thì mất thông tin "không set" → không merge được với TOML. Hành vi END-TO-END KHÔNG đổi (runner vẫn nhận 5.0 qua smart-default sau-merge); chỉ hợp-đồng-trung-gian đổi. Đường CLI-direct giữ smart-default riêng (không đụng). Backward-compat: test #299 khác duy nhất 1 assertion giá-trị-trung-gian (đã cập nhật + ghi rõ lý do).

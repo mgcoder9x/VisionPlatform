@@ -127,8 +127,10 @@ def test_main_routes_metrics_flags_to_config(tmp_path, monkeypatch):
     assert captured["metrics_port"] == 7
     assert captured["metrics_host"] == "127.0.0.1"
     assert captured["observe"] is True
-    # --observe (hoặc --metrics-port) → main set nhịp 5s (thấy sức khỏe định kỳ)
-    assert captured["observe_interval_s"] == 5.0
+    # D-086/#310: main giờ truyền RAW `args.observe_interval` (0.0 khi không set) xuống `_run_from_config`;
+    # smart-default 5s DỜI vào `_run_from_config` (SAU merge với [observability] TOML). Hành vi end-to-end
+    # KHÔNG đổi (runner vẫn nhận 5.0) — chỉ hợp đồng-trung-gian main→_run_from_config đổi (xem C-021).
+    assert captured["observe_interval_s"] == 0.0
 
 
 # ---------- integration: _run_from_config thật + metrics bật → chạy xong + exporter stop sạch (không rò) ----------
