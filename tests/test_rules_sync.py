@@ -1,4 +1,4 @@
-"""Linter luật: RULES_VERSION ở AGENTS.md phải khớp mọi file mirror.
+"""Linter luật: RULES_VERSION ở AGENTS.md phải khớp mọi file mirror (gồm kit portable).
 Chạy: py tests/test_rules_sync.py   (exit 0 = khớp, 1 = lệch)
 Dùng được với pytest qua test_rules_version_in_sync().
 """
@@ -12,6 +12,8 @@ FILES = [
     "GEMINI.md",
     ".github/copilot-instructions.md",
     ".kiro/steering/00-core-rules.md",
+    # Kit portable: §2.5 buộc kit cùng version — máy-kiểm để KHÔNG drift âm thầm (trước đây ngoài check → lệch 15 vs 16).
+    "ai-learning-os-kit/AGENTS.template.md",
 ]
 PAT = re.compile(r"RULES_VERSION:\s*(\d+)")
 

@@ -4,7 +4,7 @@
 > làm việc. Nguồn sự thật duy nhất; file luật từng tool (`.github/copilot-instructions.md`,
 > `GEMINI.md`, `.kiro/steering/`) trỏ về đây.
 >
-> **RULES_VERSION: 15** — đổi luật phải BUMP + đồng bộ mọi mirror lên cùng version (kiểm `tests/test_rules_sync.py`).
+> **RULES_VERSION: 16** — đổi luật phải BUMP + đồng bộ mọi mirror lên cùng version (kiểm `tests/test_rules_sync.py`).
 
 ## 0. Đây là gì
 {{PROJECT_DESC — mô tả dự án 2-3 câu}}.
@@ -74,6 +74,17 @@ Công cụ là đòn bẩy, KHÔNG thay người dùng suy nghĩ.
 ## 3. Quy trình triển khai (dùng agent-skills)
 Theo DEFINE → PLAN → BUILD → VERIFY → REVIEW → SHIP. Spec trước → task atomic → từng slice →
 có bằng chứng test mới "xong". Skill tại `.kiro/skills/`. TẮT `/build auto` khi học.
+
+## 3.1 ⚙️ Chạy lệnh QUA LAUNCHER CỐ ĐỊNH (an toàn + đỡ duyệt-lại)
+- MỌI lệnh verify/routine (test·lint·drift·validate) chạy qua LAUNCHER/script TÊN-CỐ-ĐỊNH của repo (vd
+  `scripts/<launcher>` gộp test+lint+drift · `python tests/<script>.py`). Cần logic MỚI → bỏ VÀO launcher,
+  **KHÔNG đổi tên lệnh** (giữ chuỗi lệnh ổn định).
+- **CẤM lệnh ad-hoc tuỳ-biến cho việc LẶP** (`python -c "..."`, one-liner đổi-chuỗi-mỗi-lần): (a) **an toàn** —
+  user chỉ Trust vài PREFIX CỐ ĐỊNH hẹp, KHÔNG phải mở `python *`/`*` rộng (= chạy code tuỳ ý, xoá/ghi ngoài
+  workspace được = nguy hiểm); (b) **đỡ ma sát** — mỗi chuỗi mới lại bắt duyệt tay vô tận. Ad-hoc CHỈ cho
+  thăm-dò 1-lần thật sự (không lặp).
+- Entry-point MỚI (launcher/script) → báo user thêm 1 dòng Trusted Command; ưu tiên script **CHỈ-ĐỌC/validate**.
+  Lệnh phá huỷ (`del`/`rmdir`/`Remove-Item`/`reset --hard`/`clean`) KHÔNG bao giờ tự-chạy — luôn để user duyệt.
 
 ## 4. Quy tắc kiến trúc — không vi phạm
 {{ARCH_RULES — quy tắc kiến trúc/import của dự án; nếu chưa có thì ghi "chưa định nghĩa"}}

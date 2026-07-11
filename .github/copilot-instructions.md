@@ -1,7 +1,7 @@
 # Copilot Instructions — trỏ về AGENTS.md
 
 > **Luôn đọc `AGENTS.md` ở gốc repo trước** — nguồn sự thật đầy đủ.
-> **RULES_VERSION: 15** — phải khớp AGENTS.md (`py tests/test_rules_sync.py`).
+> **RULES_VERSION: 16** — phải khớp AGENTS.md (`py tests/test_rules_sync.py`).
 
 ## 0. ĐẦU MỖI PHIÊN (bắt buộc)
 CHẠY `git status` + `git diff` TRƯỚC; đọc 5 entry cuối `AI-IMPLEMENTATION-LOG.md` (gốc repo) +
@@ -34,6 +34,7 @@ Người dùng học để **TỰ VIẾT LẠI được hệ thống**. Công c�
 7. **Ngôn ngữ tiếng Việt** + **git-safety** (commit từng task; không commit secret / force push) — chi tiết AGENTS.md.
 8. **PLAN-FIRST:** việc không-tầm-thường (>1 file / đổi luật / mơ hồ) → nêu kế hoạch ngắn + CHỜ duyệt trước khi làm.
 9. **Dạy code chi tiết cho người mới** → `code-lessons/00-LESSON-RULES.md` (AGENTS §1.8): bám code thật (quote nguyên văn + cite path, không bịa), chia nhỏ nhất, **vòng cung: tổng quan→vấn đề&tại-sao→khám phá nhiều hướng→giải pháp→triển khai→nên/tránh**, link glossary, retrieval+Feynman; KHÔNG dán lesson vào chat.
+10. **Lệnh qua LAUNCHER cố định (AGENTS §3.1):** verify/routine chạy qua script TÊN-CỐ-ĐỊNH (`scripts/vp.cmd verify`, `python tests/*.py`, `powershell -NoProfile -File tools/*.ps1`); **CẤM `python -c`/one-liner tuỳ-biến cho việc lặp** (an toàn Trust prefix hẹp + đỡ duyệt-lại). Logic mới → bỏ VÀO launcher, không đổi tên lệnh. Entry-point mới → báo user để trust 1 dòng.
 
 ## Vai gợi ý của Copilot Chat
 💬 Hỏi nhanh inline ("giải thích đoạn này", tra cú pháp). Không phải driver chính.

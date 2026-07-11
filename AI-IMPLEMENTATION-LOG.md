@@ -6018,3 +6018,166 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Không đổi code phiên này (điều tra thuần). Mốc 601/2·5/0·drift PASS·RULES 15 giữ nguyên.
 
 **Đã verify (máy k.nguyen.manh.toan):** chạy LẶP `test_supervisor_liveness.py` 12× + `test_step_09_shutdown.py` 12× = **24/24 passed, 0 fail** (chạy thật, đọc output từng run); `drift_check.py` chạy sau ghi sổ. · **Chưa verify (trung thực):** residual full-suite-contention (không tái hiện isolated được → cần máy mạnh/CI đo).
+
+### Entry #295 — 2026-07-10 — Luật "chạy lệnh QUA LAUNCHER CỐ ĐỊNH" (§3.1) + bump RULES_VERSION 15→16 — Kiro-Opus
+
+**Bối cảnh:** User mệt vì phải duyệt (Allow/Trust) từng lệnh, đặc biệt các phiên/agent dùng `python -c "..."` inline (mỗi chuỗi khác → Trusted Commands không nhớ được → hỏi vô tận). User duyệt phương án (b): mã hoá thành LUẬT trong AGENTS.md để mọi agent/máy tự theo.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Thêm **§3.1 AGENTS.md**: mọi lệnh verify/routine PHẢI chạy qua LAUNCHER/script TÊN-CỐ-ĐỊNH (`scripts/vp.cmd verify`, `python tests/<script>.py`, `powershell -NoProfile -File tools/<script>.ps1`); CẤM `python -c`/one-liner tuỳ-biến cho việc lặp; logic mới → bỏ VÀO launcher (không đổi tên lệnh); entry-point mới → báo user thêm 1 dòng Trusted Command; lệnh phá huỷ (del/rmdir/Remove-Item/reset/clean) KHÔNG tự-chạy.
+- Bump **RULES_VERSION 15→16** + mirror sang GEMINI.md/copilot/steering (mỗi nơi thêm mục luật #10 / §3.1 cô đọng).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (thêm luật mới, không sửa luật cũ).
+
+**3. Trade-off đã cân nhắc:**
+- Luật "chỉ launcher cố định" (hơi cứng cho thăm-dò) vs để tự do ad-hoc (tiện nhưng duyệt vô tận + buộc mở `python *` rộng nguy hiểm) → chọn **launcher cố định** (an toàn: Trust prefix hẹp + đỡ ma sát; ad-hoc CHỈ cho thăm-dò 1-lần). Cái mất: đôi khi phải gói logic vào script thay vì gõ nhanh `python -c` — chấp nhận vì đó chính là thứ tạo an toàn + hết-hỏi.
+
+**4. Điều bạn nên biết:**
+- Luật áp cho MỌI agent đọc AGENTS.md (Kiro/Codex/Gemini/Copilot) trên MỌI máy → agent phiên kia (đọc lại AGENTS.md) sẽ tự gom lệnh về launcher, ngừng đẻ `python -c` mới.
+- Trusted Commands của user (cấp app, ngoài repo) vẫn phải set thủ công 1 lần/máy (đã hướng dẫn: `cmd /c scripts\vp.cmd *`, `python tests\...py *`, `powershell -NoProfile -File tools\*`).
+- Kit `ai-learning-os-kit/` (template tái dùng) CHƯA bump lên 16 — nợ đồng bộ nhỏ (không nằm trong 4 mirror mà `test_rules_sync` kiểm; sẽ bump khi tiện).
+
+**Đã verify (CHẠY THẬT máy toann, qua cổng `cmd /c scripts\vp.cmd verify`):** `pytest` = **601 passed/2 skipped**; lint = **5 kept/0 broken**; **RULES_VERSION SYNC = 16 khớp cả 4 mirror**; drift-check PASS. · **Chưa verify:** agent phiên kia thực sự tuân luật (chỉ biết khi nó đọc lại AGENTS.md + chạy); kit chưa bump 16.
+
+### Entry #296 — 2026-07-10 — REVIEW bảo mật/đúng-đắn observability HTTP + exposition (máy khác #279–#291) — SOUND, không vá — Kiro-Opus
+
+**Bối cảnh:** Sau sync #294 + luật §3.1 (#295), đồng bộ hiểu biết việc máy `k.nguyen.manh.toan` xây (#278–#294). Review đối kháng phần rủi-ro-cao nhất = **endpoint HTTP `/metrics` phơi-mạng** (security-sensitive) + renderer, bám CODE THẬT (đọc `adapters/metrics_http_server.py`, `adapters/metrics_exposition.py`, `kernel/metric_sample.py`). KHÔNG đổi code (mốc 601/2 giữ).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Chọn review endpoint mạng TRƯỚC (thay vì làm feature mới) vì: hệ đã ở mốc no-GPU gần-hoàn-tất, phần còn lại chặn-tiền-đề; endpoint HTTP là bề mặt tấn công mới → đúng chỉ thị "cực tốt + an toàn". Bám code thật để kết luận verify-được (không suy đoán).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** KHÔNG — review kết luận code SOUND, cố ý KHÔNG vá (vá vấn-đề-không-tồn-tại = fix ngọn + rủi ro, trái "fix bản chất").
+
+**3. Trade-off đã cân nhắc:**
+- Vá phòng-thủ-sâu (validate label/metric NAME `[a-zA-Z_]...`, escape `\r`) vs để nguyên → **để nguyên** (name/key do CODE đặt literal cố định, không nhận input ngoài → rủi ro thấp; escape `\r` không bắt buộc theo spec 0.0.4). Thêm validate = over-engineer YAGNI. Nếu sau này label nhận input người dùng → mới cần.
+
+**4. Điều bạn nên biết (→ K-072):**
+- Escaping label value ĐÚNG chuẩn Prometheus 0.0.4 (`\`→`\\` trước, `"`,`\n`) → không inject/vỡ format qua source_id ký tự lạ. Secure-default bind localhost + 500-không-lộ-chi-tiết + deadlock-guard `_serving`. Type-conflict fail-fast.
+- Còn (chấp nhận, ghi): NAME chưa validate regex (code-controlled → thấp); `\r` không escape (spec không bắt); no-auth/rate-limit (localhost nội bộ chuẩn ngành). Chỉ thành vấn đề nếu (a) phơi 0.0.0.0 ra mạng công cộng KHÔNG firewall/proxy, hoặc (b) label nhận input ngoài.
+
+**Đã verify (ĐỌC CODE THẬT):** đọc 3 file; `_esc_label_value` khớp spec Prometheus label-value escaping; bind default `127.0.0.1`; `send_error(500,...)` không kèm trace; `_serving` Event guard shutdown. KHÔNG chạy test mới (không đổi code; suite 601/2 giữ nguyên từ #295). · **Chưa verify:** hành vi dưới phơi-mạng-thật + tải scrape đồng thời cao (chưa load-test — nội bộ localhost nên chưa cần).
+
+### Entry #297 — 2026-07-10 — Mở spec `config-observability` (PHA1 design-first) — bật observer/`/metrics` cho đường `--config` — Kiro-Opus
+
+**Bối cảnh:** Sau review #296 (endpoint SOUND), chọn bước sản phẩm no-GPU không-chặn còn giá-trị: đóng nợ "🟡 wire config" D-069 — đường `--config` (`_run_from_config`) chưa bật observer/`/metrics` (chỉ CLI-direct có). Đọc CODE THẬT trước (`_run_from_config` bulkhead tuần-tự, `build_runner`, schema frozen, `iter_metrics`, `MetricsHttpExporter`/`is_loopback`, `_CompositeObserver`).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Thiết kế: `build_runner` +3 param optional (observer/emit_every_n/emit_interval_s) → PipelineRunner; `_run_from_config` dựng **1 InMemoryMetrics + 1 exporter DÙNG CHUNG** cho mọi pipeline (aggregate theo source_id) + observer composite + `stop()` trong finally + giữ bulkhead; main() định tuyến cờ `--observe`/`--metrics-port`/... xuống đường config. TÁI DÙNG mảnh sẵn có, KHÔNG viết lại.
+- Dùng **cờ CLI** (không field TOML) ở v1 — bề mặt tối thiểu, khớp mô hình "1 process/1 camera, mỗi process 1 lệnh `--config cam.toml --metrics-port P`".
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (spec mới; additive, mặc định TẮT → `--config` hiện tại giữ nguyên).
+
+**3. Trade-off đã cân nhắc:**
+- Cờ CLI trên đường config vs field observability trong TOML → **cờ CLI** (thêm field = schema frozen + loader + validate + strict-key = bề mặt lớn; cờ đủ cho 1-process/camera). Config-declared = follow-on.
+- 1 metrics/exporter DÙNG CHUNG (tuần tự aggregate) vs mỗi pipeline 1 exporter → **dùng chung** (1 process = 1 scrape target chuẩn Prometheus; song song realtime = Non-Goal scale). Cái mất: nhiều-pipeline/process không realtime song song (chấp nhận, ghi Non-Goal).
+
+**4. Điều bạn nên biết:**
+- DESIGN-FIRST, **CHƯA code** — 2 file spec 0-diagnostic (get_diagnostics; đã sửa heading `## Testing Strategy` khớp checker — K-065). Chờ user valid.
+- Non-Goal rõ: runtime song song đa-pipeline · observability trong TOML · auth/push-gateway · refactor bắt-buộc khối main.
+- Ranh giới đã kiểm: `_run_from_config` tuần tự (T-015) đủ cho 1-pipeline/process.
+
+**Đã verify:** `get_diagnostics` requirements.md + design.md = **No diagnostics found** (sau sửa heading); tham chiếu code (_run_from_config/build_runner/iter_metrics/MetricsHttpExporter/is_loopback/_CompositeObserver/PipelineRunner observer) đã đọc file thật. · **Chưa verify:** hành vi runtime (chưa code — PHA1); scrape /metrics aggregate thực (test PHA2).
+
+### Entry #298 — 2026-07-11 — REVIEW đối kháng design `config-observability` → SỬA 6 lỗ lệch CODE THẬT trước khi code — Kiro-Opus
+
+**Bối cảnh:** Trước khi PHA2 code, áp pattern đã thắng (#271/#275/#280/#282/#287/#290): đọc-lại-VALID design đối chiếu CODE THẬT + luồng thực thi. Đọc `_run_from_config`, `build_runner`, `main`, `MetricsObserver`, `MetricsHttpExporter`, `observers.py` → phát hiện design (#297) LỆCH trạng thái hiện tại đáng kể (đường `--config` đã tiến hơn design tưởng).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Thu HẸP phạm vi: `build_runner` ĐÃ có `observer/emit_every_n/emit_interval_s` (D-070/#278) → **Requirement 2 = NO-OP, KHÔNG đụng**. `_run_from_config` ĐÃ có `observe/observe_interval_s/observe_every_n` + wire LoggingObserver per-pipeline. Việc CÒN LẠI chỉ là đường `/metrics` (MetricsObserver + exporter) + route `metrics_port/metrics_host`.
+- EXTRACT `_build_config_observability(observe, metrics_port, metrics_host) -> (observer, exporter)` từ khối inline trong `main` → DÙNG CHUNG cho cả `main` CLI-direct lẫn `_run_from_config` (khử trùng lặp — fix bản chất, không copy khối main).
+- GIỮ pattern closure `build = lambda pcfg: build_runner(pcfg, observer=observer, ...)` (KHÔNG đổi loop sang `build(pcfg, observer=)` → không phá test tiêm build).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu (design #297):** 6 lỗ SỬA trong design.md (thêm mục "Review đối kháng (#298)" SUPERSEDE mô tả cũ):
+- Lỗ-1 (SỐNG-CÒN): Req 2 `build_runner` đã có sẵn → bỏ (nếu code sẽ làm trùng/đổi chữ ký đang dùng).
+- Lỗ-2: tên param design (`emit_*`) lệch tên THẬT (`observe_every_n`/`observe_interval_s`) → giữ tên thật, chỉ THÊM `metrics_port`/`metrics_host`.
+- Lỗ-3: loop thật gọi `build(pcfg)` (observer trong closure), không `build(pcfg, observer=)` → giữ closure.
+- Lỗ-4: điều kiện wire chỉ gate `observe` → `--metrics-port` không kèm `--observe` cho `/metrics` RỖNG → sửa `observe OR metrics_port is not None`.
+- Lỗ-5: test scrape qua `_run_from_config` BẤT KHẢ THI (sync + `finally: stop()` → port không lộ, exporter đã đóng sau return) → test P1/P2 đánh vào seam `_build_config_observability` trực tiếp (feed snapshot ≥2 source qua observer → urllib GET `exporter.port` → assert 2 source → stop). P4 đã có test #278, không lặp.
+- Lỗ-6: smart-default emit=5.0 chỉ ở `main` → gọi `_run_from_config` trực tiếp thiếu nhịp → tự áp trong `_run_from_config` (self-consistent).
+
+**3. Trade-off đã cân nhắc:**
+- DRY (extract helper dùng chung main+config) vs additive-tối-thiểu (chỉ thêm hàm cho config) → chọn **DRY** (2 nhánh observability y hệt, tách 1 nguồn tránh lệch về sau; giữ an toàn = main dùng lại helper, không đổi hành vi).
+- 1 observer DÙNG CHUNG mọi pipeline vs "mới mỗi pipeline" (code cũ tạo LoggingObserver mới/pipeline) → **dùng chung** (LoggingObserver/MetricsObserver stateless, source_id từ snapshot → aggregate đúng; đơn giản hơn). VERIFIED `MetricsObserver.on_snapshot` đọc `snapshot.source_id`.
+
+**4. Điều bạn nên biết:**
+- Bằng chứng đọc code (chống bịa): `build_runner` chữ ký ĐÃ có 3 param observability (pipeline_factory.py:226-227); `_run_from_config` chữ ký `(path,*,build=None,observe=False,observe_interval_s=0.0,observe_every_n=0)` (vision_slice_app.py:155-158); `main` tính `obs_interval=5.0` khi `_want_periodic=(observe or metrics_port)`; `MetricsHttpExporter.start()->int`+`.port`+`stop()` idempotent+`is_loopback`; `MetricsObserver` nhãn `source=snapshot.source_id`.
+- VẪN CHƯA code (PHA1 hardened 1 vòng). Design đủ heading Kiro Spec Format (Overview/Architecture/Components/Data Models/Error Handling/Testing Strategy + Correctness Properties) — sửa nội dung, giữ cấu trúc.
+
+**Đã verify:** đọc code THẬT 5 file (chữ ký/luồng khớp trích dẫn ở trên); design.md sửa đủ 6 lỗ, headings đầy đủ (grep `^## `). · **Chưa verify (KHÔNG có tool get_diagnostics trong phiên này):** "0-diagnostic" của Kiro spec-lint — chỉ giữ NGUYÊN cấu trúc heading đã 0-diag ở #297 (chỉ sửa nội dung trong các section, không đổi tên heading); hành vi runtime chưa code (PHA2).
+
+### Entry #299 — 2026-07-11 — PHA2 code TDD `config-observability` HOÀN TẤT — `/metrics` cho đường `--config` (no-GPU) — Kiro-Opus
+
+**Bối cảnh:** Hiện thực design đã hardened 1 vòng (#297 mở + #298 review sửa 6 lỗ). Đóng nợ 🟡 wire config D-069: đường `--config` (`_run_from_config`) giờ bật được `/metrics` (Prometheus scrape), khớp mô hình "1 process/1 camera → 1 scrape target".
+
+**1. Quyết định AI tự ra (spec không nói):**
+- EXTRACT `_build_config_observability(observe, metrics_port, metrics_host) -> (observer, exporter)` từ khối inline trong `main` → main CLI-direct DÙNG LẠI (DRY — khử trùng lặp 2 nhánh observability, fix bản chất).
+- `_run_from_config` +2 param `metrics_port`/`metrics_host` (GIỮ tên `observe_*` đã có); smart-default `observe_interval_s=5.0` khi `(observe or metrics_port) & cả hai nhịp=0` (self-consistent kể cả gọi trực tiếp); wire observer khi `build is None` qua helper; GIỮ pattern closure `build(pcfg)`; `try/finally: exporter.stop()`.
+- KHÔNG đụng `build_runner` (đã có observer/emit params từ D-070 — Req 2 no-op, xác nhận ở #298).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (additive; design đã sửa khớp code ở #298). `--config` không cờ → hành vi giữ NGUYÊN (backward-compat, test cũ `test_vision_slice_config.py` còn xanh).
+
+**3. Trade-off đã cân nhắc:**
+- 1 observer/metrics/exporter DÙNG CHUNG mọi pipeline (aggregate tuần tự theo source_id) vs mỗi pipeline riêng → **dùng chung** (1 process = 1 scrape target chuẩn Prometheus; MetricsObserver đọc snapshot.source_id → mỗi camera 1 series). Cái mất: nhiều-pipeline/process không realtime song song (Non-Goal scale).
+- Test scrape qua seam `_build_config_observability` (feed snapshot → urllib GET → stop) thay vì qua `_run_from_config` (sync + finally-stop → bất khả thi, Lỗ-5 #298).
+
+**4. Điều bạn nên biết:**
+- File đổi: `profiles/vision_slice_app.py` (+`_build_config_observability`, `_run_from_config` +metrics, `main` route + dùng helper). Test mới: `tests/test_config_observability.py` (8 test: aggregate 2 camera · metrics-không-observe · backward-compat (None,None) · observe-đơn · exporter stop→cổng đóng · cảnh báo non-loopback · main route cờ · integration run+cleanup).
+- Đường `--config --metrics-port P` giờ ngang đường CLI-direct. `main` đã tính obs_interval=5.0 khi metrics bật (đã có) + giờ truyền cả metrics_port/host xuống config.
+
+**Đã verify (CHẠY lệnh + ĐỌC output thật):** `pytest tests/test_config_observability.py` = **8 passed** (3.08s); `cmd /c scripts\vp.cmd verify` = **609 passed/2 skipped** (601→609, +8 additive) · **lint 5 kept/0 broken** (import-linter: domain/kernel/runtime/application/adapters layer giữ) · **drift-check PASS** (RULES 16). · **Chưa verify:** scrape `/metrics` thật dưới deploy nhiều-process song song (Non-Goal); nhánh có-GPU (no-GPU máy này).
+
+### Entry #300 — 2026-07-11 — Đóng nợ kit RULES_VERSION 15→16 (fix bản chất) + ĐƯA KIT VÀO MÁY-KIỂM chống-drift — Kiro-Opus
+
+**Bối cảnh:** Nợ nhỏ đã flag (#295): kit `ai-learning-os-kit/` chưa bump 16. Điều tra CODE THẬT: `tests/test_rules_sync.py` chỉ kiểm 4 file (AGENTS.md + 3 mirror) → kit NẰM NGOÀI máy-kiểm → version kit drift ÂM THẦM (thật = 15 vs repo 16). Đây đúng "cách cực mạnh chống drift" user xin: fix GỐC cái đã cho kit drift, không chỉ sửa con số.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Thêm `ai-learning-os-kit/AGENTS.template.md` vào `test_rules_sync.FILES` → máy enforce kit==main ở MỌI cổng (pytest `test_rules_version_in_sync` + `drift_check.py` + `vp verify/check`). Một-nguồn-sự-thật (FILES list) → không đụng drift_check.py (nó gọi thẳng `rs.check()`).
+- Fix theo THỨ TỰ ĐÚNG: (a) thêm §3.1 "chạy lệnh QUA LAUNCHER CỐ ĐỊNH" (bản generic) vào kit AGENTS.template.md → RUỘT khớp v16 THẬT; (b) rồi mới bump số 15→16. Bump số mà thiếu nội dung = nói dối version = fix ngọn.
+- Đổi nhãn drift_check "4 mirror khớp" → "mọi mirror + kit khớp" + prose AGENTS.md §2 "4 mirror"→"5 file gồm kit" (tránh tự đẻ drift-số mới khi hardcode số đếm).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (đóng nợ + củng cố cơ chế; additive với guard).
+
+**3. Trade-off đã cân nhắc:**
+- Enforce kit==main bằng máy (option A) vs decouple kit-version độc lập (option B) → **A**: §2.5 (đã có) VỐN yêu cầu kit cùng version → mechanize luật sẵn có = đúng triết lý D-052/D-053 (máy-kiểm thay kỷ luật), và user xin CHỐNG-DRIFT MẠNH HƠN chứ không yếu đi. Cái giá: mỗi lần bump luật phải bump kit (đã là yêu cầu §2.5, giờ máy ép).
+- Bump-số-trước vs nội-dung-trước → nội-dung-trước (trung thực version).
+
+**4. Điều bạn nên biết:**
+- Trong kit CHỈ `AGENTS.template.md` mang dấu `RULES_VERSION: N` (các mirror kit khác không có marker → không cần bump). Regex `RULES_VERSION:\s*(\d+)` khớp header kit → 16.
+- File đổi: `ai-learning-os-kit/AGENTS.template.md` (+§3.1, 15→16) · `tests/test_rules_sync.py` (+kit vào FILES + docstring) · `tests/drift_check.py` (nhãn) · `AGENTS.md` §2 (prose 4→5).
+- Từ nay drift-check TỰ bắt nếu ai quên bump kit (lỗ đã đóng bằng máy).
+
+**Đã verify (CHẠY + ĐỌC output):** `cmd /c scripts\vp.cmd verify` = full suite exit 0 (609/2 giữ) · **lint 5/0** · **drift PASS** — mục [2/2] RULES_VERSION SYNC in **5 dòng đều 16** (AGENTS + GEMINI + copilot + steering + kit). `vp check` PASS. · **Chưa verify:** không có (mọi thứ máy-kiểm; kit các mirror khác không có marker version nên không áp dụng).
+
+### Entry #301 — 2026-07-11 — MỐC SẠCH: refresh `progress.md` khớp frontier #300 (đóng drift "chân lý hiện tại") — Kiro-Opus
+
+**Bối cảnh:** Sau #299 (config-observability) + #300 (kit machine-check), `progress.md` còn kẹt ở mốc #293 (baseline 601/2, RULES 15, liệt "config-path metrics" là 🔴 CHẶN — nhưng #299 đã wire xong). Đây là drift ở file "chân lý hiện tại" mà máy KHÔNG bắt (drift_check C6 chỉ kiểm activeContext freshness, KHÔNG kiểm progress.md content).
+
+**1. Quyết định AI tự ra:** refresh `progress.md` (§2.5 tóm gọn, không chồng bản cũ) → mốc #300, baseline **609/2 · lint 5/0 · RULES 16 (5 file gồm kit)**; thêm config-observability `/metrics` cho `--config` (D-082) + §3.1 (D-081) + kit machine-check (D-083) vào "Đã xong"; chuyển "config-path metrics" khỏi 🔴-CHẶN (đã wire #299) — CHỈ còn realtime-song-song chặn (T-015 tuần tự); thêm 🟡 observability-trong-TOML (follow-on).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (memory hygiene).
+
+**3. Trade-off:** log #301 cho refresh (theo tiền lệ #293) vs không-log — chọn log để LOG↔reality khớp (audit "hộp đen"). KHÔNG thêm D/C/T/K (không phải quyết định/bài học mới).
+
+**4. Điều bạn nên biết:** KHÔNG làm thêm feature no-GPU vì rủi ro over-engineer — observability-trong-TOML đã là Non-Goal có chủ đích (D-082: cờ CLI đủ cho 1-process/camera). Mọi hướng LỚN còn lại đều CHẶN tiền-đề ngoài (GPU/CUDA · DB server · máy-mạnh/CI cho K-035 · runtime song song). Đây là ĐIỂM DỪNG SẠCH hợp lý.
+
+**Đã verify (CHẠY + ĐỌC output):** `cmd /c scripts\vp.cmd check` = drift PASS (#301 sẽ khớp sau khi cập nhật INDEX/activeContext) — chạy ở bước kế. progress.md khớp activeContext + INDEX (609/2 · RULES 16 · 5 file). · **Chưa verify:** không (số baseline 609/2 lấy từ `vp verify` #299/#300 đã chạy thật lượt trước).
+
+### Entry #302 — 2026-07-11 — REVIEW an-toàn SHUTDOWN/toàn-vẹn-dữ-liệu đường `--config` (SIGTERM) = SOUND — KHÔNG vá speculative — Kiro-Opus
+
+**Bối cảnh:** Soi khía cạnh "an toàn + sản phẩm thương mại" chưa kiểm: service chạy dài (RTSP) bị systemd/docker/k8s gửi **SIGTERM** khi stop/restart. Giả thuyết ban đầu: SIGTERM → không chạy teardown → sink mất dữ liệu / rò tài nguyên. ĐIỀU TRA code thật để KIỂM (chống bịa) TRƯỚC khi kết luận.
+
+**1. Quyết định AI tự ra:** KHÔNG thêm signal-handler/graceful-shutdown — vì điều tra cho thấy vấn-đề-mất-dữ-liệu KHÔNG tồn tại (fix nó = speculative, vi phạm "đừng fix cái không tồn tại").
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (review-only, không đổi code).
+
+**3. Trade-off đã cân nhắc:** thêm graceful-shutdown (SIGTERM→should_stop→teardown sạch) vs không → **không**, vì bằng chứng cho thấy durability đã đạt per-event (thêm = phức tạp thừa cho vấn-đề-không-có). Ghi ĐIỀU KIỆN khi nào MỚI cần (sink defer/batch).
+
+**4. Điều bạn nên biết (bằng chứng đọc code THẬT — verify chặt, không tin note):**
+- `PipelineRunner.run()` bọc **nested try/finally** (source→executor→sink setup; teardown NGƯỢC trong finally) → `sink.teardown()`/`executor.teardown_all()`/`source.teardown()` LUÔN chạy khi kết thúc bình thường HOẶC raise (gồm `KeyboardInterrupt`/Ctrl+C=SIGINT unwind finally). Snapshot cuối `_emit(is_final=True)` cũng trong finally.
+- `JsonlEventSink.handle` + `CrossingEventJsonlSink.handle`: **`self._f.flush()` sau MỖI dòng** (đọc nguồn — docstring "mất tối đa 1 event khi crash cứng").
+- `CrossingEventSqliteSink.handle`: **`self._conn.commit()` sau mỗi frame có event** (đọc nguồn, không tin note D-063).
+- `MetricsHttpExporter`: daemon thread → chết cùng process (không rò).
+- ⇒ **SIGTERM (default → terminate ngay, KHÔNG unwind finally):** teardown()/exporter.stop() KHÔNG chạy, NHƯNG data đã flush/commit per-event → **KHÔNG mất dữ liệu**; fd/conn OS thu hồi khi process chết → **KHÔNG rò**. Toàn-vẹn dữ liệu SOUND.
+- **ĐIỀU KIỆN cần graceful-shutdown (chưa cần nay):** nếu sau này có sink DEFER/BATCH ghi (không flush/commit per-event) → SIGTERM sẽ mất batch chưa-ghi → LÚC ĐÓ mới cài SIGTERM handler → `should_stop` (PipelineRunner ĐÃ có param) → break → finally teardown. Pattern có sẵn ở `supervisor.py` (`signal.signal(SIGTERM, ...)`).
+
+**Đã verify (ĐỌC nguồn thật 4 file):** `pipeline_runner.py` (nested finally teardown), `jsonl_event_sink.py`/`crossing_event_sink.py` (flush/dòng), `crossing_event_sqlite_sink.py` (commit/frame) — durability per-event XÁC NHẬN. Không đổi code → baseline 609/2·5/0 giữ. · **Chưa verify (chưa cần):** hành vi SIGTERM thực tế bằng subprocess (không cần vì kết luận dựa hợp-đồng flush/commit đã đọc + hành vi Python default SIGTERM đã biết); nhánh sink-defer tương lai.

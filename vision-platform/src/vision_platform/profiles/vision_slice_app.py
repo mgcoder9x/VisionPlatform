@@ -63,6 +63,40 @@ class _CompositeObserver:
                 pass
 
 
+def _build_config_observability(observe, metrics_port, metrics_host):
+    """Dựng observer + optional exporter `/metrics` DÙNG CHUNG (khử trùng lặp: cả main CLI-direct lẫn `_run_from_config`).
+
+    Trả `(observer, exporter)`: observer=None nếu không bật gì; exporter=None nếu `metrics_port is None`.
+    `metrics_port=0` → OS cấp cổng ephemeral (test). DÙNG CHUNG **1** `InMemoryMetrics` → `MetricsObserver` gắn nhãn
+    `source=snapshot.source_id` → `/metrics` aggregate MỌI pipeline trong 1 process (mỗi camera 1 series gauge).
+    Điều kiện wire = `observe OR metrics_port is not None` (metrics đơn lẻ, không cần --observe, vẫn lên).
+    """
+    observers_list = []
+    if observe:
+        from vision_platform.runtime.observers import LoggingObserver
+        observers_list.append(LoggingObserver())
+    exporter = None
+    if metrics_port is not None:
+        from vision_platform.runtime.observability import InMemoryMetrics
+        from vision_platform.runtime.observers import MetricsObserver
+        from vision_platform.adapters.metrics_http_server import MetricsHttpExporter, is_loopback
+        metrics = InMemoryMetrics()
+        observers_list.append(MetricsObserver(metrics))
+        if not is_loopback(metrics_host):
+            print(f"[metrics] CẢNH BÁO: /metrics bind {metrics_host} KHÔNG xác thực — chỉ dùng mạng nội bộ tin cậy",
+                  file=sys.stderr)
+        exporter = MetricsHttpExporter(metrics.iter_metrics, host=metrics_host, port=metrics_port)
+        _p = exporter.start()
+        print(f"[metrics] phục vụ http://{metrics_host}:{_p}/metrics", file=sys.stderr)
+    if len(observers_list) == 1:
+        observer = observers_list[0]
+    elif len(observers_list) >= 2:
+        observer = _CompositeObserver(observers_list)
+    else:
+        observer = None
+    return observer, exporter
+
+
 def _build_source(args):
     if args.source == "fake":
         from vision_platform.adapters.fake_frame_source import FakeFrameSource
@@ -154,7 +188,8 @@ def _validate_config_only(path: str) -> int:
 
 def _run_from_config(path: str, *, build=None,
                      observe: bool = False, observe_interval_s: float = 0.0,
-                     observe_every_n: int = 0) -> int:
+                     observe_every_n: int = 0,
+                     metrics_port: int | None = None, metrics_host: str = "127.0.0.1") -> int:
     """Đường declarative (config-declarative): file TOML → dựng + chạy từng pipeline tuần tự (v1 sync).
 
     BULKHEAD per-pipeline (K-045): mỗi pipeline chạy trong khoang CÔ LẬP — lỗi khi BUILD (constructor thiếu
@@ -166,40 +201,51 @@ def _run_from_config(path: str, *, build=None,
     công (0) khi còn camera chết — để orchestration/CI phát hiện sự cố một phần (chống giấu lỗi).
 
     `build` (DI, mặc định `build_runner`): hàm dựng runner từ 1 PipelineConfig — tiêm được để test bulkhead
-    xác định (không cần adapter thật lỗi).
+    xác định (không cần adapter thật lỗi). Khi `build` được tiêm → tôn trọng build đó, BỎ QUA observability.
 
-    `observe`/`observe_interval_s`/`observe_every_n` (opt-in): bật quan sát vận hành cho MỌI pipeline của lần
-    chạy config này (mỗi pipeline 1 `LoggingObserver` riêng — snapshot mang source_id phân biệt cam). Chỉ áp
-    khi `build` KHÔNG được tiêm (đường chạy thật); nếu test tiêm `build` thì tôn trọng build đó (observe bỏ qua).
+    Observability (opt-in, đóng nợ 🟡 wire config D-069): `observe`→LoggingObserver; `metrics_port`→exporter
+    `/metrics` (Prometheus scrape) DÙNG CHUNG 1 InMemoryMetrics cho MỌI pipeline (aggregate theo source_id —
+    mô hình "1 process/1 camera → 1 scrape target"). `metrics_host` non-loopback → cảnh báo không-auth. Cả 2
+    tắt → hành vi `--config` giữ NGUYÊN (backward-compat). Exporter luôn `stop()` trong finally (không rò cổng).
     """
     from vision_platform.application.config_loader import load_app_config
     from vision_platform.profiles.pipeline_factory import build_runner
 
+    # Smart-default nhịp emit: bật quan sát mà chưa set nhịp → 5s (self-consistent kể cả khi gọi TRỰC TIẾP,
+    # không qua main) → /metrics cập nhật định kỳ, không chỉ snapshot cuối.
+    if (observe or metrics_port is not None) and observe_every_n == 0 and observe_interval_s == 0.0:
+        observe_interval_s = 5.0
+
+    exporter = None
     if build is None:
-        if observe:
-            from vision_platform.runtime.observers import LoggingObserver
-            build = lambda pcfg: build_runner(  # noqa: E731 — LoggingObserver MỚI mỗi pipeline (per-camera)
-                pcfg, observer=LoggingObserver(),
+        observer, exporter = _build_config_observability(observe, metrics_port, metrics_host)
+        if observer is not None:
+            build = lambda pcfg: build_runner(  # noqa: E731 — observer DÙNG CHUNG mọi pipeline (source_id từ snapshot)
+                pcfg, observer=observer,
                 emit_every_n=observe_every_n, emit_interval_s=observe_interval_s)
         else:
             build = build_runner
 
-    app = load_app_config(path)
-    print(f"=== vision_slice (config: {path}) — {len(app.pipelines)} pipeline ===", file=sys.stderr)
-    ok = 0
-    failed = 0
-    for pcfg in app.pipelines:
-        try:
-            runner = build(pcfg)
-            stats = runner.run(max_frames=pcfg.max_frames)
-            print(f"[{pcfg.id}] frames_read={stats.frames_read} processed={stats.processed} "
-                  f"skipped={stats.skipped} stage_errors={stats.stage_errors} eof={stats.eof}", file=sys.stderr)
-            ok += 1
-        except Exception as e:  # noqa: BLE001 — bulkhead có chủ đích: cô lập lỗi 1 pipeline (chừa BaseException)
-            failed += 1
-            print(f"[{pcfg.id}] LỖI — bỏ qua, chạy tiếp pipeline kế: {type(e).__name__}: {e}", file=sys.stderr)
-    print(f"=== tổng: {ok} ok / {failed} lỗi / {len(app.pipelines)} pipeline ===", file=sys.stderr)
-    return 0 if failed == 0 else 1
+    try:
+        app = load_app_config(path)
+        print(f"=== vision_slice (config: {path}) — {len(app.pipelines)} pipeline ===", file=sys.stderr)
+        ok = 0
+        failed = 0
+        for pcfg in app.pipelines:
+            try:
+                runner = build(pcfg)
+                stats = runner.run(max_frames=pcfg.max_frames)
+                print(f"[{pcfg.id}] frames_read={stats.frames_read} processed={stats.processed} "
+                      f"skipped={stats.skipped} stage_errors={stats.stage_errors} eof={stats.eof}", file=sys.stderr)
+                ok += 1
+            except Exception as e:  # noqa: BLE001 — bulkhead có chủ đích: cô lập lỗi 1 pipeline (chừa BaseException)
+                failed += 1
+                print(f"[{pcfg.id}] LỖI — bỏ qua, chạy tiếp pipeline kế: {type(e).__name__}: {e}", file=sys.stderr)
+        print(f"=== tổng: {ok} ok / {failed} lỗi / {len(app.pipelines)} pipeline ===", file=sys.stderr)
+        return 0 if failed == 0 else 1
+    finally:
+        if exporter is not None:
+            exporter.stop()   # R3.2: luôn đóng cổng/thread (kể cả 1 pipeline raise ra ngoài / KeyboardInterrupt)
 
 
 def main(argv=None) -> int:
@@ -280,7 +326,8 @@ def main(argv=None) -> int:
         if args.validate:
             return _validate_config_only(args.config)
         return _run_from_config(args.config, observe=args.observe,
-                                observe_interval_s=obs_interval, observe_every_n=obs_every)
+                                observe_interval_s=obs_interval, observe_every_n=obs_every,
+                                metrics_port=args.metrics_port, metrics_host=args.metrics_host)
 
     _validate(args, parser)
 
@@ -336,31 +383,8 @@ def main(argv=None) -> int:
         sinks.append(track_summary)
     sink = CompositeSink(sinks)
 
-    # Observer(s) + optional exporter /metrics (đường inline). Nhiều observer → composite.
-    observers_list = []
-    if args.observe:
-        from vision_platform.runtime.observers import LoggingObserver
-        observers_list.append(LoggingObserver())
-    exporter = None
-    if args.metrics_port is not None:
-        from vision_platform.runtime.observability import InMemoryMetrics
-        from vision_platform.runtime.observers import MetricsObserver
-        from vision_platform.adapters.metrics_http_server import MetricsHttpExporter, is_loopback
-        metrics = InMemoryMetrics()
-        observers_list.append(MetricsObserver(metrics))
-        if not is_loopback(args.metrics_host):
-            print(f"[metrics] CẢNH BÁO: /metrics bind {args.metrics_host} KHÔNG xác thực — chỉ dùng mạng nội bộ tin cậy",
-                  file=sys.stderr)
-        exporter = MetricsHttpExporter(metrics.iter_metrics, host=args.metrics_host, port=args.metrics_port)
-        _p = exporter.start()
-        print(f"[metrics] phục vụ http://{args.metrics_host}:{_p}/metrics", file=sys.stderr)
-
-    if len(observers_list) == 1:
-        observer = observers_list[0]
-    elif len(observers_list) >= 2:
-        observer = _CompositeObserver(observers_list)
-    else:
-        observer = None
+    # Observer(s) + optional exporter /metrics (đường inline) — DÙNG CHUNG helper với đường --config (DRY, #298).
+    observer, exporter = _build_config_observability(args.observe, args.metrics_port, args.metrics_host)
 
     runner = PipelineRunner(source, executor, sink, observer=observer,
                             emit_every_n=obs_every, emit_interval_s=obs_interval)

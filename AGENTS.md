@@ -4,7 +4,7 @@
 > này trước khi làm việc. Đây là nguồn sự thật duy nhất; các file luật riêng của từng tool
 > (`.github/copilot-instructions.md`, `GEMINI.md`, `.kiro/steering/`) trỏ về đây.
 >
-> **RULES_VERSION: 15** (2026-07-08) — đổi luật phải BUMP số này + đồng bộ MỌI mirror lên cùng
+> **RULES_VERSION: 16** (2026-07-10) — đổi luật phải BUMP số này + đồng bộ MỌI mirror lên cùng
 > version (xem §2.5). Kiểm tra lệch: `py tests/test_rules_sync.py`.
 
 ## 0. Đây là gì
@@ -99,7 +99,7 @@ multi-camera). **Mục tiêu tối thượng của người dùng: HIỂU hệ t
 - **CHỐNG-DRIFT BẰNG MÁY (BẮT BUỘC đầu phiên + trước khi tuyên bố "xong"):** CHẠY **1 lệnh**
   `py tests/drift_check.py` (điểm vào DUY NHẤT — chạy cả 2 linter: nhất quán bộ nhớ D-052 [LOG liên tục ·
   INDEX↔LOG max · journal liên tục · total đếm-thật · ID⇄INDEX · activeContext freshness] + RULES_VERSION
-  khớp 4 mirror). **FAIL = có DRIFT bản ghi → SỬA cho khớp thực tế TRƯỚC khi làm tiếp** (cổng khách quan,
+  khớp mọi mirror + kit (5 file — kit `ai-learning-os-kit/AGENTS.template.md` đưa vào máy-kiểm từ D-083)). **FAIL = có DRIFT bản ghi → SỬA cho khớp thực tế TRƯỚC khi làm tiếp** (cổng khách quan,
   mạnh hơn luật văn xuôi vì máy kiểm được). *Lưu ý: dùng 1 lệnh drift_check.py — KHÔNG ghép "A; B" (hook
   runCommand mangle `;`, D-053/#250).*
 
@@ -129,6 +129,19 @@ Spec trước → chia task atomic → làm từng slice → có bằng chứng 
 → **Spec-kit** (GitHub) đã lấy về `specs/` (templates + commands), dùng THỦ CÔNG: quy trình
 constitution → specify → clarify → plan → tasks → analyze → implement (xem `specs/README.md`).
 CLI `specify` (cần `uv`) để bài môi trường sau.
+
+## 3.1 ⚙️ Chạy lệnh QUA LAUNCHER CỐ ĐỊNH (an toàn + không phải duyệt-lại vô tận)
+- MỌI lệnh verify/routine (test · lint · drift-check · validate · docs-gate...) PHẢI chạy qua **LAUNCHER/
+  script CÓ TÊN CỐ ĐỊNH** trong repo — vd `scripts/vp.cmd verify` (test+lint+drift), `python tests/drift_check.py`,
+  `python tests/<script>.py`, `powershell -NoProfile -File tools/<script>.ps1`. Cần logic MỚI → bỏ VÀO
+  launcher/script cố định, **KHÔNG đổi tên lệnh** (giữ chuỗi lệnh ổn định).
+- **CẤM lệnh ad-hoc tuỳ-biến cho việc LẶP LẠI:** KHÔNG `python -c "..."`, KHÔNG one-liner `powershell -Command "..."`
+  đổi-chuỗi-mỗi-lần. Lý do bản chất: (a) **an toàn** — người dùng chỉ cần Trust vài *prefix cố định* (KHÔNG phải
+  mở `python *`/`*` rộng = chạy code tuỳ ý, có thể xoá/ghi ngoài workspace); (b) **đỡ ma sát** — mỗi chuỗi mới lại
+  bắt duyệt tay vô tận. Ad-hoc CHỈ chấp nhận cho thăm-dò 1-lần thật sự (không lặp).
+- Tạo entry-point MỚI (launcher/script) → **báo người dùng TÊN** để thêm 1 dòng Trusted Command (`<lệnh> *`);
+  ưu tiên script **chỉ-đọc/validate** (không xoá/ghi ngoài workspace) để trust an toàn. Lệnh phá huỷ (`del`/`rmdir`/
+  `Remove-Item`/`reset --hard`/`clean`) KHÔNG bao giờ đưa vào launcher tự-chạy — luôn để người dùng duyệt.
 
 ## 4. Quy tắc kiến trúc (import 6 layer) — không được vi phạm
 - **domain**: Python thuần + numpy. KHÔNG cv2/torch/ZMQ.

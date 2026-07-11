@@ -736,3 +736,25 @@ Evidence: design #289 `stop()`=`shutdown()+server_close()` sẽ DEADLOCK nếu g
 Đóng khi: (bài học — luôn áp dụng)
 Nội dung: Exporter dùng `http.server.ThreadingHTTPServer` chạy `serve_forever` trong daemon thread. `stop()` phải CHỜ (`threading.Event` set ngay trước serve_forever) tới khi serve_forever đã vào rồi mới `shutdown()` → chống deadlock stop-sớm. +`poll_interval` để shutdown phản hồi nhanh.
 Vì sao ghi (bài học vận hành): củng cố K-069 — review thành phần I/O/hạ-tầng phải đối chiếu HỢP ĐỒNG THƯ VIỆN THẬT (thread-safety, thứ tự lifecycle, điều kiện tiên quyết của API như "shutdown cần serve_forever đang chạy"), không chỉ logic ứng dụng. Nhiều lỗi deadlock/race chỉ lộ ở tầng hợp đồng thư viện.
+
+### K-072 — ✅ (2026-07-10) REVIEW bảo mật observability HTTP `/metrics` + Prometheus exposition = SOUND (đọc code thật)
+Status: ✅ (reviewed, no critical bug — không vá speculative)
+Scope: `adapters/metrics_http_server.py` · `adapters/metrics_exposition.py` · `kernel/metric_sample.py` · LOG Entry #296
+Nguồn: LOG Entry #296
+Evidence: đọc 3 file — `_esc_label_value` escape `\`→`\\`(trước)/`"`→`\"`/`\n`→`\n` (khớp spec Prometheus 0.0.4 label-value); MetricsHttpExporter bind default `127.0.0.1`; do_GET provider-lỗi→`send_error(500)` không stack-trace; `_serving` Event chống deadlock shutdown; render type-conflict→ValueError fail-fast; `_fmt_value` inf/nan→+Inf/-Inf/NaN.
+Đóng khi: (bài học — kết luận review, không cần đóng)
+Nội dung: Endpoint `/metrics` + renderer (máy `k.nguyen.manh.toan` #279–#291) ĐÚNG + AN TOÀN: (a) không inject/vỡ Prometheus text qua label value ký tự lạ (escape đúng); (b) secure-by-default localhost, 0.0.0.0=opt-in+cảnh báo; (c) lỗi không lộ chi tiết; (d) MetricSample DTO giữ (name,labels) tách rời → không parse-ngược lossy (fix gốc D-071). Cứng-hoá NHỎ chưa làm (không cần): validate NAME regex `[a-zA-Z_]...` (name code-controlled), escape `\r` (spec không bắt), auth/rate-limit (localhost nội bộ).
+Vì sao ghi: (1) preserve kết luận review → phiên/máy sau KHÔNG review lại endpoint mạng này. (2) Nêu RÕ điều kiện khi cần cứng-hoá thêm (phơi 0.0.0.0 ra internet KHÔNG firewall, hoặc label nhận input ngoài) → biết ngưỡng phải hành động. (3) Minh hoạ "không bịa fix cho vấn-đề-không-tồn-tại".
+
+### K-073 — ✅ (2026-07-11) BÀI HỌC (củng cố K-065): "0-diagnostic" của spec KHÔNG chứng nhận design KHỚP CODE — phải đọc-lại-valid đối chiếu chữ ký/luồng THẬT trước code
+**Triệu chứng:** design `config-observability` (#297) 0-diag, đọc trôi chảy, NHƯNG khi review đối kháng (#298) đối chiếu CODE THẬT → lệch 6 chỗ: (1) đề xuất THÊM `observer/emit` cho `build_runner` — thực tế ĐÃ CÓ (D-070/#278) → Req 2 no-op; (2) tên param `emit_*` ≠ tên thật `observe_*`; (3) loop thật `build(pcfg)` (closure) ≠ `build(pcfg, observer=)`; (4) điều kiện wire chỉ gate `observe` → `--metrics-port` đơn lẻ cho `/metrics` rỗng; (5) test scrape qua `_run_from_config` bất khả thi (sync + finally-stop); (6) smart-default emit chỉ ở main.
+**Gốc:** design viết theo TRÍ NHỚ/giả định về code, không đối chiếu chữ ký hiện tại. 0-diag chỉ kiểm CẤU TRÚC heading (K-065), MÙ về việc design có mô tả đúng code đang chạy hay không.
+**Luật rút ra:** trước PHA2 code, BẮT BUỘC 1 vòng "đọc-lại-valid": mở TỪNG hàm/DTO design nhắc tới, đối chiếu (a) chữ ký hiện tại, (b) luồng thực thi gồm nhánh edge, (c) hợp đồng thư viện/observer — SỬA design cho khớp rồi mới code. Đặc biệt kiểm "cái design bảo THÊM" có TỒN TẠI sẵn không (chống code trùng/đổi chữ ối đang dùng). Bằng chứng khớp = trích path+dòng, không nói suông.
+**Ứng dụng:** pattern review-trước-code (#271/#275/#280/#282/#287/#290/#298) tiếp tục bắt lỗ THIẾT KẾ rẻ hơn nhiều so với sửa sau khi đã code.
+
+### K-074 — ✅ (2026-07-11) SHUTDOWN đường `--config` SOUND: durability per-event (flush/dòng + commit/frame) → SIGTERM KHÔNG mất dữ liệu; KHÔNG cần graceful-shutdown (nay)
+**Câu hỏi:** service chạy dài bị SIGTERM (systemd/docker) — có mất dữ liệu / rò tài nguyên vì không chạy teardown không?
+**Bằng chứng (đọc nguồn THẬT, không tin note):** `PipelineRunner.run()` nested try/finally → teardown sink/executor/source LUÔN chạy khi kết thúc/raise (gồm Ctrl+C). `JsonlEventSink`/`CrossingEventJsonlSink` flush() mỗi dòng; `CrossingEventSqliteSink` commit() mỗi frame có event; `MetricsHttpExporter` daemon thread. SIGTERM default = terminate ngay (không unwind finally) NHƯNG data đã flush/commit per-event → không mất; fd/conn OS thu hồi → không rò.
+**Kết luận:** durability đạt Ở TẦNG SINK (per-event), KHÔNG phụ thuộc teardown → KHÔNG vá graceful-shutdown speculative (đúng "đừng fix cái không tồn tại"). 
+**ĐIỀU KIỆN đảo (khi nào MỚI cần):** nếu thêm sink DEFER/BATCH ghi (không flush/commit per-event) → SIGTERM mất batch → lúc đó cài `signal.signal(SIGTERM, →should_stop)` + truyền `should_stop` vào `runner.run` (param ĐÃ có) → break → finally teardown. Pattern sẵn ở `supervisor.py`.
+**Bài học:** giả thuyết "lỗ an toàn" phải KIỂM code thật trước khi vá — nhiều "lỗ" đã được thiết kế giải quyết ở tầng khác (durability per-event thay vì phụ thuộc shutdown).

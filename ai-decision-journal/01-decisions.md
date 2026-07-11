@@ -925,3 +925,32 @@ Evidence: `pytest test_capability.py` 14 passed/1 skipped; `--capabilities` in `
 Links: D-073 (capability probe), D-077 (test-stability), K-035, T-015 (config tuần tự)
 Nội dung: `--capabilities` dò+in năng lực máy (JSON) rồi thoát — operator kiểm máy trước deploy (đổi máy GPU/không-GPU). Additive. HOÃN config-path metrics (T-015 tuần tự → giá trị hạn chế). **Sửa trung thực:** #288 ghi "đóng K-035" là OVERCLAIM — thực tế qua nhiều full-run 80s+ thấy flaky supervisor ~2/5 lần dưới tải cực đại (chạy riêng 5/5 ổn định, vp verify xanh) → K-035 = GIẢM-THIỂU MẠNH (event-driven diệt race thiết kế) chứ chưa đóng tuyệt đối dưới tải cực đại.
 Vì sao: config-path metrics chưa đáng (tuần tự). --capabilities nhỏ+đúng pain+verify được. Sửa overclaim = nguyên tắc "không bịa, thà nói không chắc, valid nhiều lần" — residual flaky là bản chất môi-trường (máy yếu, tải cực đại), không phải race logic; đo/đóng tiếp cần máy mạnh/CI, KHÔNG bump-timeout che.
+
+### D-081 — 2026-07-10 — Luật "chạy lệnh QUA LAUNCHER CỐ ĐỊNH" (§3.1) + bump RULES_VERSION 15→16
+Status: ✅ (verify 601/2·5/0·rules-sync 4×16·drift PASS)
+Scope: `AGENTS.md` §3.1 (mới) + header 15→16 · `GEMINI.md`/`copilot-instructions.md` (mục #10) · `.kiro/steering/00-core-rules.md` (§3.1)
+Nguồn: LOG Entry #295 · user duyệt phương án (b)
+Evidence: `cmd /c scripts\vp.cmd verify` = 601 passed/2 skipped · lint 5/0 · RULES_VERSION SYNC 16 khớp 4 mirror · drift PASS
+Links: D-057 (vp.cmd launcher), K-066, D-052/053 (anti-drift)
+Nội dung: Luật buộc mọi lệnh verify/routine chạy qua LAUNCHER/script TÊN-CỐ-ĐỊNH (`scripts/vp.cmd`, `python tests/*.py`, `powershell -File tools/*.ps1`); CẤM `python -c`/one-liner tuỳ-biến cho việc lặp; logic mới → bỏ VÀO launcher (không đổi tên lệnh); entry-point mới → báo user trust 1 dòng; lệnh phá huỷ không tự-chạy. Mirror 4 file + bump version 16.
+Vì sao (bản chất): fix GỐC "duyệt lệnh vô tận" — nguyên nhân là agent đẻ chuỗi lệnh mới liên tục (`python -c` inline) nên Trusted Commands (khớp prefix cố định) không trùm được. Gom về launcher tên-cố-định → user Trust vài prefix HẸP 1 lần là hết hỏi, mà KHÔNG phải mở `python *`/`*` rộng (chạy code tuỳ ý = nguy hiểm). Vừa an toàn vừa đỡ ma sát; áp mọi agent/máy qua AGENTS.md.
+
+### D-082 — 2026-07-10 — Mở spec `config-observability` (PHA1 design-first) — bật observer/`/metrics` cho đường `--config`
+Status: 🔵 design-only (chờ user valid → PHA2 code TDD)
+Scope: `.kiro/specs/config-observability/requirements.md` + `design.md` (spec mới; PHA2 sẽ đụng `profiles/pipeline_factory.py::build_runner`, `profiles/vision_slice_app.py::_run_from_config`+`main`)
+Nguồn: LOG Entry #297 · đóng nợ "🟡 wire config" của D-069
+Evidence: `get_diagnostics` requirements.md + design.md = No diagnostics found (0-diag, sau sửa heading `## Testing Strategy` khớp Kiro Spec Format checker — K-065); tham chiếu code đã ĐỌC file thật (`_run_from_config` bulkhead tuần-tự, `build_runner`, `iter_metrics`, `MetricsHttpExporter`/`is_loopback`, `_CompositeObserver`, `PipelineRunner` DI observer)
+Links: D-069 (pipeline-observability, nợ wire config), D-070 (observability đường config LoggingObserver), D-079 (MetricsHttpExporter), D-074 (metrics-exposition), D-044 (bulkhead _run_from_config)
+Nội dung: Thiết kế bật observability cho đường `--config`/`_run_from_config`: (a) `build_runner` +3 param optional keyword-only (`observer=None`/`emit_every_n=0`/`emit_interval_s=0.0`) → PipelineRunner; (b) `_run_from_config` dựng **1 InMemoryMetrics + 1 MetricsHttpExporter DÙNG CHUNG** cho mọi pipeline (aggregate theo `source_id`), observer composite, `exporter.stop()` trong finally, GIỮ bulkhead per-pipeline (D-044); (c) `main()` định tuyến cờ `--observe`/`--metrics-port`/`--metrics-host`/`--observe-every`/`--observe-interval` xuống đường config. Dùng **cờ CLI** (không field TOML) ở v1. TÁI DÙNG mảnh sẵn có, additive, mặc định TẮT → `--config` hiện tại giữ nguyên (backward-compat).
+Vì sao (bản chất): mô hình deploy thật = 1 process/1 camera, mỗi process 1 `/metrics` port → Prometheus scrape N target; đường `--config` là đường deploy chính nhưng CHƯA phơi metrics được (chỉ CLI-direct có) → observability "mù ở tầng deploy". Cờ CLl (không field TOML) vì thêm field = schema frozen + loader + validate + strict-key = bề mặt lớn, thừa cho 1-process/camera.
+Non-Goal: runtime song song đa-pipeline (T-015 `_run_from_config` tuần tự) · observability trong TOML · auth/push-gateway · refactor bắt-buộc khối main.
+
+### D-083 — 2026-07-11 — Đưa kit `ai-learning-os-kit/` vào MÁY-KIỂM RULES_VERSION (đóng lỗ drift âm thầm) + bump kit 15→16
+Status: ✅ (verify full suite exit 0 · lint 5/0 · drift PASS — rules-sync 5 file đều 16)
+Scope: `tests/test_rules_sync.py` (+`ai-learning-os-kit/AGENTS.template.md` vào FILES + docstring) · `ai-learning-os-kit/AGENTS.template.md` (+§3.1 generic + bump 15→16) · `tests/drift_check.py` (nhãn "4 mirror"→"mọi mirror + kit") · `AGENTS.md` §2 (prose 4→5 file)
+Nguồn: LOG Entry #300 · nợ nhỏ #295 (kit chưa bump) · user xin "cách cực mạnh chống drift"
+Evidence: `cmd /c scripts\vp.cmd verify` — [2/2] RULES_VERSION SYNC in 5 dòng đều 16 (AGENTS/GEMINI/copilot/steering/kit) · full suite exit 0 · lint 5/0 · drift PASS
+Links: D-052 (linter nhất quán bộ nhớ), D-053 (hook tự-chạy + port kit), D-081 (§3.1 + bump 16), §2.5 (buộc sync kit)
+Nội dung: Trước đây `test_rules_sync` chỉ kiểm 4 file (AGENTS.md + 3 mirror tool) → kit portable nằm NGOÀI máy-kiểm → RULES_VERSION kit drift âm thầm (thật 15 vs repo 16). Fix GỐC = thêm kit vào FILES → máy enforce kit==main ở mọi cổng (pytest + drift_check + vp). Fix theo thứ tự đúng: thêm §3.1 (nội dung v16) vào kit TRƯỚC rồi mới bump số (chống nói-dối-version = fix ngọn).
+Vì sao (bản chất): §2.5 VỐN yêu cầu "đổi luật → bump + sync kit lên cùng version" nhưng chỉ dựa KỶ LUẬT (văn xuôi) → drift được. Mechanize thành MÁY-KIỂM = đúng triết lý D-052/D-053 (cực mạnh chống-drift = máy kiểm thay kỷ luật). Không làm yếu đi mà mạnh hơn: lỗ để-quên-bump-kit giờ bị bắt tự động.
+Trade-off: mỗi lần bump luật buộc bump kit (đã là yêu cầu §2.5 — nay máy ép, không thêm gánh nặng mới). Kit portable sang repo khác: version phản ánh thế-hệ-luật, đúng ý đồ template.

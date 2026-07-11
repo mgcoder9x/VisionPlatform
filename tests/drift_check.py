@@ -29,7 +29,7 @@ def main() -> int:
     for r in mc_report:
         print(r)
 
-    print("\n=== [2/2] RULES_VERSION SYNC (4 mirror khớp) ===")
+    print("\n=== [2/2] RULES_VERSION SYNC (mọi mirror + kit khớp) ===")
     rs_ok, rs_versions = rs.check()
     for f, ver in rs_versions.items():
         print(f"{ver if ver else 'MISSING':>8}  {f}")

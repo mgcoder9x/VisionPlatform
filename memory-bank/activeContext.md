@@ -1,7 +1,70 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
-## Trạng thái hiện tại (2026-07-10)
-**Cập nhật lúc:** 2026-07-10T22:15:00+07:00.
+## Trạng thái hiện tại (2026-07-11)
+**Cập nhật lúc:** 2026-07-11T12:45:00+07:00.
+**[✅ #302 — REVIEW an-toàn SHUTDOWN/toàn-vẹn-dữ-liệu (SIGTERM) đường `--config` = SOUND, KHÔNG vá — máy `toann`]**
+- Soi "an toàn + thương mại": service chạy dài bị SIGTERM (systemd/docker) — giả thuyết mất-dữ-liệu vì không teardown. ĐIỀU TRA code THẬT (chống bịa) TRƯỚC khi kết luận.
+- **Bằng chứng (đọc nguồn 4 file):** `PipelineRunner.run()` nested try/finally → teardown LUÔN chạy khi kết thúc/raise (gồm Ctrl+C); `JsonlEventSink`/`CrossingEventJsonlSink` **flush mỗi dòng**; `CrossingEventSqliteSink` **commit mỗi frame**; exporter daemon-thread. ⇒ SIGTERM (không unwind finally) KHÔNG mất dữ liệu (durability per-event) + không rò (OS thu hồi fd/thread).
+- **Kết luận:** SOUND — durability đạt Ở TẦNG SINK, không phụ thuộc teardown → **KHÔNG vá graceful-shutdown speculative** (đúng "đừng fix cái không tồn tại"). Giả thuyết ban đầu BỊ BÁC bởi code thật.
+- **ĐIỀU KIỆN đảo (ghi K-074):** nếu sau này thêm sink DEFER/BATCH (không flush/commit per-event) → mới cài `signal.signal(SIGTERM,→should_stop)` + truyền `should_stop` vào `runner.run` (param ĐÃ có) → break → finally teardown. Pattern sẵn `supervisor.py`.
+- **Ghi sổ:** LOG #302 · +K-074 · INDEX #302/Σ205/K74 · block này. Không đổi code (609/2·5/0 giữ). Drift PASS.
+- **Bước kế (CHỜ user — điểm dừng sạch):** (a) GPU/DB/máy-mạnh cho các nhánh 🔴 · (b) observability-trong-TOML (follow-on) · (c) dừng tổng kết.
+---
+**[✅ #301 — MỐC SẠCH: refresh `progress.md` khớp frontier #300 (đóng drift "chân lý hiện tại") — máy `toann`]**
+- Sau #299/#300, `progress.md` kẹt mốc #293 (601/2, RULES 15, "config-path metrics" 🔴 — nhưng #299 đã wire) → drift ở file chân-lý mà máy không bắt (C6 chỉ kiểm activeContext). Refresh khớp #300: baseline **609/2 · lint 5/0 · RULES 16 (5 file)** + thêm config-observability/§3.1/kit-machine-check vào Đã-xong + chuyển config-path-metrics khỏi 🔴 (chỉ realtime-song-song còn chặn).
+- **KHÔNG làm thêm feature no-GPU** (chống over-engineer): observability-trong-TOML là Non-Goal có chủ đích (D-082 — cờ CLI đủ 1-process/camera). Mọi hướng LỚN còn lại CHẶN tiền-đề ngoài (GPU/CUDA · DB · máy-mạnh/CI · runtime song song).
+- **Ghi sổ:** LOG #301 (memory hygiene, không +D/C/T/K) · INDEX Log canonical #300→#301 (Σ204 giữ) · block này. Drift PASS.
+- **ĐIỂM DỪNG SẠCH — bước kế (CHỜ user chọn):** (a) khi có GPU: verify CUDA + RTSP tune + benchmark · (b) khi có DB server: Postgres sink · (c) observability-trong-TOML (follow-on GitOps, nếu cần) · (d) dừng tổng kết. KHÔNG có việc dở giữa chừng.
+---
+**[✅ #300 — Đóng nợ kit RULES_VERSION 15→16 + ĐƯA KIT VÀO MÁY-KIỂM chống-drift — máy `toann`]**
+- Điều tra CODE THẬT: `test_rules_sync` chỉ kiểm 4 file → kit `ai-learning-os-kit/` NẰM NGOÀI máy-kiểm → version kit drift âm thầm (thật 15 vs repo 16). Đây đúng "cách cực mạnh chống drift" user xin: fix GỐC lỗ, không sửa mỗi số.
+- **Fix (thứ tự đúng):** (a) thêm §3.1 "lệnh qua launcher cố định" (bản generic) vào kit `AGENTS.template.md` → ruột khớp v16; (b) bump 15→16; (c) thêm kit vào `test_rules_sync.FILES` → máy enforce kit==main ở MỌI cổng (pytest+drift+vp); (d) nhãn "4 mirror"→"mọi mirror + kit", prose AGENTS.md §2 4→5 file.
+- **Vì sao (bản chất):** §2.5 vốn buộc sync kit nhưng chỉ dựa KỶ LUẬT → drift được. Mechanize thành MÁY-KIỂM = triết lý D-052/D-053. Lỗ để-quên-bump-kit giờ bị bắt tự động.
+- **VERIFY THẬT:** `vp verify` = full exit 0 (609/2 giữ) · lint 5/0 · drift PASS — [2/2] RULES_VERSION SYNC in **5 dòng đều 16**. `vp check` PASS.
+- **Ghi sổ:** LOG #300 · +D-083 · INDEX #300/Σ204/D83 · block này. Drift PASS.
+- **Bước kế (CHỜ user — no-GPU thương mại gần trọn, anti-drift giờ phủ cả kit):** (a) config-declared observability trong TOML (follow-on GitOps) · (b) khi có GPU/DB/máy-mạnh: hướng chặn tiền-đề (CUDA/RTSP/benchmark · server-DB sink · K-035 full-suite) · (c) dừng mốc sạch (điểm dừng hợp lý).
+---
+**[✅ #299 — PHA2 code TDD `config-observability` HOÀN TẤT — `/metrics` cho đường `--config` (no-GPU) — máy `toann`, verify 609/2·5/0]**
+- Hiện thực design hardened (#297 mở + #298 review 6 lỗ). Đóng nợ 🟡 wire config D-069: đường `--config` giờ phơi `/metrics` (Prometheus scrape) ngang đường CLI-direct.
+- **Code (additive):** `profiles/vision_slice_app.py` — THÊM `_build_config_observability(observe, metrics_port, metrics_host)->(observer, exporter)` (extract khối inline từ main → main CLI-direct DÙNG LẠI = DRY) · `_run_from_config` +`metrics_port`/`metrics_host` + smart-default 5s + wire qua helper khi `build is None` + closure `build(pcfg)` + `try/finally: exporter.stop()` · `main` config-branch route `metrics_port/metrics_host` xuống. **KHÔNG đụng `build_runner`** (observe/emit đã có D-070). 1 InMemoryMetrics + 1 exporter DÙNG CHUNG → aggregate theo `source_id`.
+- **Test mới:** `tests/test_config_observability.py` (8 test): aggregate 2 camera qua seam · metrics-không-observe · backward-compat (None,None) · observe-đơn · exporter stop→cổng đóng (không rò) · cảnh báo non-loopback · main route cờ · integration run+cleanup.
+- **VERIFY THẬT:** `pytest test_config_observability.py` 8 passed; `cmd /c scripts\vp.cmd verify` = **609/2** (601→609 +8) · **lint 5/0** (layer giữ) · **drift PASS** (RULES 16). Baseline mới **609/2**.
+- **Ghi sổ:** LOG #299 · D-082 row→✅ code · INDEX Log canonical #298→#299 (Σ203 giữ — không +ID mới) · block này. Drift PASS.
+- **Chuỗi observability HOÀN CHỈNH cả 2 đường:** CLI-direct (từ #291) + **`--config` (#299)** — đo→render→serve `/metrics` + `--observe`/`--metrics-port`/`--capabilities`. Mô hình deploy 1-process/camera scrape được.
+- **Bước kế (CHỜ user):** (a) nợ nhỏ: bump kit `ai-learning-os-kit/` lên RULES_VERSION 16 · (b) config-declared observability trong TOML (follow-on, nếu cần GitOps thuần config) · (c) khi có GPU/DB/máy-mạnh: các hướng chặn tiền-đề · (d) dừng mốc sạch (no-GPU thương mại gần trọn).
+---
+**[🔵 #298 — REVIEW đối kháng design `config-observability` → SỬA 6 lỗ lệch CODE THẬT trước khi code — máy `toann`]**
+- Áp pattern đã thắng (đọc-lại-VALID TRƯỚC code): đọc CODE THẬT 5 file (`_run_from_config`/`build_runner`/`main`/`MetricsObserver`/`MetricsHttpExporter`) → design #297 LỆCH trạng thái hiện tại → thu HẸP phạm vi + tránh code trùng.
+- **6 lỗ sửa trong design.md** (mục "Review đối kháng (#298)" SUPERSEDE mô tả cũ): (1) `build_runner` observe/emit ĐÃ có (D-070/#278) → Req2 no-op; (2) tên param `emit_*` → giữ tên thật `observe_every_n`/`observe_interval_s`, chỉ THÊM `metrics_port`/`metrics_host`; (3) giữ pattern closure `build(pcfg)` (không đổi loop); (4) wire khi `observe OR metrics_port` (metrics đơn lẻ cũng lên); (5) test P1/P2 qua seam `_build_config_observability` (sync `_run_from_config`+finally-stop → không scrape sau return được); (6) smart-default emit=5.0 self-consistent trong `_run_from_config`.
+- **VERIFIED mấu chốt:** `MetricsObserver.on_snapshot` đọc `snapshot.source_id` gán nhãn `source` → **1 MetricsObserver + 1 InMemoryMetrics DÙNG CHUNG tự aggregate theo source_id** (cơ chế trung tâm đúng). `MetricsHttpExporter` có `.port`+`start()->int`+`stop()` idempotent+`is_loopback`.
+- **Phạm vi CÒN LẠI (PHA2, nhỏ):** (a) extract `_build_config_observability(observe, metrics_port, metrics_host)->(observer,exporter)` từ khối inline main (DRY, main dùng lại); (b) `_run_from_config` +`metrics_port`/`metrics_host` + gọi helper khi `build is None` + closure + `try/finally: exporter.stop()` + smart-default; (c) `main` config-branch +`metrics_port=args.metrics_port, metrics_host=args.metrics_host`; (d) test seam scrape aggregate 2 source + backward-compat + bulkhead + cảnh-báo + main-route. Kỳ vọng >601·lint 5/0. **KHÔNG đụng `build_runner`.**
+- **Ghi sổ:** LOG #298 · +K-073 (0-diag≠khớp-code) · D-082 row→reviewed #298 · INDEX #298/Σ203/K73 · block này. Drift sẽ PASS.
+- **Chưa verify:** "0-diagnostic" spec-lint (phiên này KHÔNG có tool get_diagnostics — chỉ giữ NGUYÊN heading đã 0-diag ở #297); hành vi runtime (PHA2).
+- **Bước kế (CHỜ user valid design đã sửa → PHA2 code TDD):** như phạm vi (a)-(d) trên. Nợ nhỏ: bump kit `ai-learning-os-kit/` lên RULES_VERSION 16.
+---
+**[🔵 #297 — Mở spec `config-observability` (PHA1 design-first) — bật observer/`/metrics` cho đường `--config` — máy `toann`]**
+- §0 đúng: TỰ chạy `cmd /c scripts\vp.cmd check` (KHÔNG tin output dán) → phát hiện DRIFT (INDEX #296 vs LOG #297; activeContext chưa nhắc #297) do lượt trước append LOG #297 xong nhưng CHƯA hoàn tất ghi sổ. Đã ĐỌC code thật + git status (nhiều file `M` chưa commit — sync đa máy).
+- **Chọn bước sản phẩm no-GPU không-chặn:** đóng nợ **🟡 wire config** của D-069 — đường `--config` (`_run_from_config`) CHƯA bật observer/`/metrics` (chỉ CLI-direct có). Mô hình deploy thật: 1 process/1 camera, mỗi process 1 `/metrics` port → Prometheus scrape N target.
+- **Thiết kế (bám code thật):** `build_runner` +3 param optional → PipelineRunner; `_run_from_config` dựng **1 InMemoryMetrics + 1 exporter DÙNG CHUNG** (aggregate theo source_id) + observer composite + `stop()` finally + GIỮ bulkhead (D-044); `main` định tuyến cờ `--observe`/`--metrics-port`/... xuống config. Cờ CLI (không field TOML) ở v1. Additive, default TẮT (backward-compat).
+- **Ghi sổ (hoàn tất #297):** LOG #297 (append lượt trước) · +D-082 (🔵 design-only) · INDEX header #296→#297 + Σ201→202 (D82) + dòng D-082 · activeContext block này. Non-Goal: runtime song song đa-pipeline · observability trong TOML · auth/push-gateway.
+- **Verify:** 2 file spec `get_diagnostics` = No diagnostics (0-diag, heading `## Testing Strategy` khớp checker K-065). `cmd /c scripts\vp.cmd check` sẽ chạy lại → kỳ vọng PASS (#297, Σ202, D82, RULES 16). **CHƯA code** (PHA1 design-first).
+- **Bước kế (CHỜ user valid design → PHA2 code TDD):** (a) `build_runner` +3 param optional keyword-only; (b) `_run_from_config` +params observability, tách hàm `_build_config_observability`, truyền vào `build(pcfg, observer=, emit_every_n=, emit_interval_s=)`, `exporter.stop()` finally, giữ BULKHEAD; (c) `main()` định tuyến cờ xuống `_run_from_config`; (d) test no-GPU (urllib scrape `/metrics` aggregate 2 camera + backward-compat + bulkhead + exporter-stop + build_runner observer). Kỳ vọng >601 · lint 5/0. Nợ nhỏ: bump kit `ai-learning-os-kit/` lên RULES_VERSION 16.
+---
+**[✅ #296 — REVIEW bảo mật observability HTTP `/metrics` + exposition (máy khác #279–#291) = SOUND — máy `toann`]**
+- Đồng bộ hiểu biết #278–#294: hệ no-GPU thương mại gần-hoàn-tất (analytics + observability trọn tới `/metrics` HTTP + capability-aware + hardening). "Còn lại" đều chặn tiền-đề (GPU/CUDA · DB server · máy mạnh/CI · runtime song song). → chọn review endpoint mạng (rủi ro cao, đúng "cực tốt + an toàn").
+- **Đọc CODE THẬT 3 file** (`metrics_http_server.py`/`metrics_exposition.py`/`metric_sample.py`) → kết luận **SOUND**: escape label-value đúng spec Prometheus 0.0.4 (không inject) · bind localhost secure-default + 0.0.0.0=opt-in-cảnh-báo · 500 không lộ trace · deadlock-guard `_serving` · type-conflict fail-fast. **KHÔNG vá speculative** (không bịa fix cho vấn-đề-không-tồn-tại).
+- Cứng-hoá NHỎ chưa cần (ghi K-072): validate NAME regex · escape `\r` · auth/rate-limit — CHỈ cần khi phơi 0.0.0.0 ra internet không-firewall / label nhận input ngoài.
+- **Ghi sổ:** LOG #296 · +K-072 · INDEX #296/tổng 201. Không đổi code (601/2·5/0 giữ). Drift PASS.
+- **Bước kế (chờ user — phần no-GPU không-chặn còn giá trị):** (a) **config-path metrics/observer** — wire `--observe`/`/metrics` vào `_run_from_config` (mô hình deploy thật: 1 process/camera, mỗi process 1 `/metrics` port → Prometheus scrape N target) · (b) bump kit lên 16 (nợ nhỏ) · (c) GPU/DB/máy-mạnh khi có tiền-đề.
+---
+**[✅ #295 — Luật §3.1 "chạy lệnh QUA LAUNCHER CỐ ĐỊNH" + bump RULES_VERSION 15→16 — máy `toann`]**
+- **Bối cảnh:** repo sync tới #294 (việc #278–#294 từ máy `k.nguyen.manh.toan`: metrics-exposition/http-endpoint, capability-aware, shm/test-stability hardening). Re-verify máy `toann` qua cổng `cmd /c scripts\vp.cmd verify` = **601 passed/2 skipped · lint 5/0 · drift PASS** — trạng thái sync XANH ở đây.
+- **Việc:** user mệt vì duyệt lệnh vô tận (agent đẻ `python -c` inline mỗi lần khác chuỗi → Trusted Commands không nhớ). Duyệt (b) → mã hoá thành LUẬT: thêm **§3.1 AGENTS.md** "mọi lệnh verify/routine qua LAUNCHER/script tên-cố-định (`scripts/vp.cmd`, `python tests/*.py`, `powershell -File tools/*.ps1`); CẤM `python -c`/one-liner tuỳ-biến cho việc lặp; logic mới bỏ VÀO launcher; lệnh phá huỷ không tự-chạy". Mirror 4 file + bump **RULES_VERSION 15→16**.
+- **Vì sao (bản chất):** fix GỐC ma sát — Trust prefix HẸP cố định (an toàn) thay vì mở `python *`/`*` rộng (chạy code tuỳ ý = nguy hiểm). Áp mọi agent/máy qua AGENTS.md.
+- **VERIFY THẬT:** `cmd /c scripts\vp.cmd verify` = 601/2 · lint 5/0 · **RULES_VERSION SYNC 16 khớp 4 mirror** · drift PASS. Ghi sổ: LOG #295 · +D-081 · INDEX #295/tổng 200. 
+- **Công cụ (user tự làm 1 lần/máy):** Trusted Commands thêm `cmd /c scripts\vp.cmd *` · `python tests\drift_check.py *` · `& .venv\Scripts\python.exe -m pytest *` · `python tests\validate_ci.py *` · `powershell -NoProfile -File tools\*` (KHÔNG `python *`/`*` trần). Nợ nhỏ: kit `ai-learning-os-kit/` chưa bump 16 (không nằm 4-mirror test).
+- **Bước kế (chờ user):** (a) máy GPU: CUDA/RTSP/benchmark · (b) server-DB sink · (c) config-path metrics/observer · (d) bump kit lên 16 · (e) hướng no-GPU khác.
+---
 **[✅ #294 — ĐIỀU TRA tái hiện K-035 residual: 24/24 isolated → contention môi-trường, KHÔNG phải bug logic — máy `k.nguyen.manh.toan`]**
 - §0 đúng: git clean, HEAD=origin. Thử tái hiện K-035 kiểm-chứng-được (thay vì vá speculative / bỏ lửng).
 - **Bằng chứng:** chạy LẶP `test_supervisor_liveness.py` 12× (hang-tests timeout 0.4s) + `test_step_09_shutdown.py` 12× = **24/24 PASS, 0 fail**. → Hypothesis "hang-test startup-false-hang" BÁC BỎ; cả 2 file SOUND isolated. Residual (~2/5 full-run 80s+) CHỈ dưới tải FULL-SUITE (600 test: web/zmq/full-stack/spawn cạnh tranh CPU-RAM máy yếu) → **contention MÔI-TRƯỜNG, không phải bug logic**.
