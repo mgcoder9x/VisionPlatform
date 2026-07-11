@@ -6289,3 +6289,25 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Anti-drift cho artifact-ship: cùng tinh thần K-075 (guard phải khớp đường thật operator dùng).
 
 **Đã verify (CHẠY + ĐỌC output):** `pytest test_example_configs.py` = 4 passed (gồm all-configs full-validate); `cmd /c scripts\vp.cmd verify` = **612 passed/2 skipped** · lint 5/0 · drift PASS · VERIFY OK. · **Chưa verify:** không (test tĩnh, chạy thật).
+
+### Entry #309 — 2026-07-11 — Mở spec `config-observability-toml` (PHA1 design-first) — khai báo observability trong TOML (GitOps) — Kiro-Opus
+
+**Bối cảnh:** Hướng no-GPU không-chặn còn lại có giá-trị-lâu-dài: đóng follow-on của T-029/D-082 — cho khai báo observability TRONG file TOML (deploy GitOps thuần-file), thay vì chỉ cờ CLI (#299). Chọn vì user đẩy "tiếp tục" + nhấn "hướng tới lâu dài, sản phẩm thương mại"; đây là việc DUY NHẤT tiến-được KHÔNG cần tiền-đề ngoài (GPU/DB) và đúng workflow "design-first → valid → mới code". ĐỌC CODE THẬT trước (schema/loader/#299).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Section `[observability]` TOP-LEVEL (KHÔNG per-pipeline) — observability là fleet-level, "1 process=1 target", `source_id` đã phân biệt cam (tránh schema-bloat, đúng T-029).
+- TÁI DÙNG NGUYÊN đường #299 (`_build_config_observability`/`_run_from_config`/exporter/bulkhead) — chỉ THÊM DTO `ObservabilityConfig` @kernel + parse @loader + hàm thuần `_merge_observability` (precedence).
+- Precedence: **CLI-explicit > TOML > built-in default** (sentinel None/0.0; `observe` = OR-semantics vì store_true).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** (design đề xuất, CHỜ valid) đổi argparse `--metrics-host default None` (cần cho precedence host đúng) + DỜI smart-default 5s từ `main` → sau-merge trong `_run_from_config` (giữ smart-default riêng cho đường CLI-direct). Ghi rõ trong design §Components 4.
+
+**3. Trade-off đã cân nhắc (ghi design §Doubt-driven):**
+- TOP-LEVEL vs per-pipeline → top-level (fleet-level, tránh N-exporter/process + schema-bloat).
+- Precedence CLI>TOML vs TOML>CLI → CLI>TOML (cờ = tinh chỉnh ad-hoc, TOML = mặc-định-deploy) + backward-compat #299.
+- Hạn chế TRUNG THỰC đã ghi: `observe` OR → không TẮT-qua-CLI khi TOML bật (không có `--no-observe`); sentinel 0.0/0 → không đè-tường-minh-0 qua CLI. Cả hai = Non-Goal v1 (hiếm cần), ghi rõ không over-claim.
+
+**4. Điều bạn nên biết:**
+- DESIGN-ONLY, **CHƯA code** (PHA1). 2 file spec `requirements.md`+`design.md` đủ heading Kiro Spec Format (grep `^## `: Overview/Architecture/Components/Data Models/Error Handling/Testing Strategy + Correctness Properties + doubt-driven).
+- Phạm vi PHA2 (khi user valid): `ObservabilityConfig` DTO + `AppConfig.observability` @kernel · parse `[observability]` + helper kiểu @loader · `_merge_observability` + reorder `_run_from_config` (load→merge→smart-default) · main truyền RAW + host-sentinel · test no-GPU (parse/merge/backward-compat/e2e-spy). Kỳ vọng >612·lint 5/0.
+
+**Đã verify:** ĐỌC code thật `kernel/config.py` (AppConfig frozen) + `config_loader.py` (parse_app_config) + `_run_from_config`/#299 (chữ ký khớp trích dẫn); 2 file spec đủ heading (grep). · **Chưa verify (KHÔNG có tool get_diagnostics phiên này):** "0-diagnostic" spec-lint (chỉ verify được cấu trúc heading); hành vi runtime (PHA2 — chưa code). **CHỜ user valid design.**

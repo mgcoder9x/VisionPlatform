@@ -1,8 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T16:00:00+07:00.
-**[🔒 GIT CHECKPOINT] #295→#307 đã push (`ebbd409`). #308 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau ebbd409.**
+**Cập nhật lúc:** 2026-07-11T16:30:00+07:00.
+**[🔒 GIT CHECKPOINT] #295→#308 đã push (`8725137`). #309 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau 8725137.**
+**[🔵 #309 — Mở spec `config-observability-toml` (PHA1 design-first) — observability trong TOML (GitOps) — máy `toann`]**
+- Chọn hướng no-GPU không-chặn còn giá-trị-lâu-dài: đóng follow-on T-029/D-082 (v1 chọn cờ CLI, TOML defer). Việc DUY NHẤT tiến-được KHÔNG cần tiền-đề (GPU/DB) + đúng workflow design-first. ĐỌC code thật trước (schema/loader/#299).
+- **Thiết kế (design-only):** section `[observability]` TOP-LEVEL → `ObservabilityConfig` DTO @kernel + parse @loader + `_merge_observability` thuần (precedence **CLI-explicit>TOML>default**; observe OR; sentinel None/0.0). TÁI DÙNG NGUYÊN đường #299. Top-level (không per-pipeline, fleet-level, tránh schema-bloat T-029).
+- **Đổi (design đề xuất, chờ valid):** argparse `--metrics-host default None` + dời smart-default 5s sau-merge (giữ riêng cho CLI-direct). Hạn chế TRUNG THỰC: không `--no-observe`/không đè-tường-minh-0 (Non-Goal v1).
+- **Verify:** đọc code thật (AppConfig frozen/parse_app_config/#299 params khớp); 2 file spec đủ heading (grep). [chưa kiểm] 0-diag spec-lint (không có tool get_diagnostics); runtime PHA2.
+- **Ghi sổ:** LOG #309 · +D-086 (🔵) · INDEX #309/Σ211/D86 + dòng D-086 · block này. Sẽ commit+push.
+- **CHỜ user VALID design** → PHA2 code TDD (DTO+parse @kernel/loader · `_merge_observability`+reorder `_run_from_config` · main RAW+host-sentinel · test no-GPU parse/merge/backward-compat/e2e-spy; >612·5/0). Nếu user KHÔNG cần GitOps-thuần-file → giữ 🔵 (cờ CLI #299 đã đủ).
+---
 **[✅ #308 — Siết guard config-artifact SHIP: test_all_example_configs chạy full validate_config — máy `toann`, verify 612/2·5/0]**
 - Gap thật: `configs/*.toml` (artifact ship) chỉ được test `load_app_config` (parse+structure), CHƯA `validate_config` (registry+strict-key+detect-requires-detector) → config ship typo sẽ lọt test mà fail `--validate` operator.
 - **Fix:** thêm `validate_config(app)` vào `test_all_example_configs_parse_valid` → khớp cái operator chạy. TĨNH (T-014) → no-GPU chạy được cả config `pt`. Chạy PASS = mọi config ship hợp lệ đầy đủ + bảo vệ rot tương lai.
