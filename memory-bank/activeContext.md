@@ -1,8 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T16:30:00+07:00.
-**[🔒 GIT CHECKPOINT] #295→#308 đã push (`8725137`). #309 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau 8725137.**
+**Cập nhật lúc:** 2026-07-11T17:00:00+07:00.
+**[🔒 GIT CHECKPOINT] #295→#309 đã push (`b9b7bcc`). #310 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau b9b7bcc.**
+**[🔵 #310 — REVIEW đối kháng design `config-observability-toml` → fix 1 lỗ CRASH (host-sentinel) trước code — máy `toann`]**
+- Áp pattern đọc-lại-VALID (#271/#275/#280/#298): soi design #309 với CODE THẬT.
+- **Lỗ-1 CRASH:** design đề xuất `--metrics-host default None` + "resolve sau merge" → nhưng `_build_config_observability` dùng CHUNG 2 đường, truyền host thẳng vào `MetricsHttpExporter`→`ThreadingHTTPServer((host,port))`; CLI-direct (`--metrics-port` không kèm host) → host=None → CRASH. **Fix GỐC:** resolve `host = metrics_host or "127.0.0.1"` TRONG `_build_config_observability` (1 chỗ, phủ 2 đường; backward-compat vì test #299 truyền host tường minh). +K-076.
+- **Xác nhận SOUND phần còn lại:** AppConfig+field default None (backward-compat) · validate_config không cần đổi (test #308 bỏ qua section) · smart-default relocation không double.
+- **Ghi sổ:** LOG #310 · +K-076 · D-086 row→reviewed #310 · INDEX #310/Σ212/K76 · block này. Design-only (612/2 giữ). Sẽ commit+push.
+- **VẪN CHỜ user VALID design (đã hardened 1 vòng)** → PHA2 code TDD. Nếu chưa cần GitOps-thuần-file → giữ 🔵 (cờ CLI #299 đủ).
+---
 **[🔵 #309 — Mở spec `config-observability-toml` (PHA1 design-first) — observability trong TOML (GitOps) — máy `toann`]**
 - Chọn hướng no-GPU không-chặn còn giá-trị-lâu-dài: đóng follow-on T-029/D-082 (v1 chọn cờ CLI, TOML defer). Việc DUY NHẤT tiến-được KHÔNG cần tiền-đề (GPU/DB) + đúng workflow design-first. ĐỌC code thật trước (schema/loader/#299).
 - **Thiết kế (design-only):** section `[observability]` TOP-LEVEL → `ObservabilityConfig` DTO @kernel + parse @loader + `_merge_observability` thuần (precedence **CLI-explicit>TOML>default**; observe OR; sentinel None/0.0). TÁI DÙNG NGUYÊN đường #299. Top-level (không per-pipeline, fleet-level, tránh schema-bloat T-029).

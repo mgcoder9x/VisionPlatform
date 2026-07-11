@@ -1,5 +1,25 @@
 # Design Document — config-observability-toml (khai báo observability trong TOML)
 
+## Review đối kháng (#310) — đọc-lại-VALID với CODE THẬT trước code (fix 1 lỗ crash)
+
+> ⚠️ SUPERSEDE mô tả cũ khi mâu thuẫn. Đọc `_build_config_observability`/`MetricsHttpExporter` thật.
+
+**Lỗ-1 (CRASH — blast-radius host-sentinel):** §Components 4 (bản đầu) đề xuất `--metrics-host default None` +
+"resolve 127.0.0.1 SAU merge". NHƯNG `_build_config_observability(observe, metrics_port, metrics_host)` dùng CHUNG
+cả 2 đường (#299) → `MetricsHttpExporter(host=metrics_host, ...)`; `MetricsHttpExporter.start()` gọi
+`ThreadingHTTPServer((host, port))`. Nếu đổi argparse default→None, đường **CLI-direct** (`--metrics-port X` KHÔNG
+kèm `--metrics-host`) truyền `host=None` → `(None, port)` → **CRASH**. "Resolve sau merge" chỉ phủ đường `--config`,
+THỦNG đường CLI-direct.
+- **Fix GỐC:** resolve `host = metrics_host or "127.0.0.1"` **NGAY TRONG `_build_config_observability`** (1 chỗ,
+  phủ CẢ 2 đường). Backward-compat: test #299 luôn truyền host tường minh ("127.0.0.1"/"0.0.0.0") → không đổi hành vi.
+  Cho phép argparse `--metrics-host default=None` an toàn (sentinel merge) mà CLI-direct KHÔNG crash.
+
+**Xác nhận SOUND (không vá thừa):** (a) `AppConfig` thêm field default None → mọi `AppConfig(pipelines=...)` cũ
+chạy nguyên (backward-compat); (b) `validate_config` (pipeline_factory) iterate `pipelines` → KHÔNG cần biết
+`observability` (không đổi); test #308 `validate_config` trên config có `[observability]` bỏ qua section (an toàn);
+(c) smart-default relocation: `main` GIỮ tính `obs_interval` cho CLI-direct + truyền RAW `args.observe_interval`
+xuống `_run_from_config` cho đường config (đã ghi §Components 4) — không double, không mất.
+
 ## Overview
 
 Cho phép khai báo observability TRONG file TOML qua 1 section TOP-LEVEL `[observability]`, để deploy GitOps thuần-file

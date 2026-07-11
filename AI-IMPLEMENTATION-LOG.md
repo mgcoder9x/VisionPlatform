@@ -6311,3 +6311,19 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Phạm vi PHA2 (khi user valid): `ObservabilityConfig` DTO + `AppConfig.observability` @kernel · parse `[observability]` + helper kiểu @loader · `_merge_observability` + reorder `_run_from_config` (load→merge→smart-default) · main truyền RAW + host-sentinel · test no-GPU (parse/merge/backward-compat/e2e-spy). Kỳ vọng >612·lint 5/0.
 
 **Đã verify:** ĐỌC code thật `kernel/config.py` (AppConfig frozen) + `config_loader.py` (parse_app_config) + `_run_from_config`/#299 (chữ ký khớp trích dẫn); 2 file spec đủ heading (grep). · **Chưa verify (KHÔNG có tool get_diagnostics phiên này):** "0-diagnostic" spec-lint (chỉ verify được cấu trúc heading); hành vi runtime (PHA2 — chưa code). **CHỜ user valid design.**
+
+### Entry #310 — 2026-07-11 — REVIEW đối kháng design `config-observability-toml` → fix 1 lỗ CRASH (host-sentinel blast-radius) trước code — Kiro-Opus
+
+**Bối cảnh:** Áp pattern đã thắng (#271/#275/#280/#298): đọc-lại-VALID design #309 với CODE THẬT TRƯỚC khi code. Soi `_merge_observability` + thay đổi argparse `--metrics-host default None` đối chiếu `_build_config_observability`/`MetricsHttpExporter` thật.
+
+**1. Quyết định AI tự ra (spec không nói):** fix GỐC lỗ host-sentinel — resolve `host = metrics_host or "127.0.0.1"` NGAY TRONG `_build_config_observability` (thay vì "resolve sau merge").
+
+**2. Chỗ phải đổi so với thiết kế ban đầu (#309):** §Components 4 sửa: "resolve host sau merge" (chỉ phủ đường config) → "resolve TRONG `_build_config_observability`" (phủ CẢ 2 đường). Lý do: `_build_config_observability` dùng CHUNG; đổi argparse default→None mà không resolve chung → đường CLI-direct (`--metrics-port` không kèm `--metrics-host`) truyền host=None → `ThreadingHTTPServer((None,port))` CRASH.
+
+**3. Trade-off đã cân nhắc:** resolve-trong-helper (1 chỗ, phủ 2 đường) vs resolve-sau-merge (chỉ config) → **trong-helper** (an toàn hơn, không thủng CLI-direct; backward-compat vì test #299 luôn truyền host tường minh).
+
+**4. Điều bạn nên biết:**
+- Xác nhận SOUND phần còn lại (đọc code): AppConfig +field default None = backward-compat; validate_config iterate pipelines → không cần biết observability (test #308 bỏ qua section an toàn); smart-default relocation không double/không mất (main giữ riêng cho CLI-direct).
+- VẪN design-only, CHƯA code (PHA1 hardened 1 vòng). Bài học K-076: đổi argparse default của tham số đi qua HÀM DÙNG CHUNG → blast-radius mọi đường gọi hàm đó, phải resolve default tại HÀM (1 chỗ) không tại từng call-site.
+
+**Đã verify:** đọc lại `_build_config_observability` (truyền host thẳng vào MetricsHttpExporter) + `MetricsHttpExporter.__init__/start` (ThreadingHTTPServer((host,port))) → xác nhận host=None crash; design.md sửa mục review. · **Chưa verify:** hành vi runtime (PHA2 — chưa code); "0-diag" spec-lint (không có tool). **CHỜ user valid.**
