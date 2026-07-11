@@ -6273,3 +6273,19 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - [chưa kiểm] CI RUN thật trên GitHub Actions (không chạy Actions cục bộ được — D-058 vẫn 🔵 phần "đã chạy CI xanh"); nhưng NỘI DUNG workflow = parity với cổng local đã verify.
 
 **Đã verify (ĐỌC nguồn thật 2 file):** `verify.yml` (4 step) vs `scripts/vp.cmd` (test/lint/check/verify) → khớp entry-point. Không đổi code/logic → 612/2·5/0 giữ. · **Chưa verify:** CI-run-xanh thật trên Actions (thiếu môi trường; chỉ verify được NỘI DUNG workflow, không verify được LẦN CHẠY).
+
+### Entry #308 — 2026-07-11 — Siết guard config-artifact SHIP: `test_all_example_configs_parse_valid` chạy full `validate_config` (khớp operator `--validate`) — Kiro-Opus
+
+**Bối cảnh:** Soi gap thật cho sản phẩm thương mại: `configs/*.toml` là artifact SHIP cho khách/operator. Test `test_all_example_configs_parse_valid` glob MỌI config NHƯNG chỉ gọi `load_app_config` (parse+structure), KHÔNG gọi `validate_config` (type∈registry + strict-key + detect-requires-detector) → config ship bị typo stage-type/param sẽ LỌT test mà fail `--validate` thật của operator.
+
+**1. Quyết định AI tự ra (spec không nói):** thêm `validate_config(app)` vào vòng lặp test → guard "config ship hợp lệ" giờ KHỚP đúng cái operator kiểm bằng `--validate`. TĨNH (T-014) nên chạy được no-GPU cho cả config `pt` (không dựng torch).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (siết test hiện có, không đổi code sản phẩm).
+
+**3. Trade-off đã cân nhắc:** load_app_config-only (nhẹ) vs +validate_config (khớp operator) → **+validate_config**: guard phải phản ánh cái operator THẬT chạy, nếu không = guard yếu hơn thực tế (giống lý do T-024 CI-parity). Cái mất: ~0 (validate tĩnh nhanh).
+
+**4. Điều bạn nên biết:**
+- Chạy PASS → xác nhận MỌI config ship hiện tại hợp lệ đầy đủ (registry+strict-key), không config nào rot; giờ được bảo vệ khỏi rot tương lai (sửa config sai type/param → test FAIL).
+- Anti-drift cho artifact-ship: cùng tinh thần K-075 (guard phải khớp đường thật operator dùng).
+
+**Đã verify (CHẠY + ĐỌC output):** `pytest test_example_configs.py` = 4 passed (gồm all-configs full-validate); `cmd /c scripts\vp.cmd verify` = **612 passed/2 skipped** · lint 5/0 · drift PASS · VERIFY OK. · **Chưa verify:** không (test tĩnh, chạy thật).

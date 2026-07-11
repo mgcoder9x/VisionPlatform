@@ -1,8 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T15:30:00+07:00.
-**[🔒 GIT CHECKPOINT] #295→#306 đã push (`fe4840e`). #307 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau fe4840e.**
+**Cập nhật lúc:** 2026-07-11T16:00:00+07:00.
+**[🔒 GIT CHECKPOINT] #295→#307 đã push (`ebbd409`). #308 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau ebbd409.**
+**[✅ #308 — Siết guard config-artifact SHIP: test_all_example_configs chạy full validate_config — máy `toann`, verify 612/2·5/0]**
+- Gap thật: `configs/*.toml` (artifact ship) chỉ được test `load_app_config` (parse+structure), CHƯA `validate_config` (registry+strict-key+detect-requires-detector) → config ship typo sẽ lọt test mà fail `--validate` operator.
+- **Fix:** thêm `validate_config(app)` vào `test_all_example_configs_parse_valid` → khớp cái operator chạy. TĨNH (T-014) → no-GPU chạy được cả config `pt`. Chạy PASS = mọi config ship hợp lệ đầy đủ + bảo vệ rot tương lai.
+- **VERIFY:** `pytest test_example_configs.py` 4 passed; `vp verify` 612/2·5/0·VERIFY OK.
+- **Ghi sổ:** LOG #308 (siết test, không +ID journal) · INDEX Log canonical #307→#308 (Σ210 giữ) · block này. Sẽ commit+push.
+- **Bước kế (CHỜ user — điểm dừng sạch, khuyến nghị DỪNG):** GPU/DB/máy-mạnh cho nhánh 🔴 · hoặc observability-trong-TOML (follow-on) · hoặc tổng kết. Thêm nữa = churn/over-engineer.
+---
 **[✅ #307 — REVIEW cổng CI (verify.yml) vs `vp verify` = PARITY/SOUND + bỏ số stale comment — máy `toann`]**
 - Kiểm điểm mù chống-drift TẦNG SERVER: CI có lệch cổng local không? Đọc `verify.yml` + đối chiếu `vp.cmd` THẬT.
 - **Kết luận SOUND + parity:** CI 4 bước ≡ vp verify (pytest/importlinter.api/`python tests/drift_check.py`/extras dev,onnx,cv2,web). **Parity BY-CONSTRUCTION (K-075):** CI gọi THẲNG `drift_check.py` (không chép-cứng danh sách check) → C7(#305)+self-test[3/3](#306) TỰ vào CI, không sửa YAML.

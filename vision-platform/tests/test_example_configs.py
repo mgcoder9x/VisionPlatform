@@ -8,7 +8,7 @@ from __future__ import annotations
 import pathlib
 
 from vision_platform.application.config_loader import load_app_config
-from vision_platform.profiles.pipeline_factory import build_runner
+from vision_platform.profiles.pipeline_factory import build_runner, validate_config
 
 CONFIGS = pathlib.Path(__file__).resolve().parents[1] / "configs"
 
@@ -18,6 +18,9 @@ def test_all_example_configs_parse_valid():
     assert files, "phải có file config mẫu trong configs/"
     for f in files:
         app = load_app_config(str(f))       # parse + validate cấu trúc (fail-fast nếu sai)
+        # FULL validate (type∈registry + strict-key + detect-requires-detector) — KHỚP operator `--validate`.
+        # TĨNH (T-014): không dựng detector/torch → chạy được no-GPU kể cả config `pt`. Bắt config ship rot.
+        validate_config(app)
         assert len(app.pipelines) >= 1
         for p in app.pipelines:
             assert p.id and p.source.type    # tối thiểu id + source.type
