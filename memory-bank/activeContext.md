@@ -1,7 +1,8 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T12:45:00+07:00.
+**Cập nhật lúc:** 2026-07-11T13:00:00+07:00.
+**[🔒 GIT CHECKPOINT] Việc #295→#302 đã commit + push (`5488f4c`) trên `chore/dev-env-launcher-portable-hooks`; memory-note này commit ngay sau → working tree về SẠCH. Persist chống sync-đè đa-máy. §0 phiên sau: git phải clean, HEAD ở/sau 5488f4c.**
 **[✅ #302 — REVIEW an-toàn SHUTDOWN/toàn-vẹn-dữ-liệu (SIGTERM) đường `--config` = SOUND, KHÔNG vá — máy `toann`]**
 - Soi "an toàn + thương mại": service chạy dài bị SIGTERM (systemd/docker) — giả thuyết mất-dữ-liệu vì không teardown. ĐIỀU TRA code THẬT (chống bịa) TRƯỚC khi kết luận.
 - **Bằng chứng (đọc nguồn 4 file):** `PipelineRunner.run()` nested try/finally → teardown LUÔN chạy khi kết thúc/raise (gồm Ctrl+C); `JsonlEventSink`/`CrossingEventJsonlSink` **flush mỗi dòng**; `CrossingEventSqliteSink` **commit mỗi frame**; exporter daemon-thread. ⇒ SIGTERM (không unwind finally) KHÔNG mất dữ liệu (durability per-event) + không rò (OS thu hồi fd/thread).
