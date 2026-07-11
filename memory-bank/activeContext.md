@@ -1,8 +1,17 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T18:15:00+07:00.
-**[🔒 GIT CHECKPOINT] #295→#311 đã push (`274bcde`). #312 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau 274bcde.**
+**Cập nhật lúc:** 2026-07-11T18:45:00+07:00.
+**[🔒 GIT CHECKPOINT] #295→#312 đã push (`8569bbe`). #313 commit LOCAL nhưng ⚠️ CHƯA PUSH (user remote — CẤM MẠNG). §0 phiên sau (khi có mạng): PUSH ngay; git local ahead origin — rủi ro sync-đè nếu máy khác đè trước.**
+**[✅ #313 — VERIFY (no-network) máy `toann`: GPU phần cứng CÓ nhưng torch=False → nhánh CUDA blocker = torch-install-mạng — máy `toann`]**
+- User: "máy có GPU nhưng ĐỪNG đụng mạng (remote)". Kiểm no-network, read-only.
+- **Verify:** `vp env` → GPU=co (nvidia-smi OK, venv exists); `--capabilities` → `{has_torch:false, has_cuda:false, gpu_name:null, has_cv2:true}`. → GPU PHẦN CỨNG CÓ nhưng **torch CHƯA cài**.
+- **Kết luận:** nhánh CUDA (D-073 nợ 🔴) VẪN chặn — nhưng blocker ĐỔI: từ "thiếu GPU" → "**torch chưa cài, install=mạng (cấm)**". `probe_capabilities` has_cuda=False khi torch vắng = ĐÚNG thiết kế (D-073). KHÔNG cài torch (cấm mạng) → KHÔNG verify nhánh CUDA phiên này (không đoán liều).
+- **Sửa frontier:** "máy toann no-GPU" (cũ) → GPU-HW-có + torch-vắng (K-077).
+- **Ràng buộc phiên remote (K-077):** CẤM pip install/git push/tải. Chỉ local read-only + commit local.
+- **Ghi sổ:** LOG #313 · +K-077 · INDEX #313/Σ214/K77 + dòng · progress.md GPU line · block này. Commit LOCAL, KHÔNG push.
+- **Bước kế:** khi user cho phép mạng → `vp setup` extras torch cu124 (K-066) → verify nhánh CUDA D-073 + push dồn. Hiện: điểm dừng (no-network chặn mọi hướng 🔴).
+---
 **[✅ #312 — MỐC SẠCH: refresh `progress.md` khớp frontier #311 (đóng drift chân-lý-hiện-tại) — máy `toann`]**
 - `progress.md` kẹt mốc #303/612/2 → refresh #311/623/2: observability +khai-báo-TOML #311; anti-drift nâng "4 tầng" (C1–C7 + RULES-5-file + self-test [3/3] + CI-parity + config-artifact/durability guard); đóng 🟡 observability-trong-TOML (xong #311). Drift progress.md không máy-bắt (C6 chỉ activeContext) → refresh tay = §2.5.
 - **Ghi sổ:** LOG #312 (memory hygiene, không +D/C/T/K) · INDEX Log canonical #311→#312 (Σ213 giữ) · block này. Sẽ commit+push.

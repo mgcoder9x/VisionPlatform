@@ -6362,3 +6362,20 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** phạm vi no-GPU thương mại + mọi follow-on no-GPU đã nhận diện = TRỌN. Hướng còn lại đều CHẶN tiền-đề ngoài (GPU/CUDA · DB server · máy-mạnh/CI cho K-035 · runtime song song). Điểm dừng sạch hợp lý.
 
 **Đã verify:** progress.md khớp activeContext + INDEX (#311, 623/2, RULES 16, drift C1–C7+self-test); `vp check` sẽ PASS (#312). · **Chưa verify:** không (số 623/2 từ `vp verify` #311 đã chạy thật).
+
+### Entry #313 — 2026-07-11 — VERIFY (no-network) máy `toann`: GPU phần cứng CÓ nhưng torch=False → nhánh CUDA blocker ĐỔI BẢN CHẤT (torch-install=mạng, không phải thiếu HW) — Kiro-Opus
+
+**Bối cảnh:** User báo "máy có GPU nhưng ĐỪNG đụng mạng (đang remote)". Kiểm xem có verify được nhánh GPU (nợ 🔴 D-073 "nhánh có-CUDA [chưa kiểm]") mà KHÔNG cần mạng không. Chỉ thao tác LOCAL, read-only (tuân thủ cấm-mạng tuyệt đối: KHÔNG pip install, KHÔNG git push, KHÔNG tải).
+
+**1. Quyết định AI tự ra:** KHÔNG cài torch (cài = cần mạng = cấm) → KHÔNG thể chạy nhánh CUDA phiên này. Ghi lại chính xác thay vì đoán liều.
+
+**2. Chỗ phải đổi so với hiểu biết cũ:** frontier cũ ghi "máy `toann` no-GPU". THỰC TẾ (verify): GPU phần cứng CÓ (`vp env` → nvidia-smi OK). Nhưng `--capabilities` → `{"has_torch":false,"has_cuda":false,"cuda_device_count":0,"gpu_name":null,"has_cv2":true}` → **torch CHƯA cài**. Blocker nhánh CUDA đổi từ "thiếu GPU" → "**torch chưa cài (install cần mạng)**".
+
+**3. Trade-off đã cân nhắc:** (a) cài torch để test CUDA vs (b) tôn trọng cấm-mạng → **(b)** tuyệt đối (user remote, cấm mạng rõ; vi phạm = rủi ro rớt session + trái chỉ thị). Verify GPU-branch để phiên có-mạng.
+
+**4. Điều bạn nên biết (K-077):**
+- `probe_capabilities` báo has_cuda=False khi torch vắng LÀ ĐÚNG THIẾT KẾ (D-073: torch vắng→False không raise) — KHÔNG mâu thuẫn GPU-phần-cứng-có; nó phản ánh "phần mềm chưa sẵn sàng dùng GPU".
+- Đường mở khoá (khi CÓ mạng + user cho phép): `vp setup` với `VP_EXTRAS` gồm nhóm torch/pt (lệnh torch CUDA đúng ở K-066: pin `torch==2.6.0+cu124` index pytorch cu124) → rồi verify nhánh CUDA (`--capabilities` phải hiện has_cuda=true + gpu_name) + chạy `pt` cuda detector.
+- **GIT: phiên này commit LOCAL, CHƯA push** (push=mạng, cấm) → local ahead origin; phiên sau CÓ mạng phải push (rủi ro sync-đè nếu máy khác đè trước — chấp nhận theo chỉ thị user).
+
+**Đã verify (CHẠY + ĐỌC output, no-network):** `vp env` → GPU=co (nvidia-smi OK), venv exists; `--capabilities` → torch=False/cuda=False/cv2=True. · **Chưa verify (chặn bởi cấm-mạng):** nhánh CUDA thật (cần torch-install=mạng) — KHÔNG đoán, để phiên có-mạng.

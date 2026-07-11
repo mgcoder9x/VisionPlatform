@@ -15,7 +15,7 @@
 
 ## Còn lại — CHẶN bởi điều kiện (trung thực, KHÔNG làm speculative)
 - **🔴 K-035 flaky residual:** supervisor/step_09 flaky RẤT HIẾM (~2/5 full-run 80s+ dưới tải CỰC ĐẠI máy yếu) — event-driven đã diệt race THIẾT KẾ (5/5 isolated), residual là bản chất môi-trường. **Đo + đóng tuyệt đối cần máy mạnh/CI** (không bump-timeout che; startup_grace không verify được isolated nên chưa vá — D-080/#292).
-- **🔴 GPU/CUDA (máy không GPU + không CUDA):** nhánh `Yolov5PtDetector` device cuda · tune ngưỡng motion-gate-roi trên RTSP thật · node-capacity-benchmark (K-040 A1/R6.1) · verify `probe_capabilities` nhánh có-CUDA. Cần máy GPU (torch CUDA install network-bound, HOÃN K-066).
+- **🔴 GPU/CUDA:** máy `toann` GPU PHẦN CỨNG CÓ (nvidia-smi OK, #313) NHƯNG **torch chưa cài** → nhánh `Yolov5PtDetector` cuda · tune motion-gate-roi RTSP · node-capacity-benchmark (K-040 A1) · verify `probe_capabilities` nhánh có-CUDA (D-073) — TẤT CẢ chặn bởi **torch-install cần MẠNG** (K-077/K-066). Mở khoá khi có mạng: `vp setup` extras torch cu124.
 - **🔴 server-DB sink (Postgres nhiều-cam):** cần DB server để verify thật (SQLite đã có, no-GPU).
 - **🔴 runtime SONG SONG đa-pipeline/process:** `_run_from_config` TUẦN TỰ (T-015) → nhiều-pipeline/process không /metrics realtime song song (aggregate tuần tự đã đủ cho 1-process/camera — D-082). Song song = việc scale tương lai (cần GPU + benchmark). *Lưu ý: `/metrics` đường `--config` (cờ CLI #299) + khai báo TOML (#311) ĐÃ xong — chỉ realtime-song-song còn chặn.*
 - **✅ (ĐÃ ĐÓNG #311) observability khai báo trong TOML (GitOps thuần-file):** `[observability]` top-level + merge precedence CLI>TOML (D-086). Follow-on T-029/D-082 hoàn tất.

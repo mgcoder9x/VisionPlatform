@@ -770,3 +770,9 @@ Vì sao ghi: (1) preserve kết luận review → phiên/máy sau KHÔNG review 
 **Gốc:** đổi default ở argparse (1 call-site) nhưng giá trị chảy qua hàm-dùng-chung phục vụ NHIỀU đường → sentinel None rò sang đường không-merge → vỡ.
 **Luật:** khi 1 tham số có "default resolve" đi qua hàm dùng chung → resolve default TRONG hàm đó (`host = metrics_host or "127.0.0.1"`), 1 chỗ phủ mọi đường; đừng resolve rải ở từng call-site (sót đường = thủng). Đối chiếu MỌI call-site của hàm dùng chung khi đổi sentinel.
 **Ứng dụng:** củng cố review-trước-code (đọc-lại-valid) tiếp tục bắt lỗ THIẾT KẾ rẻ hơn sửa-sau-code (#271/#275/#280/#298/#310).
+
+### K-077 — ✅ (2026-07-11) Máy `toann`: GPU PHẦN CỨNG có (nvidia-smi) nhưng torch CHƯA cài → nhánh CUDA chặn bởi INSTALL-CẦN-MẠNG (không phải thiếu HW); `probe_capabilities` has_cuda=False khi torch vắng LÀ ĐÚNG
+**Bằng chứng (verify no-network #313):** `vp env` → GPU=co (nvidia-smi OK); `python -m ...--capabilities` → `{"has_torch":false,"has_cuda":false,"cuda_device_count":0,"gpu_name":null,"has_cv2":true}`.
+**Sửa hiểu biết cũ:** frontier từng ghi "máy toann no-GPU" → thực tế GPU phần cứng CÓ, chỉ thiếu torch (phần mềm dùng GPU). Blocker nhánh CUDA (D-073 [chưa kiểm]) = torch-chưa-cài, mà cài = cần MẠNG.
+**Đường mở khoá (khi có mạng + user cho phép):** `vp setup` với extras torch/pt (K-066: `torch==2.6.0+cu124` index pytorch cu124, tránh bẫy CPU-wheel) → `--capabilities` phải hiện has_cuda=true+gpu_name → chạy `pt` cuda detector verify D-073 nhánh có-CUDA.
+**Ràng buộc vận hành (khi user remote báo "đừng đụng mạng"):** CẤM pip install / git push / tải. Chỉ local read-only (nvidia-smi, probe_capabilities, pytest no-network, drift_check). Commit LOCAL được; push để phiên có-mạng.
