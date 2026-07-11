@@ -67,8 +67,13 @@ def _contiguity(nums: list[int]) -> tuple[bool, int, list[int], list[int]]:
     return (not dups and not gaps), mx, dups, gaps
 
 
-def check() -> tuple[bool, list[str]]:
-    """Trả (ok, dòng-báo-cáo). ok=True nếu MỌI check pass."""
+def check(log_text: str | None = None, index_text: str | None = None,
+          active_text: str | None = None, journal_texts: dict | None = None) -> tuple[bool, list[str]]:
+    """Trả (ok, dòng-báo-cáo). ok=True nếu MỌI check pass.
+
+    Tham số text TIÊM (mặc định None → đọc file thật): cho META-TEST kiểm chính checker (D-085) — feed
+    text drift tổng-hợp → assert đúng check FAIL. Gọi `check()` không tham số = HÀNH VI CŨ (đọc file), nên
+    `drift_check.py`/`vp` không đổi. `journal_texts` = dict prefix→text (None → đọc từng file journal)."""
     report: list[str] = []
     ok_all = True
 
@@ -77,9 +82,9 @@ def check() -> tuple[bool, list[str]]:
         ok_all = ok_all and ok
         report.append(f"[{'PASS' if ok else 'FAIL'}] {tag}: {msg}")
 
-    log_text = _read(LOG)
-    index_text = _read(INDEX)
-    active_text = _read(ACTIVE)
+    log_text = _read(LOG) if log_text is None else log_text
+    index_text = _read(INDEX) if index_text is None else index_text
+    active_text = _read(ACTIVE) if active_text is None else active_text
 
     # ---- C1: LOG entries liên tục (bỏ qua dup LEGACY đã đông cứng; fail dup MỚI) ----
     entries = [int(m) for m in re.findall(r"^###\s+Entry\s+#(\d+)\b", log_text, re.M)]
@@ -104,7 +109,8 @@ def check() -> tuple[bool, list[str]]:
     # ---- C3 + C5: journal per-file contiguity + khớp INDEX rows ----
     counts: dict[str, int] = {}
     for prefix, path in JOURNAL_FILES.items():
-        file_ids = _ids_from_headings(_read(path), prefix)
+        jtext = _read(path) if journal_texts is None else journal_texts.get(prefix, "")
+        file_ids = _ids_from_headings(jtext, prefix)
         ok, mx, dups, gaps = _contiguity(file_ids)
         counts[prefix] = mx
         line(ok, f"C3-{prefix}", f"{len(file_ids)} ID, max {prefix}-{mx:03d}"
@@ -155,9 +161,79 @@ def check() -> tuple[bool, list[str]]:
     return ok_all, report
 
 
+def _fail(report: list[str], tag: str) -> bool:
+    """True nếu report có dòng FAIL chứa tag (dùng cho self_test)."""
+    return any(r.startswith("[FAIL]") and tag in r for r in report)
+
+
+def _self_baseline():
+    """Bộ text NHẤT QUÁN tối thiểu (mọi check PASS) để META-TEST perturb ĐÚNG 1 chỗ."""
+    log = "### Entry #1 — x\n### Entry #2 — x\n"
+    journal = {"D": "### D-001 — a\n### D-002 — b\n", "C": "### C-001 — a\n",
+               "T": "### T-001 — a\n", "K": "### K-001 — a\n"}
+    index = (
+        "Log canonical tới **Entry #2**. Tổng **5 entry** (D2·C1·T1·K1).\n"
+        "| D-001 | x | #1 |\n| D-002 | x | #2 |\n| C-001 | x | #1 |\n"
+        "| T-001 | x | #1 |\n| K-001 | x | #1 |\n"
+    )
+    active = "Cập nhật lúc: 2026\nnhắc #2\n"
+    return log, index, active, journal
+
+
+def self_test() -> tuple[bool, list[str]]:
+    """META-TEST chính checker (D-085): baseline sạch → PASS; mỗi drift tổng-hợp → ĐÚNG tag FAIL.
+
+    GUARD chống regex-rot: nếu ai sửa hỏng 1 check (vd regex sai → luôn PASS), self_test này FAIL →
+    `vp check`/CI bắt ngay. Thuần in-memory, xác định (không đọc file, không flake)."""
+    report: list[str] = []
+
+    def rec(cond: bool, name: str) -> None:
+        report.append(f"[{'PASS' if cond else 'FAIL'}] self:{name}")
+
+    log, index, active, journal = _self_baseline()
+
+    ok0, _ = check(log, index, active, journal)
+    rec(ok0, "baseline-clean-PASS")  # baseline phải PASS toàn bộ
+
+    # C1: entry TRÙNG mới (max giữ 2 → cô lập C1)
+    _, r = check(log + "### Entry #2 — dup\n", index, active, journal)
+    rec(_fail(r, "C1-LOG"), "C1-catch-dup")
+
+    # C2: INDEX header trích #khác max
+    _, r = check(log, index.replace("Entry #2**", "Entry #9**"), active, journal)
+    rec(_fail(r, "C2-INDEX-LOGREF"), "C2-catch-header-mismatch")
+
+    # C4: tổng sai (5→9)
+    _, r = check(log, index.replace("**5 entry**", "**9 entry**"), active, journal)
+    rec(_fail(r, "C4-INDEX-TOTAL"), "C4-catch-wrong-total")
+
+    # C5: dòng INDEX orphan (D-009 không có heading trong journal D)
+    _, r = check(log, index + "| D-009 | x | #1 |\n", active, journal)
+    rec(_fail(r, "C5-D"), "C5-catch-orphan")
+
+    # C6: activeContext thiếu mốc + thiếu nhắc #max
+    _, r = check(log, index, "nhắc #2 (thiếu mốc)\n", journal)
+    rec(_fail(r, "C6-ACTIVE-STAMP"), "C6-catch-missing-stamp")
+    _, r = check(log, index, "Cập nhật lúc: 2026 (thiếu nhắc entry)\n", journal)
+    rec(_fail(r, "C6-ACTIVE-LATEST"), "C6-catch-stale-pointer")
+
+    # C7: INDEX trích LOG-# phantom (#99 ∉ {1,2})
+    _, r = check(log, index + "| Z | x | #99 |\n", active, journal)
+    rec(_fail(r, "C7-INDEX-CITES"), "C7-catch-phantom-cite")
+
+    ok_all = all(line.startswith("[PASS]") for line in report)
+    return ok_all, report
+
+
 def test_memory_consistency():
     ok, report = check()
     assert ok, "DRIFT bộ nhớ phát hiện:\n" + "\n".join(report)
+
+
+def test_checker_self_test():
+    """META: chính checker phải BẮT được mọi lớp drift (chống regex-rot)."""
+    ok, report = self_test()
+    assert ok, "SELF-TEST checker FAIL (checker hỏng?):\n" + "\n".join(report)
 
 
 if __name__ == "__main__":
@@ -165,5 +241,10 @@ if __name__ == "__main__":
     print("=== MEMORY CONSISTENCY (chống drift) ===")
     for r in report:
         print(r)
-    print("PASS: bản ghi nhất quán." if ok else "FAIL: có DRIFT — sửa bản ghi trước khi tiếp.")
-    sys.exit(0 if ok else 1)
+    st_ok, st_report = self_test()
+    print("\n=== SELF-TEST checker (guard chống regex-rot) ===")
+    for r in st_report:
+        print(r)
+    both = ok and st_ok
+    print("\nPASS: bản ghi nhất quán + checker lành." if both else "FAIL: có DRIFT hoặc checker hỏng — sửa trước khi tiếp.")
+    sys.exit(0 if both else 1)

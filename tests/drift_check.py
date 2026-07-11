@@ -24,17 +24,22 @@ import test_rules_sync as rs           # noqa: E402
 
 
 def main() -> int:
-    print("=== [1/2] MEMORY CONSISTENCY (LOG/journal/INDEX/activeContext khớp thực tế) ===")
+    print("=== [1/3] MEMORY CONSISTENCY (LOG/journal/INDEX/activeContext khớp thực tế) ===")
     mc_ok, mc_report = mc.check()
     for r in mc_report:
         print(r)
 
-    print("\n=== [2/2] RULES_VERSION SYNC (mọi mirror + kit khớp) ===")
+    print("\n=== [2/3] RULES_VERSION SYNC (mọi mirror + kit khớp) ===")
     rs_ok, rs_versions = rs.check()
     for f, ver in rs_versions.items():
         print(f"{ver if ver else 'MISSING':>8}  {f}")
 
-    ok = mc_ok and rs_ok
+    print("\n=== [3/3] SELF-TEST checker (guard chống regex-rot — checker phải BẮT được drift) ===")
+    st_ok, st_report = mc.self_test()
+    for r in st_report:
+        print(r)
+
+    ok = mc_ok and rs_ok and st_ok
     print("\nDRIFT-CHECK: " + ("PASS — bản ghi nhất quán." if ok
                                else "FAIL — có DRIFT, SỬA bản ghi cho khớp thực tế TRƯỚC khi làm tiếp."))
     return 0 if ok else 1

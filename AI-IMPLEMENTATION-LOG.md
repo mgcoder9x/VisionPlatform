@@ -6233,3 +6233,25 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Bộ máy chống-drift giờ: C1–C7 (memory) + RULES 5-file. Vùng phủ: hand-edit mirror + sync-đè-mất-đuôi. Ngoài phạm vi (đã ghi): git-state (§0 riêng) · progress.md · số prose.
 
 **Đã verify (CHẠY + ĐỌC output):** `vp check` → dòng `[PASS] C7-INDEX-CITES: mọi #N trích ∈ LOG` + `DRIFT-CHECK: PASS` (Exit 0); `vp verify` = **612 passed/2 skipped** · lint 5/0 · VERIFY OK (pytest `test_memory_consistency()` vẫn xanh sau thêm C7). · **Chưa verify:** hành vi C7 CATCH phantom bằng cách cố-ý-tạo-phantom (bỏ — logic `cited not in entry_set` hiển nhiên đúng + đã PASS trên data thật; không phá INDEX để test).
+
+### Entry #306 — 2026-07-11 — GUARD-THE-GUARD: self-test chứng minh checker C1–C7 BẮT được drift (chống regex-rot) — Kiro-Opus
+
+**Bối cảnh:** Điểm mù BẢN CHẤT cuối của chiến lược chống-drift: checker `test_memory_consistency` (C1–C7) là NỀN của D-052/053/083/084, nhưng CHỈ có bằng chứng nó PASS-lúc-sạch — KHÔNG có bằng chứng nó BẮT-được-drift. Nếu 1 regex bị rot (sửa hỏng → luôn PASS) → mọi bảo vệ drift bốc hơi ÂM THẦM (false-confidence = hỏng tệ nhất).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Refactor `check()` nhận text TIÊM optional (`log_text`/`index_text`/`active_text`/`journal_texts`, mặc định None→đọc file) → HÀNH VI CŨ giữ NGUYÊN khi gọi `check()` không tham số (`drift_check.py`/`vp` không đổi). Mục đích: cho META-TEST feed drift tổng-hợp.
+- Thêm `self_test()`: baseline text NHẤT QUÁN → PASS; perturb ĐÚNG 1 chỗ mỗi lần → assert đúng tag FAIL (C1 dup · C2 header-mismatch · C4 wrong-total · C5 orphan · C6 missing-stamp + stale-pointer · C7 phantom-cite). Thuần in-memory, xác định.
+- Wire `drift_check.py` thêm section **[3/3] SELF-TEST** → enforce ở `vp check`/`vp verify`/CI/hook. (Đặt ở drift_check chứ KHÔNG pytest vì `vp test` chạy pytest trong `vision-platform/` — KHÔNG collect `ROOT/tests/`; kiểm code thật `scripts/vp.cmd` xác nhận.)
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (thêm self-test + refactor backward-compat; hành vi check() không đổi khi no-arg).
+
+**3. Trade-off đã cân nhắc:**
+- Wire self-test vào `drift_check.py` [3/3] vs pytest ở vision-platform/tests → **drift_check** vì đó là NƠI checker chạy thật (ROOT/tests không được `vp test` collect — đã KIỂM `vp.cmd`); đặt pytest sẽ = guard giả (không chạy). Kèm pytest wrapper `test_checker_self_test()` (tài liệu, không hại).
+- Refactor `check()` injectable (param optional) vs viết checker song song để test → **injectable** (test ĐÚNG code production, không nhánh-thứ-2 lệch). Cái mất: chữ ký check() dài hơn 4 param — nhưng default None giữ 100% backward-compat.
+
+**4. Điều bạn nên biết:**
+- self_test là META (kiểm cái-kiểm) — nếu ai sửa hỏng 1 check → `self:Cx-catch-*` FAIL → `vp check` FAIL ngay.
+- Giới hạn trung thực: self_test phủ các LỚP drift đã biết (C1–C7); KHÔNG chứng minh checker phủ MỌI drift-có-thể (chỉ phủ loại đã thiết kế). Đó là giới hạn cố hữu (không thể liệt kê vô hạn drift chưa-biết).
+- Bộ chống-drift giờ 3 tầng: (1) checker C1–C7 bắt drift bản-ghi · (2) RULES 5-file · (3) self-test bắt checker-hỏng.
+
+**Đã verify (CHẠY + ĐỌC output):** `vp check` → `[3/3] SELF-TEST` in 8 dòng `[PASS] self:*` (baseline + C1/C2/C4/C5/C6×2/C7 catch) + DRIFT PASS (Exit 0); `vp verify` = **612 passed/2 skipped** · lint 5/0 · [3/3] chạy · VERIFY OK. · **Chưa verify:** không (self-test tự chứng minh bằng chạy thật).

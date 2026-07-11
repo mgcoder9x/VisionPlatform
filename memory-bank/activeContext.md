@@ -1,8 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T14:30:00+07:00.
-**[🔒 GIT CHECKPOINT] #295→#304 đã push (`e3d8529`). #305 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau e3d8529.**
+**Cập nhật lúc:** 2026-07-11T15:00:00+07:00.
+**[🔒 GIT CHECKPOINT] #295→#305 đã push (`6e38d71`). #306 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau 6e38d71.**
+**[✅ #306 — GUARD-THE-GUARD: self-test chứng minh checker C1–C7 BẮT được drift — máy `toann`, verify 612/2·5/0]**
+- Điểm mù BẢN CHẤT cuối: checker (nền D-052/053/083/084) chỉ có bằng chứng "PASS lúc sạch", CHƯA có "BẮT được drift" → regex-rot làm bảo vệ bốc hơi âm thầm (false-confidence).
+- **Fix:** refactor `check()` nhận text TIÊM optional (no-arg=đọc file, backward-compat) + `self_test()` (baseline PASS + perturb từng drift → đúng tag FAIL) + wire `drift_check.py` **[3/3] SELF-TEST**. Đặt ở drift_check vì `vp test`=pytest trong vision-platform KHÔNG collect ROOT/tests (đã KIỂM `vp.cmd`) → pytest sẽ là guard giả.
+- **VERIFY THẬT:** `vp check` [3/3] in 8 dòng `[PASS] self:*` (baseline+C1/C2/C4/C5/C6×2/C7 catch) + DRIFT PASS; `vp verify` = 612/2·5/0·VERIFY OK.
+- **Bộ chống-drift 3 tầng:** (1) C1–C7 bắt drift bản-ghi · (2) RULES 5-file · (3) self-test bắt checker-hỏng. Giới hạn trung thực: self-test phủ lớp drift ĐÃ BIẾT, không phủ drift chưa-biết (cố hữu).
+- **Ghi sổ:** LOG #306 · +D-085 · INDEX #306/Σ209/D85 + dòng D-085 · block này. Sẽ commit+push.
+- **Bước kế (CHỜ user):** điểm dừng sạch (chống-drift giờ rất mạnh + tự-kiểm); hoặc GPU/DB/máy-mạnh cho nhánh 🔴; hoặc observability-trong-TOML (follow-on).
+---
 **[✅ #305 — Củng cố chống-drift: thêm C7 (INDEX trích LOG-# phantom) vào máy-kiểm — máy `toann`, verify 612/2·5/0]**
 - Audit TRỌN `test_memory_consistency` → C1–C6 SOUND, nhưng điểm mù thật: INDEX row trích LOG-#phantom (C2 chỉ kiểm HEADER) = đúng kịch bản sync-đè mất-đuôi-LOG (nỗi lo gốc, K-064).
 - **Thêm C7-INDEX-CITES:** mọi `#N` ∈ INDEX phải ∈ tập LOG entry thật. NON-BRITTLE (mọi #N=LOG ref). Tự chảy vào drift_check + vp. LOẠI check brittle khác (progress.md/số-prose/LOG↔journal-format) — tránh false-fail (K-035), không over-engineer.
