@@ -2,8 +2,10 @@ name: verify
 
 # Cổng chất lượng server-side (anti-drift độc lập máy dev): chạy lại ĐÚNG bộ cổng của
 # `scripts/vp.cmd verify` — pytest + import-linter + drift-check — sau MỖI push/PR.
-# Vì sao windows-latest: baseline 465/1 gồm test cross-process guard `win32`; ubuntu sẽ SKIP
+# Vì sao windows-latest: baseline gồm test cross-process guard `win32`; ubuntu sẽ SKIP
 # chúng → cổng yếu đi. Windows giữ parity. (Đổi lấy: tốn Actions-minutes hơn ubuntu.)
+# LƯU Ý: bước Drift-check gọi THẲNG `tests/drift_check.py` (không copy-cứng danh sách check) →
+# mọi check thêm sau (vd C7, self-test [3/3]) TỰ vào CI → parity local↔CI by-construction (K-075).
 
 on:
   push:

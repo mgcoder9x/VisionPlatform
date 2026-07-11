@@ -6255,3 +6255,21 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Bộ chống-drift giờ 3 tầng: (1) checker C1–C7 bắt drift bản-ghi · (2) RULES 5-file · (3) self-test bắt checker-hỏng.
 
 **Đã verify (CHẠY + ĐỌC output):** `vp check` → `[3/3] SELF-TEST` in 8 dòng `[PASS] self:*` (baseline + C1/C2/C4/C5/C6×2/C7 catch) + DRIFT PASS (Exit 0); `vp verify` = **612 passed/2 skipped** · lint 5/0 · [3/3] chạy · VERIFY OK. · **Chưa verify:** không (self-test tự chứng minh bằng chạy thật).
+
+### Entry #307 — 2026-07-11 — REVIEW cổng CI (verify.yml) vs cổng local `vp verify` = PARITY/SOUND + bỏ số stale trong comment — Kiro-Opus
+
+**Bối cảnh:** Kiểm điểm mù chống-drift ở TẦNG SERVER: CI (`verify.yml`, D-058) có LỆCH khỏi cổng local `vp verify` không? Nếu CI chạy bước riêng đã drift (thiếu self-test [3/3], khác extras/lint) → CI xanh nhưng bỏ sót = nguy hiểm. ĐỌC verify.yml + đối chiếu vp.cmd thật (chống bịa).
+
+**1. Quyết định AI tự ra (spec không nói):** bỏ số `465/1` (stale — giờ 612/2) khỏi comment verify.yml → thay bằng mô tả KHÔNG-số (giữ lý do win32-parity). Fix GỐC: số đếm hardcode trong comment (không máy nào kiểm) vốn drift → bỏ số là triệt nguồn drift, không phải cập nhật-số-rồi-lại-drift.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (review + hygiene comment; KHÔNG đổi bước CI).
+
+**3. Trade-off đã cân nhắc:** cập-nhật-số 465→612 vs BỎ-số → **bỏ số** (số trong comment sẽ drift lại mỗi lần +test; bỏ = fix gốc). Cái mất: comment ít cụ thể hơn — chấp nhận (lý do win32 mới là điều cần giữ).
+
+**4. Điều bạn nên biết (bằng chứng đối chiếu THẬT):**
+- CI 4 bước ≡ `vp verify`: pytest `-q` (vision-platform) ≡ `vp test` · `importlinter.api lint_imports()` ≡ `vp lint` · `python tests/drift_check.py` ≡ `vp check` · extras `.[dev,onnx,cv2,web]` ≡ vp.cmd default.
+- **Parity by-construction (K-075):** CI gọi THẲNG `drift_check.py` (KHÔNG copy-cứng danh sách check) → C7 (#305) + self-test [3/3] (#306) tôi vừa thêm ĐÃ tự vào CI, không cần sửa CI. Đây là property đẹp: thêm check ở 1 nơi (drift_check) → local + CI + hook đều nhận.
+- Khác biệt DUY NHẤT không đáng lo: CI Python 3.11 vs local 3.13 (cả hai ≥3.11 cho tomllib; baseline chạy cả hai theo lịch sử). CI parity là chủ đích D-058.
+- [chưa kiểm] CI RUN thật trên GitHub Actions (không chạy Actions cục bộ được — D-058 vẫn 🔵 phần "đã chạy CI xanh"); nhưng NỘI DUNG workflow = parity với cổng local đã verify.
+
+**Đã verify (ĐỌC nguồn thật 2 file):** `verify.yml` (4 step) vs `scripts/vp.cmd` (test/lint/check/verify) → khớp entry-point. Không đổi code/logic → 612/2·5/0 giữ. · **Chưa verify:** CI-run-xanh thật trên Actions (thiếu môi trường; chỉ verify được NỘI DUNG workflow, không verify được LẦN CHẠY).

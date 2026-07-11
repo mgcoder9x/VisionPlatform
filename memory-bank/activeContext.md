@@ -1,8 +1,17 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T15:00:00+07:00.
-**[🔒 GIT CHECKPOINT] #295→#305 đã push (`6e38d71`). #306 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau 6e38d71.**
+**Cập nhật lúc:** 2026-07-11T15:30:00+07:00.
+**[🔒 GIT CHECKPOINT] #295→#306 đã push (`fe4840e`). #307 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau fe4840e.**
+**[✅ #307 — REVIEW cổng CI (verify.yml) vs `vp verify` = PARITY/SOUND + bỏ số stale comment — máy `toann`]**
+- Kiểm điểm mù chống-drift TẦNG SERVER: CI có lệch cổng local không? Đọc `verify.yml` + đối chiếu `vp.cmd` THẬT.
+- **Kết luận SOUND + parity:** CI 4 bước ≡ vp verify (pytest/importlinter.api/`python tests/drift_check.py`/extras dev,onnx,cv2,web). **Parity BY-CONSTRUCTION (K-075):** CI gọi THẲNG `drift_check.py` (không chép-cứng danh sách check) → C7(#305)+self-test[3/3](#306) TỰ vào CI, không sửa YAML.
+- **Fix con:** bỏ số `465/1` stale khỏi comment verify.yml (số hardcode dễ drift → bỏ số, giữ lý do win32-parity = fix gốc).
+- **VERIFY:** đọc 2 file thật (verify.yml 4 step ↔ vp.cmd) khớp entry-point; không đổi logic → 612/2·5/0 giữ. [chưa kiểm] CI-run-xanh-thật trên Actions (không chạy Actions cục bộ — D-058 phần đó vẫn 🔵).
+- **Ghi sổ:** LOG #307 · +K-075 · INDEX #307/Σ210/K75 + dòng K-075 · block này. Sẽ commit+push.
+- **Chống-drift giờ phủ:** local 3 tầng (C1–C7 + RULES 5-file + self-test) + CI parity by-construction + git-persist mỗi lượt. Rất mạnh.
+- **Bước kế (CHỜ user):** điểm dừng sạch; hoặc GPU/DB/máy-mạnh cho nhánh 🔴; hoặc observability-trong-TOML (follow-on).
+---
 **[✅ #306 — GUARD-THE-GUARD: self-test chứng minh checker C1–C7 BẮT được drift — máy `toann`, verify 612/2·5/0]**
 - Điểm mù BẢN CHẤT cuối: checker (nền D-052/053/083/084) chỉ có bằng chứng "PASS lúc sạch", CHƯA có "BẮT được drift" → regex-rot làm bảo vệ bốc hơi âm thầm (false-confidence).
 - **Fix:** refactor `check()` nhận text TIÊM optional (no-arg=đọc file, backward-compat) + `self_test()` (baseline PASS + perturb từng drift → đúng tag FAIL) + wire `drift_check.py` **[3/3] SELF-TEST**. Đặt ở drift_check vì `vp test`=pytest trong vision-platform KHÔNG collect ROOT/tests (đã KIỂM `vp.cmd`) → pytest sẽ là guard giả.

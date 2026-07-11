@@ -758,3 +758,9 @@ Vì sao ghi: (1) preserve kết luận review → phiên/máy sau KHÔNG review 
 **Kết luận:** durability đạt Ở TẦNG SINK (per-event), KHÔNG phụ thuộc teardown → KHÔNG vá graceful-shutdown speculative (đúng "đừng fix cái không tồn tại"). 
 **ĐIỀU KIỆN đảo (khi nào MỚI cần):** nếu thêm sink DEFER/BATCH ghi (không flush/commit per-event) → SIGTERM mất batch → lúc đó cài `signal.signal(SIGTERM, →should_stop)` + truyền `should_stop` vào `runner.run` (param ĐÃ có) → break → finally teardown. Pattern sẵn ở `supervisor.py`.
 **Bài học:** giả thuyết "lỗ an toàn" phải KIỂM code thật trước khi vá — nhiều "lỗ" đã được thiết kế giải quyết ở tầng khác (durability per-event thay vì phụ thuộc shutdown).
+
+### K-075 — ✅ (2026-07-11) CI parity với cổng local BY-CONSTRUCTION: CI gọi THẲNG entry-point (`drift_check.py`/`importlinter.api`/`pytest`), KHÔNG copy-cứng danh sách check
+**Bối cảnh:** review `verify.yml` vs `vp verify` (#307) — lo CI drift khỏi cổng local (thiếu check mới → CI xanh giả).
+**Bằng chứng (đọc 2 file thật):** CI 4 bước gọi ĐÚNG entry-point mà `vp.cmd` gọi: `python -m pytest -q` · `importlinter.api lint_imports()` · `python tests/drift_check.py` · extras `.[dev,onnx,cv2,web]`. Vì bước drift gọi THẲNG `drift_check.py` (không liệt-kê-cứng C1..C7) → C7 (#305) + self-test [3/3] (#306) TỰ vào CI, không sửa CI.
+**Luật rút ra:** cổng CI PHẢI gọi cùng entry-point script với cổng local (một-nguồn-sự-thật), KHÔNG chép danh sách bước vào YAML (chép = 2 nguồn → drift). Thêm check → bỏ vào script (drift_check/vp.cmd) → local+CI+hook đều nhận. Đây là mở rộng của §3.1 (launcher cố định) sang tầng CI.
+**Cảnh báo trung thực:** parity NỘI DUNG đã verify (đọc file); CI RUN-xanh-thật trên Actions [chưa kiểm] (không chạy Actions cục bộ) — D-058 phần đó vẫn 🔵. Số đếm test KHÔNG hardcode trong comment/YAML (dễ drift — đã bỏ 465/1 ở #307).
