@@ -6379,3 +6379,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - **GIT: phiên này commit LOCAL, CHƯA push** (push=mạng, cấm) → local ahead origin; phiên sau CÓ mạng phải push (rủi ro sync-đè nếu máy khác đè trước — chấp nhận theo chỉ thị user).
 
 **Đã verify (CHẠY + ĐỌC output, no-network):** `vp env` → GPU=co (nvidia-smi OK), venv exists; `--capabilities` → torch=False/cuda=False/cv2=True. · **Chưa verify (chặn bởi cấm-mạng):** nhánh CUDA thật (cần torch-install=mạng) — KHÔNG đoán, để phiên có-mạng.
+
+### Entry #314 — 2026-07-11 — LÀM RÕ ràng-buộc network (remote): "cẩn trọng bandwidth để không rớt session", KHÔNG cấm tuyệt đối — sửa K-077 — Kiro-Opus
+
+**Bối cảnh:** User làm rõ: "Không network có nghĩa nên CẨN TRỌNG việc dùng mạng để đừng bị MẤT MẠNG". Tức không phải cấm-tuyệt-đối mạng, mà tránh op NẶNG làm nghẽn băng thông → rớt phiên remote.
+
+**1. Quyết định AI tự ra:** phân loại op theo bandwidth: NHẸ (git push vài KB — OK, an toàn) vs NẶNG (pip install torch CUDA ~GB, tải model/weight — RỦI RO rớt session → KHÔNG tự làm, chờ user OK rõ). Push commit #313+#314 (nhẹ) để resync origin (đóng rủi ro "ahead 1" sync-đè).
+
+**2. Chỗ phải đổi so với hiểu biết trước:** K-077 ghi "CẤM git push" (theo cách hiểu ban đầu "đừng đụng mạng") → SỬA (K-078): push NHẸ được phép; chỉ CẤM op nặng-băng-thông. Append-only (không sửa K-077 cũ; K-078 supersede phần over-strict).
+
+**3. Trade-off đã cân nhắc:** push-để-resync (nhẹ, đóng drift-risk cross-máy) vs không-đụng-mạng-gì (an toàn tuyệt đối nhưng để local ahead = rủi ro sync-đè) → **push nhẹ** (user đã cho phép ops nhẹ; giá trị anti-drift > rủi ro bandwidth KB). torch-install (~GB) vẫn HOÃN (chờ user OK vì nặng).
+
+**4. Điều bạn nên biết (K-078):** quy tắc network cho phiên remote-cẩn-trọng: NHẸ (push/pull KB, git ls-remote) = OK; NẶNG (pip install lớn, tải weight GB, clone lớn) = chờ user OK rõ. nvidia-smi/probe/pytest/drift = local, luôn OK. Verify nhánh GPU vẫn chờ torch-install (nặng → cần user bật đèn xanh).
+
+**Đã verify:** không đổi code (612.../623 giữ); ghi sổ thuần. `vp check` PASS (#314). git push #313+#314 = op nhẹ (vài KB text). · **Chưa verify:** nhánh CUDA (chờ torch-install nặng-mạng, user OK).

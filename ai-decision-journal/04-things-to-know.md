@@ -776,3 +776,11 @@ Vì sao ghi: (1) preserve kết luận review → phiên/máy sau KHÔNG review 
 **Sửa hiểu biết cũ:** frontier từng ghi "máy toann no-GPU" → thực tế GPU phần cứng CÓ, chỉ thiếu torch (phần mềm dùng GPU). Blocker nhánh CUDA (D-073 [chưa kiểm]) = torch-chưa-cài, mà cài = cần MẠNG.
 **Đường mở khoá (khi có mạng + user cho phép):** `vp setup` với extras torch/pt (K-066: `torch==2.6.0+cu124` index pytorch cu124, tránh bẫy CPU-wheel) → `--capabilities` phải hiện has_cuda=true+gpu_name → chạy `pt` cuda detector verify D-073 nhánh có-CUDA.
 **Ràng buộc vận hành (khi user remote báo "đừng đụng mạng"):** CẤM pip install / git push / tải. Chỉ local read-only (nvidia-smi, probe_capabilities, pytest no-network, drift_check). Commit LOCAL được; push để phiên có-mạng.
+
+### K-078 — ✅ (2026-07-11) Ràng buộc NETWORK phiên remote-cẩn-trọng: phân loại theo BANDWIDTH (sửa K-077 over-strict)
+**Làm rõ từ user (#314):** "không network" = CẨN TRỌNG để không RỚT remote-session, KHÔNG cấm tuyệt đối.
+**Quy tắc:**
+- ✅ **NHẸ (được phép):** `git push`/`git pull` vài KB, `git ls-remote`, thao tác local (nvidia-smi, probe_capabilities, pytest no-network, drift_check).
+- ⛔ **NẶNG (chờ user OK rõ):** `pip install` lớn (torch CUDA ~GB), tải model/weight, clone repo lớn — ngốn băng thông → nguy cơ rớt session remote.
+**Sửa K-077:** K-077 ghi "CẤM git push" (theo cách hiểu ban đầu "đừng đụng mạng") → thực tế push NHẸ OK; chỉ cấm op nặng-băng-thông. (Append-only: K-077 giữ nguyên, K-078 supersede phần này.)
+**Hệ quả nhánh GPU:** verify CUDA cần `vp setup` extras torch (~GB, NẶNG) → thuộc nhóm ⛔ → chờ user bật đèn xanh rõ ràng trước khi cài.

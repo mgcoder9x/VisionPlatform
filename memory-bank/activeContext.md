@@ -1,8 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T18:45:00+07:00.
-**[🔒 GIT CHECKPOINT] #295→#312 đã push (`8569bbe`). #313 commit LOCAL nhưng ⚠️ CHƯA PUSH (user remote — CẤM MẠNG). §0 phiên sau (khi có mạng): PUSH ngay; git local ahead origin — rủi ro sync-đè nếu máy khác đè trước.**
+**Cập nhật lúc:** 2026-07-11T19:15:00+07:00.
+**[🔒 GIT CHECKPOINT] #313+#314 push DỒN lượt này (op NHẸ vài KB — user làm rõ network=cẩn-trọng-bandwidth, không cấm tuyệt đối). Sau push: local==origin. §0 phiên sau: git clean.**
+**[✅ #314 — LÀM RÕ ràng-buộc network remote: cẩn-trọng-bandwidth (không cấm tuyệt đối) — sửa K-077 — máy `toann`]**
+- User làm rõ: "không network" = CẨN TRỌNG để không RỚT remote, KHÔNG cấm hẳn. Phân loại: NHẸ (push/pull KB, local) = OK; NẶNG (torch install ~GB, tải weight) = chờ đèn xanh.
+- **Sửa K-077** (ghi "cấm git push" over-strict) → K-078: push nhẹ OK. → push commit #313 (đang ahead 1) + #314 dồn 1 lần (nhẹ) → resync origin, đóng rủi ro sync-đè.
+- **Nhánh GPU vẫn chờ:** verify CUDA cần `vp setup` extras torch (~GB, NẶNG) → nhóm ⛔ → chờ user bật đèn xanh rõ.
+- **Ghi sổ:** LOG #314 · +K-078 · INDEX #314/Σ215/K78 + dòng · block này. Không đổi code (623/2 giữ).
+- **Bước kế (CHỜ user):** bật đèn xanh mạng cho `vp setup` torch → tôi verify nhánh CUDA (D-073). Hoặc chốt.
+---
 **[✅ #313 — VERIFY (no-network) máy `toann`: GPU phần cứng CÓ nhưng torch=False → nhánh CUDA blocker = torch-install-mạng — máy `toann`]**
 - User: "máy có GPU nhưng ĐỪNG đụng mạng (remote)". Kiểm no-network, read-only.
 - **Verify:** `vp env` → GPU=co (nvidia-smi OK, venv exists); `--capabilities` → `{has_torch:false, has_cuda:false, gpu_name:null, has_cv2:true}`. → GPU PHẦN CỨNG CÓ nhưng **torch CHƯA cài**.
