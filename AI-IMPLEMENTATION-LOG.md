@@ -6213,3 +6213,23 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** 4-file journal giờ khớp: 01(D-083)/02(C-020, không đổi)/03(T-030)/04(K-074) + INDEX Σ207 (D83·C20·T30·K74). Drift-check C3-T/C5-T sẽ kiểm T liên tục + khớp INDEX.
 
 **Đã verify:** `vp check` sẽ xác nhận C3-T (30 ID max T-030) + C5-T khớp INDEX + C4 total Σ207 — chạy bước kế. · **Chưa verify:** không (thuần ghi sổ, không đụng code — 612/2 giữ).
+
+### Entry #305 — 2026-07-11 — Củng cố chống-drift: thêm C7 (INDEX trích LOG-# phantom) vào máy-kiểm — đóng điểm mù sync-đè — Kiro-Opus
+
+**Bối cảnh:** User lặp yêu cầu "cách CỰC MẠNH chống drift". Thay vì thêm feature vặt, AUDIT chính bộ máy `test_memory_consistency` (đọc trọn) → xác định vùng phủ + điểm mù. Kết luận: C1–C6 SOUND cho phạm vi (nhất quán mirror hand-edit), NHƯNG có 1 điểm mù thật liên quan TRỰC TIẾP nỗi lo sync-đè-đa-máy: **INDEX row có thể trích LOG #N phantom** (vd `| #310 |` khi LOG max #304) — C2 chỉ kiểm HEADER "Log canonical", KHÔNG kiểm từng dòng bảng.
+
+**1. Quyết định AI tự ra (spec không nói):** thêm **C7-INDEX-CITES** vào `tests/test_memory_consistency.py`: mọi token `#N` trong INDEX phải ∈ tập LOG entry thật (`entry_set`) — bắt kịch bản sync mất đuôi LOG mà INDEX còn trích #cũ/phantom. Tự động chảy vào `drift_check.py` + `vp verify/check` (drift_check gọi `mc.check()`).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (thêm check, không đổi hành vi cũ).
+
+**3. Trade-off đã cân nhắc:**
+- Thêm C7 (đóng lỗ sync) vs KHÔNG thêm (tránh mở rộng cơ chế) → **thêm** vì lỗ khớp ĐÚNG kịch bản sync-đè user lo + fix-gốc NON-BRITTLE (dùng token `#N` cấu trúc, mọi `#N` trong repo = LOG ref).
+- Các điểm mù KHÁC (progress.md staleness · baseline-số prose · LOG↔journal-citation format-variant) → **KHÔNG thêm** vì brittle/false-fail (progress.md là file MỐC cố ý lag; số prose + K-format-variant dễ false-positive) → chấp nhận, ghi rõ (không over-engineer cơ chế = trái chính "đừng fix cái không tồn tại").
+- VALIDATE thiết kế TRƯỚC khi thêm: grep INDEX xác nhận KHÔNG có `#N ≥ 305` → C7 không false-positive trên trạng thái hiện tại.
+
+**4. Điều bạn nên biết:**
+- Điều kiện C7: mọi `#N` ∈ INDEX phải ∈ LOG entries (C1 đã đảm bảo LOG liên tục 1..max nên = "≤ max"). Legacy dup 90/91/95/96 vẫn ∈ set → OK.
+- Giới hạn trung thực: C7 KHÔNG kiểm chiều ngược (LOG prose trích journal-ID phantom) — format "Nguồn:" khác nhau giữa D/C/T vs K nên parse dễ brittle → cố ý bỏ (giá trị thấp + rủi ro false-fail).
+- Bộ máy chống-drift giờ: C1–C7 (memory) + RULES 5-file. Vùng phủ: hand-edit mirror + sync-đè-mất-đuôi. Ngoài phạm vi (đã ghi): git-state (§0 riêng) · progress.md · số prose.
+
+**Đã verify (CHẠY + ĐỌC output):** `vp check` → dòng `[PASS] C7-INDEX-CITES: mọi #N trích ∈ LOG` + `DRIFT-CHECK: PASS` (Exit 0); `vp verify` = **612 passed/2 skipped** · lint 5/0 · VERIFY OK (pytest `test_memory_consistency()` vẫn xanh sau thêm C7). · **Chưa verify:** hành vi C7 CATCH phantom bằng cách cố-ý-tạo-phantom (bỏ — logic `cited not in entry_set` hiển nhiên đúng + đã PASS trên data thật; không phá INDEX để test).

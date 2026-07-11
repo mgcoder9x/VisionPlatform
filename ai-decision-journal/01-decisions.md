@@ -954,3 +954,12 @@ Links: D-052 (linter nhất quán bộ nhớ), D-053 (hook tự-chạy + port ki
 Nội dung: Trước đây `test_rules_sync` chỉ kiểm 4 file (AGENTS.md + 3 mirror tool) → kit portable nằm NGOÀI máy-kiểm → RULES_VERSION kit drift âm thầm (thật 15 vs repo 16). Fix GỐC = thêm kit vào FILES → máy enforce kit==main ở mọi cổng (pytest + drift_check + vp). Fix theo thứ tự đúng: thêm §3.1 (nội dung v16) vào kit TRƯỚC rồi mới bump số (chống nói-dối-version = fix ngọn).
 Vì sao (bản chất): §2.5 VỐN yêu cầu "đổi luật → bump + sync kit lên cùng version" nhưng chỉ dựa KỶ LUẬT (văn xuôi) → drift được. Mechanize thành MÁY-KIỂM = đúng triết lý D-052/D-053 (cực mạnh chống-drift = máy kiểm thay kỷ luật). Không làm yếu đi mà mạnh hơn: lỗ để-quên-bump-kit giờ bị bắt tự động.
 Trade-off: mỗi lần bump luật buộc bump kit (đã là yêu cầu §2.5 — nay máy ép, không thêm gánh nặng mới). Kit portable sang repo khác: version phản ánh thế-hệ-luật, đúng ý đồ template.
+
+### D-084 — 2026-07-11 — Thêm C7-INDEX-CITES vào máy-kiểm chống-drift (đóng điểm mù INDEX trích LOG-# phantom, kịch bản sync-đè)
+Status: ✅ (verify — vp check dòng C7 PASS + DRIFT PASS; vp verify 612/2·5/0)
+Scope: `tests/test_memory_consistency.py` (+ check C7 + docstring) — tự chảy vào `tests/drift_check.py` + `vp verify/check`
+Nguồn: LOG Entry #305 · audit trọn checker · user xin "cách cực mạnh chống drift"
+Evidence: `cmd /c scripts\vp.cmd check` in `[PASS] C7-INDEX-CITES: mọi #N trích ∈ LOG` + `DRIFT-CHECK: PASS`; `vp verify` = 612 passed/2 skipped · lint 5/0; grep INDEX xác nhận không có `#N ≥ 305` (validate không false-positive)
+Links: D-052 (linter nhất quán bộ nhớ gốc), D-053/083 (máy-kiểm), K-064 (sync-đè tin-output-dán)
+Nội dung: C7 = mọi token `#N` trong INDEX phải ∈ tập LOG entry thật (`entry_set`). Đóng điểm mù: C2 chỉ kiểm HEADER "Log canonical tới #N", KHÔNG kiểm từng DÒNG BẢNG → INDEX row trích `#phantom` (sync mất đuôi LOG) lọt. C7 quét toàn INDEX, bắt mọi #N không tồn tại trong LOG.
+Vì sao (bản chất): kịch bản sync-đè-đa-máy (repo bị đè, mất đuôi LOG nhưng INDEX rows giữ #cũ) là nỗi-lo-gốc của user + đã từng gây drift (K-064). C2 (header-only) là điểm mù cho đúng kịch bản này. Fix gốc = kiểm MỌI citation, NON-BRITTLE (mọi `#N` trong repo = LOG ref, có cấu trúc). Cân nhắc & LOẠI các check brittle khác (progress.md/số-prose/LOG↔journal-format-variant) để KHÔNG over-engineer cơ chế (false-fail xói mòn niềm tin — bài học K-035). Validate thiết kế (grep #≥305 = rỗng) TRƯỚC khi thêm.

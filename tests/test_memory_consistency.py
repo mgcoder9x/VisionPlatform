@@ -14,6 +14,7 @@ Mỗi check nhắm ĐÚNG một loại drift ĐÃ TỪNG xảy ra (xem AI-IMPLEM
 - C4  Header INDEX "Tổng M entry (D..·C..·T..·K..)" == đếm THẬT   (bắt tự-đếm-sai, vd 133 vs 137).
 - C5  Mọi ID journal có dòng bảng trong INDEX & ngược lại        (bắt orphan / thiếu dòng).
 - C6  activeContext có mốc "Cập nhật lúc" + có nhắc #maxEntry     (bắt con trỏ để cũ, không cập nhật per-turn).
+- C7  Mọi LOG-# trích trong INDEX đều TỒN TẠI trong LOG          (bắt sync-đè mất đuôi LOG mà INDEX còn trích #phantom).
 """
 from __future__ import annotations
 
@@ -140,6 +141,16 @@ def check() -> tuple[bool, list[str]]:
     line(refs_latest, "C6-ACTIVE-LATEST",
          f"activeContext nhắc #{max_entry}" if refs_latest else
          f"activeContext KHÔNG nhắc entry mới nhất #{max_entry} (con trỏ để cũ?)")
+
+    # ---- C7: mọi LOG-# trích trong INDEX phải TỒN TẠI trong LOG ----
+    # Bắt kịch bản sync-đè đa-máy: mất đuôi LOG nhưng INDEX rows còn trích #cũ/phantom (C2 chỉ kiểm HEADER).
+    # Mọi token '#N' trong repo này = tham chiếu LOG entry → phải ∈ tập entry thật.
+    entry_set = set(entries)
+    cited = [int(x) for x in re.findall(r"#(\d+)", index_text)]
+    phantom = sorted({n for n in cited if n not in entry_set})
+    line(not phantom, "C7-INDEX-CITES",
+         "mọi #N trích ∈ LOG" if not phantom else
+         f"INDEX trích LOG #KHÔNG-tồn-tại={phantom} (LOG max #{max_entry}) — sync mất đuôi?")
 
     return ok_all, report
 

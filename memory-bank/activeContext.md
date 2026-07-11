@@ -1,8 +1,17 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T14:00:00+07:00.
-**[🔒 GIT CHECKPOINT] #295→#303 đã push (`c009a55`). #304 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau c009a55.**
+**Cập nhật lúc:** 2026-07-11T14:30:00+07:00.
+**[🔒 GIT CHECKPOINT] #295→#304 đã push (`e3d8529`). #305 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau e3d8529.**
+**[✅ #305 — Củng cố chống-drift: thêm C7 (INDEX trích LOG-# phantom) vào máy-kiểm — máy `toann`, verify 612/2·5/0]**
+- Audit TRỌN `test_memory_consistency` → C1–C6 SOUND, nhưng điểm mù thật: INDEX row trích LOG-#phantom (C2 chỉ kiểm HEADER) = đúng kịch bản sync-đè mất-đuôi-LOG (nỗi lo gốc, K-064).
+- **Thêm C7-INDEX-CITES:** mọi `#N` ∈ INDEX phải ∈ tập LOG entry thật. NON-BRITTLE (mọi #N=LOG ref). Tự chảy vào drift_check + vp. LOẠI check brittle khác (progress.md/số-prose/LOG↔journal-format) — tránh false-fail (K-035), không over-engineer.
+- **Validate trước khi thêm:** grep INDEX `#N≥305`=rỗng → C7 không false-positive.
+- **VERIFY THẬT:** `vp check` → `[PASS] C7-INDEX-CITES` + DRIFT PASS; `vp verify` = 612/2·lint 5/0·VERIFY OK (pytest test_memory_consistency vẫn xanh).
+- **Ghi sổ:** LOG #305 · +D-084 · INDEX #305/Σ208/D84 + dòng D-084 · block này. Sẽ commit+push.
+- **Bộ máy chống-drift giờ:** C1–C7 (memory) + RULES 5-file. Phủ: hand-edit mirror + sync-đè-mất-đuôi. Ngoài phạm vi (ghi rõ): git-state (§0) · progress.md · số-prose.
+- **Bước kế (CHỜ user):** điểm dừng sạch; hoặc GPU/DB/máy-mạnh cho nhánh 🔴; hoặc observability-trong-TOML (follow-on).
+---
 **[✅ #304 — Đóng drift TÍNH-ĐẦY-ĐỦ 4-file journal: bổ sung T-029/T-030 vào `03-tradeoffs.md` — máy `toann`]**
 - Rà theo yêu cầu lặp của user (duy trì 4 file): `01-decisions`(1)+`04-things-to-know`(4) cập nhật đều tới #303, nhưng `03-tradeoffs`(3) DỪNG ở T-028 → trade-off #297–#303 chỉ trong D/LOG, chưa vào file chuyên trách = drift tính-đầy-đủ.
 - **Thêm:** T-029 (config-observability: cờ-CLI-vs-TOML + exporter-dùng-chung) · T-030 (shutdown: không-graceful-shutdown + test-durability-vs-SIGTERM). KHÔNG thêm C-entry (việc 2) — phiên này KHÔNG đổi yêu-cầu-GỐC user (không bịa).
