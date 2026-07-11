@@ -1,8 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T17:45:00+07:00.
-**[🔒 GIT CHECKPOINT] #295→#310 đã push (`631af34`). #311 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau 631af34.**
+**Cập nhật lúc:** 2026-07-11T18:15:00+07:00.
+**[🔒 GIT CHECKPOINT] #295→#311 đã push (`274bcde`). #312 (dưới) CHƯA commit — sẽ commit+push cuối lượt. §0 phiên sau: git phải clean, HEAD ở/sau 274bcde.**
+**[✅ #312 — MỐC SẠCH: refresh `progress.md` khớp frontier #311 (đóng drift chân-lý-hiện-tại) — máy `toann`]**
+- `progress.md` kẹt mốc #303/612/2 → refresh #311/623/2: observability +khai-báo-TOML #311; anti-drift nâng "4 tầng" (C1–C7 + RULES-5-file + self-test [3/3] + CI-parity + config-artifact/durability guard); đóng 🟡 observability-trong-TOML (xong #311). Drift progress.md không máy-bắt (C6 chỉ activeContext) → refresh tay = §2.5.
+- **Ghi sổ:** LOG #312 (memory hygiene, không +D/C/T/K) · INDEX Log canonical #311→#312 (Σ213 giữ) · block này. Sẽ commit+push.
+- **PHẠM VI NO-GPU THƯƠNG MẠI + FOLLOW-ON = TRỌN.** Hướng còn lại đều CHẶN tiền-đề ngoài: GPU/CUDA (nhánh pt-cuda · motion-gate-roi RTSP tune · benchmark) · DB server (Postgres sink) · máy-mạnh/CI (K-035 tuyệt đối) · runtime song song (config realtime song song).
+- **Bước kế (điểm dừng SẠCH — khuyến nghị chốt):** chờ user cấp GPU/DB → verify nhánh 🔴 (design-first); hoặc tổng kết. KHÔNG còn việc no-GPU không-chặn.
+---
 **[✅ #311 — PHA2 code TDD `config-observability-toml` HOÀN TẤT — observability trong TOML (GitOps) — máy `toann`, verify 623/2·5/0]**
 - Hiện thực design hardened 2 vòng (#309 mở + #310 review host-sentinel). Đóng follow-on T-029/D-082.
 - **Code (additive):** `kernel/config.py` (+`ObservabilityConfig` DTO frozen +`AppConfig.observability`) · `config_loader.py` (+`_parse_observability` validate-kiểu-tường-minh chặn bool-lọt-int +wire) · `vision_slice_app.py` (+`_merge_observability` precedence CLI>TOML>default · `_build_config_observability` resolve host #310 · reorder `_run_from_config` load→merge→smart-default · main RAW+`--metrics-host default None`).

@@ -6348,3 +6348,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - 1 test-fix trong lúc chạy: `test_merge_none_toml_gives_defaults` kỳ vọng host None — SAI (merge dùng ObservabilityConfig() default → "127.0.0.1"); sửa test, code đúng.
 
 **Đã verify (CHẠY + ĐỌC output):** `pytest test_config_observability_toml.py` = 11 passed; `cmd /c scripts\vp.cmd verify` = **623 passed/2 skipped** (612→623 +11) · **lint 5/0** (layer giữ: DTO@kernel thuần) · **drift PASS** (C1–C7 + self-test). · **Chưa verify:** scrape `/metrics` thật khi deploy song song (Non-Goal); nhánh GPU.
+
+### Entry #312 — 2026-07-11 — MỐC SẠCH: refresh `progress.md` khớp frontier #311 (đóng drift "chân lý hiện tại") — Kiro-Opus
+
+**Bối cảnh:** Sau #311 (config-observability-toml đóng follow-on no-GPU cuối), `progress.md` kẹt mốc #303/baseline 612/2, thiếu #305–#311 (C7 · self-test [3/3] · CI-parity K-075 · config-artifact-guard #308 · config-observability-toml #311). Drift ở file "chân lý hiện tại" mà máy KHÔNG bắt (C6 chỉ kiểm activeContext, không kiểm progress.md).
+
+**1. Quyết định AI tự ra:** refresh `progress.md` (§2.5, tóm gọn không chồng bản cũ) → mốc #311, baseline **623/2 · RULES 16 · drift PASS (C1–C7 + self-test)**; observability chuỗi thêm "khai báo TOML #311"; anti-drift nâng "4 tầng máy-kiểm" (C1–C7 + RULES-5-file + self-test [3/3] + CI-parity + config-artifact/durability guard); đóng 🟡 observability-trong-TOML (đã xong #311).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (memory hygiene).
+
+**3. Trade-off:** log #312 cho refresh (tiền lệ #293/#301) — audit "hộp đen"; KHÔNG +D/C/T/K (không quyết định/bài học mới).
+
+**4. Điều bạn nên biết:** phạm vi no-GPU thương mại + mọi follow-on no-GPU đã nhận diện = TRỌN. Hướng còn lại đều CHẶN tiền-đề ngoài (GPU/CUDA · DB server · máy-mạnh/CI cho K-035 · runtime song song). Điểm dừng sạch hợp lý.
+
+**Đã verify:** progress.md khớp activeContext + INDEX (#311, 623/2, RULES 16, drift C1–C7+self-test); `vp check` sẽ PASS (#312). · **Chưa verify:** không (số 623/2 từ `vp verify` #311 đã chạy thật).
