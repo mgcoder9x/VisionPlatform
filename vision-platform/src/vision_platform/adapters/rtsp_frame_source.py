@@ -39,21 +39,27 @@ def mask_rtsp(url: str) -> str:
 
 
 def _default_cv2_capture(url: str):
-    """Factory mặc định: cv2.VideoCapture với timeout mở/đọc (tránh treo vô hạn khi host không tới được)."""
+    """Factory mặc định: cv2.VideoCapture với timeout mở/đọc (tránh treo vô hạn khi host không tới được).
+
+    R1 (#346): set property TRƯỚC open. `cv2.VideoCapture(url, ...)` MỞ NGAY trong constructor → property set
+    SAU đó KHÔNG tác động cái open đã xong (OPEN_TIMEOUT vô hiệu → host chết vẫn treo lâu). Sửa GỐC: construct
+    RỖNG → set timeout/buffer → `cap.open(url)` → OPEN_TIMEOUT mới thực sự có hiệu lực cho open.
+    """
     import cv2
 
-    cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
-    # Timeout mở + đọc (ms) — chống treo khi camera/mạng không phản hồi.
+    cap = cv2.VideoCapture()
+    # Timeout mở + đọc (ms) — chống treo khi camera/mạng không phản hồi. PHẢI set TRƯỚC open (R1).
     with_open = getattr(cv2, "CAP_PROP_OPEN_TIMEOUT_MSEC", None)
     with_read = getattr(cv2, "CAP_PROP_READ_TIMEOUT_MSEC", None)
+    # Buffer nhỏ nhất → giảm ĐỘ TRỄ dồn (đọc frame mới, không chồng hàng đợi khi xử lý chậm).
+    bufsize = getattr(cv2, "CAP_PROP_BUFFERSIZE", None)
     if with_open is not None:
         cap.set(with_open, 5000)
     if with_read is not None:
         cap.set(with_read, 5000)
-    # Buffer nhỏ nhất → giảm ĐỘ TRỄ dồn (đọc frame mới, không chồng hàng đợi khi xử lý chậm).
-    bufsize = getattr(cv2, "CAP_PROP_BUFFERSIZE", None)
     if bufsize is not None:
         cap.set(bufsize, 1)
+    cap.open(url, cv2.CAP_FFMPEG)   # open SAU khi đã cấu hình → OPEN_TIMEOUT có hiệu lực
     return cap
 
 

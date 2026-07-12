@@ -1,8 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T15:30:00+07:00.
-**[🔒 GIT] #345 FIX Z1 bulkhead io-thread ZMQ — sẽ commit + push NHẸ. Code additive (629/2).**
+**Cập nhật lúc:** 2026-07-12T16:10:00+07:00.
+**[🔒 GIT] #346 FIX R1 rtsp OPEN_TIMEOUT-trước-open — sẽ commit + push NHẸ. Code additive (630/2).**
+**[✅ #346 — FIX săn-bug R1: `_default_cv2_capture` set OPEN_TIMEOUT TRƯỚC open (D-092 ✅, TDD)]**
+- Săn bug `rtsp_frame_source` + `onnx_detector`: onnx SOUND; rtsp reconnect/mask SOUND; nhưng `_default_cv2_capture` set `CAP_PROP_OPEN_TIMEOUT_MSEC` SAU `cv2.VideoCapture(url,...)` (constructor mở NGAY) → timeout vô hiệu → host chết vẫn treo. Lỗi logic chắc chắn.
+- **TDD:** test fake-cv2 ghi call-order (deterministic, KHÔNG cần camera) → RED (code cũ [set,set,set], không open) → FIX construct-rỗng→set→`cap.open` → GREEN.
+- **Ghi sổ:** LOG #346 · +D-092 (✅) · INDEX canonical #345→#346 · Σ225→Σ226 (D92) · dòng D-092 · Verify-Symbol (C8→7) · R1 vào ARCHITECTURE §12 + review · block này.
+- **VERIFY:** `vp verify` = 630/2 (+1) · lint 5/0 · drift PASS · VERIFY OK. Order-contract verify được; hang-thực chờ field-verify RTSP host (nhãn rõ D-092).
+- **Bug đã fix phiên săn: Z1 (#345) + R1 (#346).** SOUND: nms/letterbox/postprocess/onnx/inference_server/rtsp-reconnect. Mở: Z2 (Low).
+- **Bước kế (CHỜ user):** soi tiếp `video_file_frame_source` / `dark_filter`+`brightness` stages / `supervisor` cascade race; hoặc dừng mốc sạch.
+---
 **[✅ #345 — FIX săn-bug Z1: bulkhead io-thread `ZmqInferenceClient` (D-091 ✅ +T-032, TDD)]**
 - User chuyển hướng: TÌM BUG + nâng thiết kế (không học). Săn bug: `nms`/`letterbox`/`yolo_postprocess` = SOUND; `zmq_inference_client` vs `inference_server` → **Z1**: server bulkhead per-request (K-024) nhưng client `_io_loop` KHÔNG bọc recv/unpack → 1 response rác giết io thread → client "hố đen".
 - **TDD:** test in-process ROUTER thô (event-driven, không spawn) → RED tái hiện (io-thread chết, msgpack.FormatError + Exception in thread) → FIX tách `_loop_body` + bọc `try/except`+`_io_errors`+sleep chống busy-spin → GREEN + **5/5 không-flaky**. Kèm Verify-Symbol dogfood C8 (5 symbol).

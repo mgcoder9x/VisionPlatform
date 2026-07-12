@@ -227,3 +227,7 @@ Mục tiêu user: TÌM BUG + nâng thiết kế (không học). Soi vùng ghi "c
 
 **### Z2 [Low] — MỞ (chưa sửa)**
 `ZmqInferenceClient._responses` là `queue.Queue()` không chặn → nếu caller ngừng `poll_responses()` mà io thread vẫn nhận response → phình vô hạn. Hiện an toàn (in_flight ≤ window + camera poll mỗi vòng, documented). Ghi nhận; sửa nếu tái dùng client ở ngữ cảnh khác.
+
+**### R1 [Med, production robustness] — ✅ ĐÃ FIX (#346, D-092)**
+`adapters/rtsp_frame_source.py::_default_cv2_capture` set `CAP_PROP_OPEN_TIMEOUT_MSEC` SAU `cv2.VideoCapture(url, CAP_FFMPEG)` — nhưng constructor MỞ NGAY → property set sau KHÔNG tác động cái open đã xong; mọi reconnect construct lại với url → OPEN_TIMEOUT **không bao giờ** áp dụng cho open nào → docstring hứa "chống treo host không phản hồi" nhưng bảo vệ VÔ HIỆU (host chết → `read()` treo theo timeout mặc định FFMPEG). Lỗi logic chắc chắn (không thể cấu hình cái đã xảy ra).
+**Fix:** `cv2.VideoCapture()` rỗng → set OPEN/READ_TIMEOUT + BUFFERSIZE → `cap.open(url, CAP_FFMPEG)`. **TDD:** `tests/test_rtsp_open_timeout.py` fake cv2 ghi call-order → RED (code cũ không gọi cap.open) → GREEN. Verify 630/2. *Order-contract verify được; độ-lớn-hang thực + hiệu-quả-timeout = [chưa kiểm runtime, cần RTSP host thật].*

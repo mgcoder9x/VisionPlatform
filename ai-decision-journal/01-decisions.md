@@ -1038,3 +1038,14 @@ Verify-Symbol: vision-platform/src/vision_platform/adapters/zmq_inference_client
 Nội dung: `_io_loop` cũ chỉ bọc `try/except queue.Empty` quanh bước-1; recv/unpack/step1b-send TRẦN → 1 response rác (msgpack hỏng / thiếu request_id) hoặc lỗi zmq transient → exception giết io thread (daemon) → client thành HỐ ĐEN (mọi infer/submit timeout mãi). Fix: tách logic 1 vòng ra `_loop_body`, `_io_loop` bọc `try/except Exception` → log stderr + `_io_errors++` + `sleep(5ms)` chống busy-spin + `continue`. Request đang chờ tự timeout=retryable (degradation đúng ý đồ).
 Vì sao (bản chất): BẤT ĐỐI XỨNG fault-isolation — server đã bulkhead per-request (K-024) nhưng client (1 thread duy nhất sở hữu socket, dễ tổn thương HƠN) thì không. Cùng threat model (message rác) phải phòng cả 2 đầu cho sản phẩm cross-process thương mại.
 Non-goal: KHÔNG đổi giao thức/độ ngữ nghĩa; catch rộng có chủ đích (mọi lỗi 1-vòng = cô lập, giống server).
+
+### D-092 — 2026-07-12 — FIX R1 (săn bug): `_default_cv2_capture` set OPEN_TIMEOUT TRƯỚC open (construct rỗng → set → open)
+Status: ✅ code (TDD: RED [code cũ không gọi cap.open] → GREEN; verify 630/2 · lint 5/0). Order-contract verify được; hiệu-quả-hang chờ field-verify (RTSP host)
+Evidence: `vp test tests/test_rtsp_open_timeout.py` RED trước (calls=[set,set,set], KHÔNG có open) → PASS sau; `vp verify` = 630 passed/2 skipped (+1) · lint 5/0 · drift PASS
+Scope: `adapters/rtsp_frame_source.py::_default_cv2_capture`; test mới `tests/test_rtsp_open_timeout.py` (fake cv2 ghi call-order)
+Nguồn: LOG Entry #346 · review săn bug R1 · đọc code thật (set property SAU constructor-open)
+Links: R1 (review), D-033 (RtspFrameSource), D.3/#321 (reconnect cùng file)
+Verify-Symbol: vision-platform/src/vision_platform/adapters/rtsp_frame_source.py::_default_cv2_capture
+Nội dung: `cv2.VideoCapture(url, CAP_FFMPEG)` MỞ NGAY trong constructor → `cap.set(CAP_PROP_OPEN_TIMEOUT_MSEC,...)` set SAU → vô hiệu cho open đã xong (mọi lần reconnect construct lại với url → OPEN_TIMEOUT không bao giờ áp dụng). Fix: `cv2.VideoCapture()` rỗng → set timeout/buffer → `cap.open(url, CAP_FFMPEG)`.
+Vì sao (bản chất): pre-open property PHẢI set trước open — logic chắc chắn (không thể cấu hình cái đã xảy ra). Docstring hứa "chống treo host không phản hồi" nhưng bảo vệ không hoạt động → fix để lời-hứa thành thật. Test bằng fake cv2 (call-order) → kiểm được contract KHÔNG cần camera.
+Non-goal: KHÔNG đổi logic reconnect/read (chỉ đường tạo capture); độ-lớn-hang thực tế = field-verify khi có RTSP host.
