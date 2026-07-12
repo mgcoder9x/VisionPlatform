@@ -6547,3 +6547,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** bộ trao-tay cho reviewer = `docs/ARCHITECTURE.md` (chính) + `review/2026-07-11-architecture-review.md` (chi tiết findings) + `ai-decision-journal/00-INDEX.md` (xuất xứ). §12 bảng trạng thái: F1✅ D.3✅ F2✅(phần lớn) · E.2/F3/F4/F5/F6/F7/D.2/D.4 MỞ (Low, phần lớn chặn tiền-đề GPU hoặc dọn-dần).
 
 **Đã verify:** đọc ARCHITECTURE.md hiện tại + cập nhật §11.4/§12/header khớp trạng thái sau F1 (#324); không đổi code (628/2 giữ). `vp check` sẽ PASS (#325). · **Chưa verify:** không có mục cần chạy (thuần tài liệu; nội dung §12 tóm tắt từ review đã verify #318–#324).
+
+### Entry #326 — 2026-07-12 — MỞ deep-dive code-lessons #11 (config-declarative) — lấp khoảng-trống dạy-code sau #10 — Kiro-Opus
+
+**Bối cảnh:** user cần tài liệu "đọc là hiểu mọi thứ tới mẩu nhỏ nhất" (khác `docs/ARCHITECTURE.md` tổng-quan). Đó là `code-lessons/` (luật §1.8/LESSON-RULES). Đọc INDEX code-lessons → phủ sâu #01–#10 + sub-spec, NHƯNG có KHOẢNG TRỐNG: tính năng sau #10 (analytics/observability-metrics/capability/config-declarative...) chưa có bài. Luật cấm tạo-hàng-loạt → mở DẦN.
+
+**1. Quyết định AI tự ra:** bắt đầu lấp khoảng-trống bằng chủ đề nền tảng nhất cho "tổ chức/phân tách code" (user nhấn): **config-declarative** (#11). Tạo `code-lessons/11-config-declarative/00-cau-chuyen.md` (vòng cung 6 nhịp: tổng-quan→vấn-đề/forces→nhiều-hướng→chốt→triển-khai→nên/tránh) + `00-muc-luc.md` (15 mẩu). Bám 4 file code đã đọc thật phiên này.
+
+**2. Chỗ phải đổi so với hiểu biết trước:** `implement/` chỉ có #01–#10 → chủ đề mới không có folder implement khớp; đánh số nối tiếp #11 trong code-lessons + ghi rõ "spec-based, không implement/11".
+
+**3. Trade-off đã cân nhắc:** tạo hết bài mới cùng lúc (nhanh có tài liệu) vs tạo dần 1 chủ đề (đúng luật + chất lượng + verify được từng mẩu). Chọn tạo DẦN — nền cau-chuyen+muc-luc trước (khung hiểu "tại sao"), mẩu chi tiết lấp tiếp theo yêu cầu. KHÔNG dán lesson vào chat (luật §1.8).
+
+**4. Điều bạn nên biết:** bộ tài liệu giờ 2 mức — `docs/ARCHITECTURE.md` (tổng quan reviewer) + `code-lessons/` (deep, mẩu-by-mẩu). Deep-dive phần MỚI mới có #11 nền (cau-chuyen+muc-luc); các chủ đề khác (analytics/observability-metrics/capability) sẽ thêm dần. Mẩu 01–15 của #11 còn ⬜.
+
+**Đã verify:** đọc code thật 4 file (config.py/config_loader.py/pipeline_factory.py/vision_slice_app.py — phiên này #322/#324) để viết cau-chuyen bám sát; tạo 2 file + cập nhật INDEX code-lessons. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#326). · **Chưa verify:** mẩu chi tiết 01–15 (chưa viết); nội dung cau-chuyen là giải-thích (không phải khẳng-định-hành-vi cần chạy) — số/hành vi dẫn từ code+journal đã verify.
