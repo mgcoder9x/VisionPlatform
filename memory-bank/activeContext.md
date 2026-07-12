@@ -1,8 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T04:15:00+07:00.
-**[🔒 GIT] #329 deep-dive #11 mẩu 08–13 — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T04:45:00+07:00.
+**[🔒 GIT] #330 HOÀN TẤT deep-dive #11 (15/15) — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**[✅ #330 — HOÀN TẤT deep-dive code-lessons #11 config-declarative (15/15 mẩu)]**
+- Viết mẩu cuối 14 (`_args_to_pipeline_config`, F1) + 15 (`extra_sinks`) → #11 ĐỦ 15/15.
+- Chuỗi dạy trọn: TOML→`AppConfig`(kernel DTO frozen)→loader(application, validate cấu trúc, không-biết-registry)→factory(profiles, registry Open/Closed + lazy-import + typo-guard + build_runner)→F1(CLI dùng chung).
+- **Ghi sổ:** LOG #330 · INDEX canonical #329→#330 (Σ219 giữ) · muc-luc 14–15→✅ · code-lessons INDEX #11→ĐỦ · block này.
+- **Bước kế (CHỜ user):** mở **#12 analytics** (tracking→line-crossing→motion-gate) theo thứ tự nền→sản phẩm→vận hành; hoặc #13 observability-metrics; hoặc dừng. Cổng Feynman #11 chờ user tự giải thích lại.
+---
 **[🔵 #329 — Deep-dive code-lessons #11: viết mẩu 08–13 (tầng factory `pipeline_factory.py`)]**
 - Viết cụm factory: 08 REGISTRY(Open/Closed) · 09 lazy-import · 10 typo-guard(K-046) · 11 `_lookup` · 12 validate_config-vs-build_runner · 13 build_runner(+extra_sinks). Quote nguyên văn + cite.
 - #11 tiến độ **13/15 mẩu** (01–13 ✅: DTO+loader+factory). Còn 14–15 (F1).

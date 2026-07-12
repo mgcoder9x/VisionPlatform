@@ -6603,3 +6603,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** #11 tiến độ 13/15 (01–13 ✅: DTO+loader+factory). Còn 14–15 (F1: `_args_to_pipeline_config`+`extra_sinks`). Cụm factory dạy trọng tâm "tổ chức/phân tách": registry Open/Closed + lazy-import (chạy máy no-GPU) + validate-vs-build.
 
 **Đã verify:** quote đúng từ `pipeline_factory.py` (đọc thật #322/#324) + cite path; cập nhật muc-luc 08–13→✅. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#329). · **Chưa verify:** mẩu 14–15.
+
+### Entry #330 — 2026-07-12 — HOÀN TẤT deep-dive code-lessons #11 (config-declarative, 15/15 mẩu) — Kiro-Opus
+
+**Bối cảnh:** đóng #11 — viết mẩu 14–15 (F1). Tiếp #329 (01–13).
+
+**1. Quyết định AI tự ra:** viết 2 mẩu cuối: 14 `_args_to_pipeline_config` (CLI→PipelineConfig→cùng build_runner, đóng phân kỳ F1) · 15 `extra_sinks` (chèn `_TrackSummarySink` presentation, giữ config sạch). Mẩu 15 kèm cổng Feynman tổng-hợp #11. Đánh dấu #11 ĐỦ trong muc-luc + INDEX code-lessons.
+
+**2. Chỗ phải đổi:** không.
+
+**3. Trade-off:** mẩu 14 quote LƯỢC (excerpt có dấu `...`) phần detector/sinks của `_args_to_pipeline_config` (hàm dài) — đúng quy ước "## 3 Code thật" (excerpt đánh dấu được phép, Codex P0-1), không chép nguyên khối dài.
+
+**4. Điều bạn nên biết:** **#11 config-declarative HOÀN TẤT 15/15 mẩu** — deep-dive đầu tiên của phần sản phẩm sau #10. Chuỗi: TOML→AppConfig(kernel)→loader(application, validate cấu trúc)→factory(profiles, registry+build)→F1(CLI dùng chung). Chờ Feynman (user tự giải thích lại để chốt ✅). Bước kế: #12 analytics.
+
+**Đã verify:** quote đúng từ `vision_slice_app.py`/`pipeline_factory.py` (đọc thật #324) + cite path; cập nhật muc-luc 14–15→✅ + INDEX code-lessons #11→ĐỦ. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#330). · **Chưa verify:** #12+ (chưa mở); cổng Feynman #11 (chờ user học).

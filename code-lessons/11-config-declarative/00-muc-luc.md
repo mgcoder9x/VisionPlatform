@@ -18,8 +18,8 @@
 | 11 | `_lookup` — tra registry, type lạ → `ConfigError` liệt kê type hợp lệ | `pipeline_factory.py::_lookup` | ✅ `11-lookup.md` |
 | 12 | `validate_config` (dry-run, no-GPU) vs `build_runner` (dựng thật) — vì sao tách 2 | `pipeline_factory.py` | ✅ `12-validate-config-vs-build.md` |
 | 13 | `build_runner` — ráp source+stages+sinks → `SyncLinearExecutor`+`CompositeSink`→`PipelineRunner` | `pipeline_factory.py::build_runner` | ✅ `13-build-runner.md` |
-| 14 | F1 (#324): `_args_to_pipeline_config` — CLI cũng sinh `PipelineConfig` → cùng `build_runner` (1 nguồn lắp-ráp) | `vision_slice_app.py::_args_to_pipeline_config` | ⬜ |
-| 15 | `extra_sinks` — chèn sink presentation (`_TrackSummarySink`) ngoài-config vào composite | `pipeline_factory.py::build_runner` + `vision_slice_app.py` | ⬜ |
+| 14 | F1 (#324): `_args_to_pipeline_config` — CLI cũng sinh `PipelineConfig` → cùng `build_runner` (1 nguồn lắp-ráp) | `vision_slice_app.py::_args_to_pipeline_config` | ✅ `14-args-to-pipeline-config.md` |
+| 15 | `extra_sinks` — chèn sink presentation (`_TrackSummarySink`) ngoài-config vào composite | `pipeline_factory.py::build_runner` + `vision_slice_app.py` | ✅ `15-extra-sinks.md` |
 
 **Ghi chú phạm vi:** đây là chủ đề #11 (config-declarative) — spec-based, KHÔNG có folder `implement/11` (các
 tính năng sau #10 làm theo spec). Số 11 là số nối tiếp trong code-lessons cho phần "sản phẩm sau Module 03".
