@@ -1,8 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T08:25:00+07:00.
-**[🔒 GIT] #337 HOÀN TẤT deep-dive #13 (10/10) — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T08:55:00+07:00.
+**[🔒 GIT] #338 mở deep-dive #14 capability-aware — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**[🔵 #338 — MỞ deep-dive code-lessons #14 capability-aware (cau-chuyen + muc-luc)]**
+- Đọc `capability_probe.py` + `conftest.py` thật → tạo `14-capability-aware/00-cau-chuyen.md` (vòng cung 6 nhịp: nỗi-đau-đổi-máy → tách DÒ/QUYẾT-ĐỊNH/DTO → fail-fast) + `00-muc-luc.md` (8 mẩu).
+- Deep-dive: **#11 ✅ · #12 ✅ · #13 ✅ · #14 🔵 nền** (8 mẩu ⬜). Sau #14 → chương trình lấp khoảng-trống (sau #10) TRỌN.
+- **Ghi sổ:** LOG #338 · INDEX canonical #337→#338 (Σ219 giữ) · INDEX code-lessons +#14 · block này.
+- **Bước kế (CHỜ user):** viết mẩu #14 (kernel 01/02/03 → probe 04/05 → gate/cli/wiring 06/07/08) → HOÀN TẤT chương trình.
+---
 **[✅ #337 — HOÀN TẤT deep-dive code-lessons #13 observability-metrics (10/10 mẩu)]**
 - Viết 6 mẩu cuối: 05 MetricSample · 06 iter_metrics · 07 render_prometheus · 08 exporter · 09 `_serving` deadlock · 10 wiring (cổng Feynman).
 - Bức tranh #13: đo (port/snapshot/observers) → gom (InMemoryMetrics/iter_metrics) → render (Prometheus 0.0.4) → serve (/metrics secure-default + stop-chống-deadlock) → wiring aggregate source_id.

@@ -6715,3 +6715,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** **#13 HOÀN TẤT 10/10.** Deep-dive: #11✅ #12✅ #13✅. Bức tranh #13: đo (port+snapshot+observers) → gom (InMemoryMetrics+iter_metrics) → render (Prometheus 0.0.4) → serve (/metrics HTTP secure-default + stop chống-deadlock) → wiring aggregate. Kế: #14 capability-aware (chủ đề cuối chương trình lấp khoảng-trống).
 
 **Đã verify:** quote đúng từ `metric_sample.py`/`observability.py`/`metrics_exposition.py`/`metrics_http_server.py`/`vision_slice_app.py` (đọc thật phiên này) + cite; cập nhật muc-luc + INDEX code-lessons #13→ĐỦ. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#337). · **Chưa verify:** #14 (chưa mở); cổng Feynman #11/#12/#13 (chờ user học).
+
+### Entry #338 — 2026-07-12 — MỞ deep-dive code-lessons #14 capability-aware (cau-chuyen + muc-luc) — Kiro-Opus
+
+**Bối cảnh:** tiếp #337 (đóng #13). Mở #14 (chủ đề CUỐI chương trình lấp khoảng-trống). Đọc code THẬT: `adapters/capability_probe.py` + `tests/conftest.py` (+ kernel/capabilities.py + --capabilities đã đọc).
+
+**1. Quyết định AI tự ra:** tạo `14-capability-aware/00-cau-chuyen.md` (vòng cung 6 nhịp: nỗi-đau-đổi-máy-GPU↔CPU tái diễn → tách DÒ/QUYẾT-ĐỊNH/DTO → fail-fast vs fallback im lặng) + `00-muc-luc.md` (8 mẩu).
+
+**2. Chỗ phải đổi:** không.
+
+**3. Trade-off:** #14 nhỏ hơn (8 mẩu) — chủ đề gọn (probe + resolve + gate + cli + wiring). Điểm dạy trọng tâm: tách DÒ(adapters)/QUYẾT-ĐỊNH(kernel thuần) → test tiêm caps không cần GPU.
+
+**4. Điều bạn nên biết:** deep-dive: #11✅ #12✅ #13✅ · #14 🔵 nền (8 mẩu ⬜). Sau #14 → chương trình lấp khoảng-trống (sau #10) TRỌN. Điểm dạy #14: capability = DTO hạng nhất, probe không-raise, resolve thuần fail-fast, gate GPU test CI-xanh-mọi-máy.
+
+**Đã verify:** đọc 2 file thật (probe/conftest) + cite; tạo 2 file + cập nhật INDEX code-lessons. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#338). · **Chưa verify:** mẩu 01–08 #14.
