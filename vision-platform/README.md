@@ -1,93 +1,104 @@
 # vision_platform
 
-Mini Vision Platform — dựng theo `Design/module-03-build-along` (Step 01→10) để **kiểm chứng thiết kế**
-kiến trúc real-time multi-camera. Đây là bản đã **production-hardening** (vượt blueprint `vision_demo`
-gốc): thêm SHM production hardening (#05), ring-epoch switchover (sub-spec #05b), observability, backpressure,
-supervisor shutdown.
+Nền tảng thị giác **real-time multi-camera** (Python thuần + numpy), kiến trúc **Hexagonal 6 layer** ép bằng
+import-linter, chạy được **không cần GPU** (đường CPU/ONNX) và mở rộng lên GPU khi có.
 
-> ⚠️ Số liệu dưới đây là **thực tế đã verify trên máy này** (Windows, Python 3.13.12), KHÔNG phải con số
-> blueprint trong Design (Design nói 110 test cho `vision_demo` MVP — dự án này đã tiến hoá xa hơn).
+> 📐 **Đánh giá kiến trúc đầy đủ (cho người review): [`docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md)** (gốc repo)
+> — thiết kế, 6 package + 5 contract, ports, luồng dữ liệu, patterns (Forces/cái giá/khi-KHÔNG-dùng),
+> hiệu năng, giới hạn trung thực, hướng dẫn review.
+>
+> 🧾 Xuất xứ quyết định: `ai-decision-journal/` (D/C/T/K) + `AI-IMPLEMENTATION-LOG.md` (gốc repo).
 
-## Kiến trúc — 4 layer Hexagonal (+ adapter rim + profiles composition root)
+## Số liệu là gì (CHỐNG DRIFT — không hardcode trong README)
 
-Hướng phụ thuộc (ép bằng import-linter, 5 contract, **0 broken**): `domain ← kernel ← runtime ← application`;
-`adapters`/`profiles` ở rìa.
+README này **không ghi cứng** số test/lint (nguồn drift kinh điển). Muốn số THẬT tại thời điểm hiện tại, chạy:
 
-- `domain/` — logic thuần (`BBox`, `CoordinateSpace`). KHÔNG import I/O.
-- `kernel/` — DTO + ports thuần: `MediaPacket`, `ReadResult`, `ShmFrameRefData`, `inference_protocol`
-  (InferenceRequest/Detection/InferenceError/InferenceResponse), `backpressure` (BackpressurePolicy + BoundedQueue),
-  `stage_contract`, `shm_layout`/`shm_control_plane_layout`; `ports/` (`IFrameSource`, `IDetector`).
-- `runtime/` — thực thi + hạ tầng: `SyncLinearExecutor`, `BaseStage` + `stages/`, `observability`
-  (structlog + log_context + InMemoryMetrics), `ipc/` (`shm_frame_ring`, `ring_control_plane`, `ring_pool`).
-- `application/` — điều phối: `ring_supervisor`, `writer/reader_epoch_coordinator`, **`inline_inference_client`**
-  (ở đây, KHÔNG ở adapters — vì cần import runtime; xem ERRATA E-06-1), `supervisor` (process + cascade shutdown).
-- `adapters/` — leaf: `FakeFrameSource`, `NoiseFrameSource`, `FakeDetector`.
-- `profiles/` — composition root: `demo_pipeline.py`.
+```
+cmd /c scripts\vp.cmd verify   # pytest + import-linter + drift-check (từ gốc repo)
+cmd /c scripts\vp.cmd test     # dòng cuối = số passed/skipped chính xác
+lint-imports                   # (trong vision-platform/) → "N kept, 0 broken"
+```
+
+## Kiến trúc — 6 package, hướng phụ thuộc ÉP BẰNG MÁY
+
+`domain ← kernel ← runtime ← application`; `adapters` (leaf: implement ports) + `profiles` (composition root)
+ở rìa. 5 contract import-linter trong `pyproject.toml` (chạy `lint-imports` để verify "0 broken"):
+
+- `domain/` — logic thuần (bbox, geometry, letterbox, motion, nms, tracking). KHÔNG cv2/torch/zmq/I/O.
+- `kernel/` — DTO bất biến + **Ports (Protocol)**: `IFrameSource`/`IDetector`/`ISink`/`ITracker`/
+  `IPipelineObserver`/`IInferenceClient`; DTO: MediaPacket, ReadResult, stage_contract, inference_protocol,
+  crossing_event, metric_sample, capabilities, config, observability_port, backpressure, shm_layout.
+- `runtime/` — cơ chế: PipelineRunner, SyncLinearExecutor, stages (motion_gate/detect/tracking/line_crossing/
+  count/brightness/dark_filter), observability (structlog + InMemoryMetrics), iou_tracker, ipc (SHM ring +
+  ring_control_plane + ring_pool).
+- `application/` — điều phối đa-process: supervisor (bulkhead + cascade shutdown), ring_supervisor,
+  writer/reader_epoch_coordinator, inline_inference_client, inference_server, config_loader.
+- `adapters/` — leaf: frame source (fake/noise/video/rtsp/push), detector (fake/onnx/yolov5_pt/blob),
+  sink (jsonl/crossing-jsonl/crossing-sqlite), metrics_http_server, metrics_exposition, capability_probe,
+  zmq_inference_client.
+- `profiles/` — composition root: **`vision_slice_app`** (entry chính, CLI), pipeline_factory, demo_pipeline,
+  vision_demo_app, vision_web_app, vision_fullstack_profile.
 
 ## Patterns đã triển khai + kiểm chứng
 
 - **Hexagonal** (ports + adapters, ép hướng phụ thuộc bằng import-linter).
-- **Bulkhead** (supervisor đa-process, cách ly crash — #09).
-- **Backpressure** (BoundedQueue 4 policy: DROP_OLDEST/DROP_NEWEST/BLOCK/REJECT — #07).
-- **Immutability + CoW** (MediaPacket frozen — #02).
-- **ABA prevention + ring-epoch switchover** (SHM generation counter + control-plane epoch, pool tái dùng — #05/#05b).
-- **SHM production hardening**: lease deadline, QUARANTINED slot, multi-reader pinning, single-writer, crash-recovery (#05).
-- **Observability**: structlog JSON + contextvars log_context + InMemoryMetrics (#08).
-- **Cascade shutdown cooperative-first** (graceful trên cả Windows lẫn POSIX — #09, ERRATA E-10).
+- **Bulkhead** (supervisor đa-process, cách ly crash 1 camera/process).
+- **Backpressure** (BoundedQueue 4 policy: DROP_OLDEST/DROP_NEWEST/BLOCK/REJECT).
+- **Immutability + CoW** (MediaPacket frozen; config frozen + MappingProxyType/tuple).
+- **Ring-epoch switchover / ABA-prevention** (SHM generation counter + control-plane epoch + pool tái dùng).
+- **Capability-aware execution** (`resolve_device` thuần, fail-fast; probe ở adapter → DTO `MachineCapabilities`).
+- **Observability** (đo → render Prometheus 0.0.4 → serve `/metrics` HTTP secure-default localhost).
+- **Analytics chuỗi**: tracking (IoU) → line-crossing → crossing-event (JSONL/SQLite) → motion-gate (ROI+illum).
 
-## Quick start (Windows PowerShell)
+## Quick start (Windows)
 
 ```powershell
-# Setup
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -e .[dev]
+# Setup venv + deps (launcher cross-machine, tự dò interpreter/GPU/extras)
+cmd /c scripts\vp.cmd setup     # (từ gốc repo) — hoặc: python -m venv .venv; pip install -e .[dev,onnx,cv2,web]
 
-# Chạy test
-pytest                    # → 290 passed, 1 skipped
+# Kiểm máy TRƯỚC khi deploy (đổi máy GPU/không-GPU)
+python -m vision_platform.profiles.vision_slice_app --capabilities
+# → {"has_torch": ..., "has_cuda": ..., "gpu_name": ..., "has_cv2": ...}
 
-# Kiểm ranh giới layer
-lint-imports              # → 5 kept, 0 broken
+# Chạy 1 pipeline (fake detector, no-GPU) — analytics + đếm-qua-vạch + lưu sự kiện
+python -m vision_platform.profiles.vision_slice_app --source noise --frames 20 --track --line "0.0,0.5,1.0,0.5" --out events.jsonl
 
-# Chạy demo end-to-end
-python -m vision_platform.profiles.demo_pipeline --source noise --frames 10 --threshold 100.0
-python -m vision_platform.profiles.demo_pipeline --source fake  --frames 5  --threshold 100.0
+# Bật observability + phục vụ /metrics (Prometheus scrape)
+python -m vision_platform.profiles.vision_slice_app --source noise --frames 100 --observe --metrics-port 9108
+# scrape: curl http://127.0.0.1:9108/metrics   ·   health: curl http://127.0.0.1:9108/healthz
+
+# Deploy khai báo bằng TOML (nhiều pipeline; observability khai trong file)
+python -m vision_platform.profiles.vision_slice_app --config configs/example_analytics.toml
+python -m vision_platform.profiles.vision_slice_app --config configs/example_rtsp_gpu.toml --validate  # chỉ KIỂM, không chạy
 ```
 
-## Test count (THẬT — đã verify, không phải blueprint)
+Cờ CLI chính (đọc từ `profiles/vision_slice_app.py`): `--config`/`--validate` (đường TOML) · `--source
+{fake,noise,video,rtsp}` · `--detector {fake,pt}` `--weights` `--device auto|cpu|cuda|cuda:N` · `--motion-gate`
+(+`--motion-gate-roi`/`--motion-gate-illum-robust`/`--motion-gate-max-skip`) · `--track` (+`--track-iou`/
+`--track-max-age`) · `--line "ax,ay,bx,by"` · `--out`/`--crossing-out`/`--crossing-db` · `--observe`
+(+`--observe-interval`/`--observe-every`) · `--metrics-port`/`--metrics-host` · `--capabilities`.
 
-**290 passed, 1 skipped** (~16s; multi-process spawn của #05/#05b/#09 làm chậm). 1 skip có chủ đích
-(guard theo nền tảng, vd ARM/POSIX skip trên Windows). Bao gồm test cross-process THẬT (SHM #05, switchover
-T-B #05b, multi-reader, supervisor #09) + property-based test (Hypothesis, #05b).
+## Đã xong (no-GPU thương mại) vs Còn hoãn (TRUNG THỰC)
 
-Build wheel: `python -m build` → `dist/vision_platform-0.1.0-py3-none-any.whl` + `.tar.gz`
-(fresh-install verify: `import vision_platform` → 0.1.0).
+**Đã xong + verify (no-GPU):** hexagonal 6-layer (import-linter 0 broken) · analytics chuỗi (tracking →
+line-crossing → crossing-event JSONL/SQLite → motion-gate ROI/illum) · observability TRỌN (đo → render →
+serve `/metrics` + `--observe`/`--metrics-port`/`--capabilities`) · capability-aware GPU/CPU · SHM production
+hardening + ring-epoch switchover · config-declarative TOML · dev-env launcher + CI + anti-drift 4-tầng.
 
-## Trade-offs vs Vision Platform production (đã hoãn có chủ ý)
+**Còn hoãn — CHẶN điều kiện (không làm speculative):**
+- **Nhánh GPU/CUDA**: máy có GPU nhưng torch chưa cài (K-079); cài = op nặng-mạng → chờ. `resolve_device`/probe
+  đã xử lý no-GPU đúng; chỉ thiếu bằng chứng chạy detector CUDA thật.
+- **Sink DB-server** (Postgres...): hiện có JSONL + SQLite (file); DB-server cần server thật để verify.
+- **Runtime song song đa-pipeline**: `_run_from_config` chạy tuần tự (1 pipeline live/lúc) — scale tương lai.
+- **ZMQ cross-process inference**: có adapter; đường mặc định là InlineInferenceClient (cùng process).
+- **POSIX/ARM teardown atomicity**: verify chủ yếu trên Windows/x86.
+- **Bảo mật `/metrics`**: mặc định localhost an toàn; phơi `0.0.0.0` ra internet chưa có auth/rate-limit (K-072).
 
-- **ZMQ ROUTER/DEALER** cross-process inference — dùng `InlineInferenceClient` (cùng process); ZMQ là sub-spec production sau.
-- **Production log handlers** (non-blocking queue / rotation / flush-on-shutdown) — K-018.
-- **Hang detection / heartbeat liveness** — supervisor hiện chỉ bắt crash, không bắt hang (K-020); restart chưa có exponential backoff (K-021).
-- **Cardinality guard** cho metrics — quy tắc vận hành thủ công (K-019).
-- **Teardown POSIX / ARM atomicity** — verify mới trên Windows/x86 (K-001/K-003).
-- **Secrets management** (RTSP credentials, mask URL trước log), **circuit breaker / DLQ / TrackerScope per source** — production concern.
-
-> Các mục 🔴/🟡 mở được theo dõi đầy đủ ở `ai-decision-journal/` (gốc repo). Nhật ký quyết định: `AI-IMPLEMENTATION-LOG.md`.
-
-## Definition of Done (#10)
-
-- [x] Tests pass: `pytest` → **290 passed, 1 skipped** (verify thật).
-- [x] No deps leak: `lint-imports` → **5 kept, 0 broken** (domain/kernel không import I/O ngoài).
-- [x] Type hints ở public API.
-- [x] Immutability (MediaPacket frozen) + idempotent setup/teardown.
-- [x] Process isolation (bulkhead) verify qua test #09.
-- [x] Backpressure 4 policy đúng spec (#07).
-- [x] End-to-end demo chạy (`--source noise` processed 10; `--source fake` skipped 5).
-- [x] Package builds: `python -m build` → wheel + sdist; fresh-install `__version__` = 0.1.0.
-- [x] README (file này) — kiến trúc + quick start + số thật + trade-offs.
+> Mục 🔴/🟡 mở được theo dõi ở `ai-decision-journal/00-INDEX.md` (lọc 🔴/🟡).
 
 ## Tham chiếu
 
-- Thiết kế nguồn: `Design/module-03-build-along/` (Step 01→10).
-- Production đầy đủ: `Vision_platform_architecture_design/`.
+- **Kiến trúc đầy đủ + đánh giá:** `docs/ARCHITECTURE.md` (gốc repo).
+- Thiết kế nguồn (giáo trình khái niệm): `Design/module-03-build-along/`.
 - Bài học chi tiết từng bước: `code-lessons/` (gốc repo).
+- Config mẫu: `configs/*.toml`. Benchmark: `benchmarks/`. Deploy: `deploy/` (Dockerfile + compose).

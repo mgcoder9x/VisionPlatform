@@ -6421,3 +6421,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** Doc tự-mô-tả là ảnh-chụp-thời-điểm (#316); nguồn sự thật sống = code + journal + `vp verify`. Mọi claim cụ thể đã VERIFY tồn tại trước khi viết (grep: `resolve_device`, `render_prometheus`, `/healthz`, `MetricsHttpExporter`, 5 contract verbatim từ pyproject). Doc KHÔNG thêm nguồn drift mới (không số dễ đổi) → không cần thêm check vào drift_check.
 
 **Đã verify:** đọc code thật 6 layer (ports/engine/config/capabilities/contracts) + grep xác minh 4 symbol cụ thể tồn tại; tạo `docs/ARCHITECTURE.md`. Không đổi code sản phẩm (623/2 giữ). `vp check` sẽ PASS (#316). · **Chưa verify:** chưa đồng bộ README dự án (nợ nhỏ, ghi rõ trong doc §11 + entry này).
+
+### Entry #317 — 2026-07-11 — Đồng bộ `vision-platform/README.md` (đóng nợ nhỏ #316): bỏ số hardcode cũ + cập nhật hiện trạng + trỏ ARCHITECTURE.md — Kiro-Opus
+
+**Bối cảnh:** #316/D-087 ghi nợ nhỏ: README dự án CŨ (kẹt mốc ~#09: "290 test/1 skip", "4 layer", composition root = demo_pipeline, patterns tới #09) → nguồn drift cuối trong tài liệu. Đóng bằng cách viết lại (đường "fix gốc": loại nguồn lệch, không để 2 doc phân kỳ).
+
+**1. Quyết định AI tự ra:** viết lại README thành quick-start + trỏ `docs/ARCHITECTURE.md`, áp CÙNG nguyên tắc chống-drift (A): KHÔNG hardcode số test/lint → trỏ `vp verify`/`vp test`/`lint-imports`. Cập nhật: 6 package (không "4 layer"), entry point `vision_slice_app` (không demo_pipeline), patterns đủ (analytics chuỗi + observability→/metrics + capability-aware), Đã-xong-vs-Còn-hoãn trung thực.
+
+**2. Chỗ phải đổi so với hiểu biết trước:** README cũ mô tả composition root là `demo_pipeline.py` — thực tế entry sản phẩm giờ là `profiles/vision_slice_app.py` (CLI đầy đủ). Trade-offs cũ liệt observability/hang-detection là "hoãn" — thực tế observability ĐÃ trọn (tới /metrics HTTP), capability-aware ĐÃ có.
+
+**3. Trade-off đã cân nhắc:** viết-lại-toàn-bộ vs sửa-từng-dòng → chọn viết lại (README cũ lệch quá nhiều mốc, sửa lẻ vẫn rối). Giữ quick-start hữu ích + thêm bảng "số liệu chạy lệnh nào" thay số cứng.
+
+**4. Điều bạn nên biết:** mọi lệnh CLI trong README VERIFY từ argparse thật (`main()` trong vision_slice_app.py: --config/--validate/--source/--detector/--device/--motion-gate*/--track*/--line/--out/--crossing-*/--observe*/--metrics-*/--capabilities) + config mẫu tồn tại thật (`configs/example_analytics.toml`, `example_rtsp_gpu.toml`). Không bịa cờ/không bịa file.
+
+**Đã verify:** đọc argparse `main()` thật lấy đúng cờ CLI; `configs/*.toml` tồn tại (đã list); `/healthz` tồn tại (grep #316). Viết lại `vision-platform/README.md`. Không đổi code (623/2 giữ). `vp check` sẽ PASS (#317). · **Chưa verify:** chưa chạy end-to-end mọi lệnh ví dụ (là lệnh minh hoạ user chạy; cờ đã khớp code thật).

@@ -1,8 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T21:15:00+07:00.
-**[🔒 GIT] #316 tạo tài liệu — sẽ commit + push NHẸ (text, K-078 cho phép). Không đổi code sản phẩm (623/2 giữ).**
+**Cập nhật lúc:** 2026-07-11T21:40:00+07:00.
+**[🔒 GIT] #317 đồng bộ README — sẽ commit + push NHẸ (text). Không đổi code (623/2 giữ).**
+**[✅ #317 — Đồng bộ `vision-platform/README.md` (đóng nợ nhỏ #316): bỏ số hardcode cũ + hiện trạng + trỏ ARCHITECTURE.md]**
+- README cũ kẹt mốc ~#09 ("290 test", "4 layer", composition root=demo_pipeline, observability="hoãn") = nguồn drift cuối trong tài liệu.
+- **Viết lại:** quick-start + trỏ `docs/ARCHITECTURE.md`; cùng nguyên tắc chống-drift (A) — KHÔNG hardcode số, trỏ `vp verify`/`lint-imports`. Cập nhật 6 package, entry `vision_slice_app`, patterns đủ (analytics+observability+capability), Đã-xong-vs-Còn-hoãn trung thực.
+- **Chống bịa:** cờ CLI lấy từ argparse `main()` THẬT; config mẫu (`example_analytics.toml`/`example_rtsp_gpu.toml`) + `/healthz` verify tồn tại.
+- **Ghi sổ:** LOG #317 (doc hygiene, KHÔNG thêm D/C/T/K) · INDEX canonical #316→#317 (Σ217 giữ) · block này.
+- **Tài liệu giờ NHẤT QUÁN:** `docs/ARCHITECTURE.md` (chiều sâu, reviewer) + `README.md` (quick-start, trỏ về) — cùng nguồn số sống `vp verify`, không phân kỳ.
+- **Bước kế (CHỜ user — điểm dừng sạch):** verify nhánh CUDA (cần cài torch, nặng-mạng K-078/K-079); hoặc chốt.
+---
 **[✅ #316 — TẠO `docs/ARCHITECTURE.md`: tài liệu đánh giá kiến trúc cho người ngoài (bám code thật, chống-drift-by-design) — +D-087]**
 - User hỏi "đã có tài liệu tổng hợp cho người ngoài đánh giá thiết kế/pattern/code/hiệu-năng chưa". Kiểm triệt để → CHƯA có: `Design/`=giáo-trình khái niệm; `vision-platform/README.md`=THẬT nhưng CŨ (kẹt ~#09/"290 test", thiếu #256–#315); `review/`=rời từng issue; journal=vi mô.
 - **Làm:** đọc CODE THẬT 6 layer (pyproject 5 contract + pipeline_runner + 6 ports + capabilities/config/observability_port) → viết `docs/ARCHITECTURE.md` 11 mục (cách-kiểm-chứng → context → 6 package+5 contract → ports → data-flow → patterns POSA Forces/giá/khi-KHÔNG-dùng → hiệu-năng đã-đo-vs-chưa → config TOML → observability/capability → giới-hạn-trung-thực → hướng-dẫn-review+probe).
