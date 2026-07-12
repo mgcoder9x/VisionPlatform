@@ -6533,3 +6533,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** 6 hố design đều xử: H1 device-log ở `_det_pt` · H2 main bắt CapabilityError quanh `build_runner`→exit 2 + stop exporter · H3 `--frames`→source.max_frames, `--max-frames`→run() · H4 `_validate` trước map · H5 default khớp (verify #323) · H6 test map thuần + backward-compat (628/2, mọi test cũ xanh). Test F1 mới: `_args_to_pipeline_config` minimal/full-stage-order + qua `_build_argparser`.
 
 **Đã verify (CHẠY THẬT + ĐỌC code):** full suite **628 passed/2 skipped** (cwd=vision-platform); **lint 5 kept/0 broken**; đọc `_args_to_pipeline_config`/`_print_summary`/`main`/`build_runner+extra_sinks`/`_det_pt+device-log` — mạch lạc, khớp design, không rác; grep KHÔNG trùng def. `vp check` sẽ chạy sau ghi sổ. · **Chưa verify:** đường `--detector pt` runtime thật (cần torch — K-079 vắng; nhánh fake + config path đã phủ test).
+
+### Entry #325 — 2026-07-12 — Cập nhật `docs/ARCHITECTURE.md` thành 1 CỬA review duy nhất (hiểu + đánh giá) — khớp sau F1 — Kiro-Opus
+
+**Bối cảnh:** user muốn 1 tài liệu rõ để người khác đọc-hiểu VÀ review kiến trúc/pattern/struct/tổ chức code. Đã có ARCHITECTURE.md (hiểu) + review doc (đánh giá) nhưng rời + ARCHITECTURE.md hơi cũ sau F1. Gộp thành 1 điểm vào.
+
+**1. Quyết định AI tự ra:** biến `docs/ARCHITECTURE.md` thành cửa trao-tay: §1–11 HIỂU hệ + §12 mới "Đánh giá & vấn đề đã biết" (bảng trạng thái F1..D.4 + SOUND list + phạm vi chưa review) + trỏ `review/2026-07-11-architecture-review.md`. Thêm dòng điều hướng ở header.
+
+**2. Chỗ phải đổi so với hiểu biết trước:** §11 điểm 4 cập nhật sau F1 — composition giờ hợp nhất qua `build_runner` (không còn hand-assembly riêng ở vision_slice_app); header #316→#325.
+
+**3. Trade-off đã cân nhắc:** gộp review vào ARCHITECTURE.md (§12 tóm tắt) vs giữ 2 file rời. Chọn: §12 tóm-tắt-trạng-thái + trỏ review doc chi tiết (1 điểm vào, không nhân đôi nội dung → tránh drift 2 bản). Giữ nguyên tắc chống-drift (A): không hardcode số test.
+
+**4. Điều bạn nên biết:** bộ trao-tay cho reviewer = `docs/ARCHITECTURE.md` (chính) + `review/2026-07-11-architecture-review.md` (chi tiết findings) + `ai-decision-journal/00-INDEX.md` (xuất xứ). §12 bảng trạng thái: F1✅ D.3✅ F2✅(phần lớn) · E.2/F3/F4/F5/F6/F7/D.2/D.4 MỞ (Low, phần lớn chặn tiền-đề GPU hoặc dọn-dần).
+
+**Đã verify:** đọc ARCHITECTURE.md hiện tại + cập nhật §11.4/§12/header khớp trạng thái sau F1 (#324); không đổi code (628/2 giữ). `vp check` sẽ PASS (#325). · **Chưa verify:** không có mục cần chạy (thuần tài liệu; nội dung §12 tóm tắt từ review đã verify #318–#324).

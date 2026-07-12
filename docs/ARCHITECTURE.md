@@ -6,8 +6,12 @@
 > **Phạm vi:** mô tả hệ **đang có thật** trong `vision-platform/src/vision_platform/` (đọc code trực tiếp,
 > không phải blueprint trong `Design/`). `Design/` là giáo trình *khái niệm*; file này là *hiện trạng*.
 >
-> **Cập nhật:** 2026-07-11 · gắn với `AI-IMPLEMENTATION-LOG.md` Entry #316. Tài liệu là ảnh-chụp-thời-điểm;
-> **nguồn sự thật SỐNG** = code + `ai-decision-journal/` (quyết định) + kết quả `vp verify`.
+> **Cập nhật:** 2026-07-12 · gắn với `AI-IMPLEMENTATION-LOG.md` Entry #325 (đã phản ánh F1 #324 — hợp nhất
+> đường lắp-ráp). Tài liệu là ảnh-chụp-thời-điểm; **nguồn sự thật SỐNG** = code + `ai-decision-journal/`
+> (quyết định) + kết quả `vp verify`.
+>
+> 👉 **Người review:** đọc §1–11 để HIỂU hệ, rồi §12 (Đánh giá & vấn đề đã biết) + `review/2026-07-11-architecture-review.md`
+> để thấy KẾT LUẬN đánh giá + danh sách sửa/cải tiến. Hai file này là bộ trao-tay đầy đủ.
 
 ---
 
@@ -259,7 +263,9 @@ không-firewall thì chưa có auth/rate-limit (ghi rõ ở journal K-072 — ch
 1. **`pyproject.toml`** §`[tool.importlinter]` → hiểu 5 ranh giới; chạy `lint-imports` xem còn nguyên không.
 2. **`kernel/ports/`** → đọc 6 Protocol = "bề mặt hợp đồng" của hệ (thay gì được, test gì được).
 3. **`runtime/pipeline_runner.py`** → engine trung tâm (vòng lặp, teardown, cô lập observer).
-4. **`profiles/vision_slice_app.py`** → composition root: adapter thật ráp vào ports thế nào + CLI.
+4. **`profiles/pipeline_factory.py::build_runner`** → **đường lắp-ráp DUY NHẤT** (từ F1/#324): cả `--config`
+   lẫn CLI-direct đều dựng pipeline qua đây (registry `type`→builder). `profiles/vision_slice_app.py` = entry CLI:
+   `_args_to_pipeline_config` map cờ → `PipelineConfig` → `build_runner` (không còn hand-assembly riêng).
 5. **`kernel/config.py` + `application/config_loader.py`** → mô hình khai báo TOML.
 6. **`runtime/ipc/`** → phần khó nhất (SHM ring + epoch switchover) — soi ABA-prevention.
 7. **`ai-decision-journal/00-INDEX.md`** → 1 trang rà mọi quyết định + mục 🔴/🟡 (rủi ro mở).
@@ -270,5 +276,41 @@ tái dùng slot mà không có epoch → bug ABA nào? (c) Camera RTSP rớt m�
 (e) `/metrics` phơi `0.0.0.0` — rủi ro gì, hệ mặc định chống thế nào?
 
 ---
-*Tài liệu bám code thật đã đọc tại thời điểm #316. Khi code đổi lớn → cập nhật file này + ghi LOG; số liệu
-sống luôn lấy từ `vp verify`, không từ prose.*
+
+## 12. Đánh giá kiến trúc & vấn đề đã biết (cho reviewer — cập nhật #325)
+
+Đây là tóm tắt kết luận review 3 vòng (chi tiết + cite từng file: `review/2026-07-11-architecture-review.md`).
+Đọc mục này để biết hệ ĐÃ được soi tới đâu, chỗ nào SOUND, chỗ nào cần cải tiến — trước khi tự review sâu.
+
+**Kết luận tổng thể (đã đọc ~25 file thật):** kiến trúc **vững toàn diện**; **KHÔNG có lỗi đúng-sai nghiêm trọng**
+trong phạm vi đã đọc. Các phát hiện đều Low→Medium (tổ chức/khử-trùng-lặp), không phải lỗi logic.
+
+**Đã SOUND (xác nhận bằng đọc code):** ranh giới ép-máy (import-linter 5/0) · Ports Protocol · PipelineRunner
+teardown lồng + cô lập observer · BaseStage traceback-chuỗi (chống rò RAM) · executor rollback-setup · Supervisor
+bulkhead + cascade cooperative-first · **IPC/SHM chặt** (state-ghi-cuối=authority · ABA-check gen+epoch ·
+reader-registry đa-reader · double-snapshot recovery · drain-before-reuse cưỡng chế · single-writer invariant) ·
+SQLite sink param-hoá + durability · line-crossing domain-geometry + bounded-memory · iou_tracker id đơn điệu ·
+wire-codec kernel-pure · config frozen + registry + typo-guard.
+
+**Danh sách cải tiến (trạng thái):**
+
+| ID | Vấn đề | Mức | Trạng thái |
+|---|---|---|---|
+| F1 | 2 đường lắp-ráp pipeline (CLI vs config) song song → phân kỳ | Med-High | ✅ **ĐÃ FIX (#324)** — hợp nhất qua `build_runner` |
+| D.3 | RTSP `_reconnects` trọn-đời → ERROR oan | Low | ✅ **ĐÃ FIX (#321)** — reset khi đọc thành công |
+| F2 | `main()` dài (SRP) | Med | ✅ phần lớn xong (tách `_build_argparser`/`_print_summary` kèm F1) |
+| E.2 | `Yolov5PtDetector` patch `torch.load` toàn cục | Low-Med (security-hygiene) | ⬜ MỞ — gắn nhánh GPU (chặn bởi torch vắng, K-079); scope + restore khi mở GPU |
+| F3 | magic "5.0s" observe-default ×2 nơi | Low | ⬜ MỞ — gom hằng + helper |
+| F4 | guard `assert_policy_allowed_for_source` (BLOCK+RTSP) chưa wire | Low-Med | ⬜ MỞ — wire schema policy per-source hoặc đánh dấu future-API |
+| F5 | `_CompositeObserver` nên ở `runtime/observers.py` | Low | ⬜ MỞ |
+| F6 | `_build_config_observability` trộn build+start+I/O | Low | ⬜ MỞ |
+| F7 | nhiều profile entry gây mơ hồ | Low | ⬜ MỞ — thêm docstring "demo/legacy/web" |
+| D.2 | lock-poison LẦN-2 (slot kẹt WRITING/READING) | Low-Med | ⬜ MỞ (code tự ghi E-15) — wire lease-deadline khi làm production |
+| D.4 | observability trải 4 kênh | Low | ⬜ điều hướng (đã liệt kê §8 + review) |
+
+**Phạm vi CHƯA review sâu (trung thực):** `onnx_detector`, sink JSONL, vài stage phụ (dark_filter/brightness),
+`zmq_inference_client`/`inference_server`, domain thuần (bbox/nms). Đã đọc đại diện + nhánh nhạy-đúng-sai mỗi nhóm.
+
+---
+*Tài liệu bám code thật, cập nhật tại #325 (phản ánh F1 #324). Khi code đổi lớn → cập nhật file này + ghi LOG;
+số liệu sống luôn lấy từ `vp verify`, không từ prose. Đánh giá chi tiết: `review/2026-07-11-architecture-review.md`.*

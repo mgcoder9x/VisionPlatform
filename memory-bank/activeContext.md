@@ -1,8 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T01:30:00+07:00.
-**[🔒 GIT] #324 code F1 — sẽ commit + push. Code đổi: baseline 624→628/2 (3 file src/test).**
+**Cập nhật lúc:** 2026-07-12T02:00:00+07:00.
+**[🔒 GIT] #325 cập nhật ARCHITECTURE.md (1 cửa review) — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**[✅ #325 — `docs/ARCHITECTURE.md` thành 1 CỬA review duy nhất (hiểu §1–11 + đánh giá §12) — khớp sau F1]**
+- User cần 1 tài liệu để người khác đọc-hiểu + review kiến trúc/pattern/struct/tổ chức code.
+- Gộp: ARCHITECTURE.md §1–11 (hiểu hệ) + §12 mới "Đánh giá & vấn đề đã biết" (bảng trạng thái F1✅/D.3✅/F2✅/E.2..D.4 MỞ + SOUND list + phạm vi chưa-review) + trỏ `review/2026-07-11-architecture-review.md`. Header +dòng điều hướng reviewer.
+- Cập nhật §11.4 sau F1 (composition hợp nhất qua `build_runner`); header #316→#325.
+- **Bộ trao-tay reviewer:** `docs/ARCHITECTURE.md` (chính) + `review/2026-07-11-...md` (findings chi tiết) + `ai-decision-journal/00-INDEX.md` (xuất xứ).
+- **Ghi sổ:** LOG #325 · INDEX canonical #324→#325 (Σ219 giữ) · block này. Thuần tài liệu.
+- **Bước kế (CHỜ user — mốc sạch):** hệ + tài liệu review đã trọn. Còn E.2 (nhánh GPU) · F3-F7/D.2/D.4 (Low dọn dần). Khuyến nghị dừng hoặc chỉ định hướng.
+---
 **[✅ #324 — PHA2 code F1 HOÀN TẤT: hợp nhất 2 đường lắp-ráp pipeline — verify 628/2·5/0 — +D-088✅]**
 - Hiện thực design D-088 (#322)+valid H5 (#323). Working tree kết thúc ở F1 hoàn chỉnh (một phần landed qua compaction) → VERIFY end-to-end trước khi tin (628/2·5/0·đọc code khớp design·không trùng def).
 - **Code:** `_args_to_pipeline_config` (thuần, CLI→PipelineConfig) + `build_runner` +`extra_sinks` (chèn `_TrackSummarySink`) + tách `_print_summary`/`_build_argparser` (F2) + device-log dời vào `_det_pt` (H1). Xoá ~90 dòng hand-assembly.
