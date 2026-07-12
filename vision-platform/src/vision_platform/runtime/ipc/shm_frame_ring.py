@@ -11,27 +11,30 @@ Model:
 - Reader (inference/consumer process) read frame qua expected_gen check.
 - Per-slot multiprocessing.Lock cho serialization.
 
-Simplified vs production (Vision_platform_architecture_design):
-- Header layout = v2 (kernel/shm_layout.py, 256B) từ Task 2.2 + ctrl segment fail-fast attach.
-  NHƯNG các field v2 (lease/owner_create_time/reader_registry) CHƯA được code dùng (bật ở Task 3+).
-- Không có lease deadlines (writer/reader timeout) → xem F-3/ERRATA E-15 dưới.
-- Không có QUARANTINED state active (đã định nghĩa trong enum; recovery bật ở Task 3/4).
-- Không có reader_count multi-reader pinning (Task 5).
-- Đủ để học pattern. Vị trí layer (runtime/ipc) thì GIỐNG production.
+Trạng thái hiện tại (ĐÃ vượt bản demo step-05 — Task 3/4/5 landed; xác nhận bằng ĐỌC code #344):
+- Header layout v2 (kernel/shm_layout.py, 256B) + ctrl segment fail-fast attach. Các field v2
+  (lease_deadline, owner_create_time, reader_registry) ĐÃ được dùng THẬT (không còn "chưa dùng").
+- CÓ lease deadlines: WRITE_LEASE_NS/READ_LEASE_NS (2s) ghi vào header khi mark WRITING/READING;
+  `_read_lease`/`_reap_dead_readers` dùng để quyết định recovery (lease = CHỈ BÁO recovery, KHÔNG tự kill).
+- CÓ QUARANTINED state ACTIVE: `quarantine_poisoned_slot()` (double-snapshot P1-1 + liveness + lease-expiry)
+  được gọi khi acquire-lock LẦN 1 timeout (cả writer & reader); `peek_state` bỏ qua QUARANTINED lock-free.
+- CÓ multi-reader pinning: reader_registry (MAX_READERS) + reader_count dẫn xuất; nhiều reader pin 1 slot.
+- Vị trí layer (runtime/ipc) GIỐNG production.
 
 INVARIANT QUAN TRỌNG (brief #05 F-4): `generation` là WRITER-LOCAL (mỗi ShmFrameWriter
 đếm riêng từ 1). Do đó MỘT ring chỉ an toàn với DUY NHẤT 1 writer (model "1 camera = 1
 process"). Nhiều writer/ring → trùng generation → vỡ ABA prevention. KHÔNG dùng 1 ring cho >1 writer.
 
-ERRATA E-15 (brief #05 F-3, = Finding F2): nếu writer acquire-lock LẦN 2 (commit READY)
-bị timeout, slot kẹt `WRITING` vĩnh viễn (demo không có lease/quarantine để hồi phục).
-Rollback cũng cần lock — không giải được nếu lock poison. Production cần lease-timeout +
-QUARANTINED state (việc riêng, ngoài scope step-05).
-
-ERRATA E-15 F-3b (ĐỐI XỨNG, phát hiện khi re-review Pha 2): `ShmFrameReader.read` cũng vậy —
-nếu acquire-lock LẦN 2 (mark DONE) timeout → `return frame_copy` nhưng slot kẹt `READING`
-vĩnh viễn (writer chỉ tái dùng FREE/DONE). Cùng GỐC + cùng cách giải (lease/quarantine ở
-production) như F-3. Demo chấp nhận giới hạn này.
+ERRATA E-15 — RESIDUAL còn lại (đã THU HẸP mạnh sau Task 3/4; = D.2 review 2026-07-11):
+Recovery cho lock-poison LẦN 1 ĐÃ CÓ (quarantine + lease + reap ở trên, wire cả write & read). RESIDUAL chỉ còn
+lock-poison LẦN 2 (acquire lại để commit/unpin):
+- Writer commit READY (acquire lần 2) timeout → `return None`, slot kẹt WRITING nhưng CÓ lease 2s + KHÔNG mất
+  data (chưa publish). Owner=self: nếu self CHẾT → slot được quarantine khi scan lại (lease quá hạn + DEAD);
+  nếu self SỐNG mà lock vẫn poison (process KHÁC chết giữa critical-section) = edge cực hẹp → chưa recovery-tức-thì.
+- Reader unpin (acquire lần 2) timeout → `return frame_copy` (ĐÃ copy xong — KHÔNG mất data); ô registry của mình
+  còn lại, `_reap_dead_readers` dọn khi lease hết + reader DEAD.
+Fix triệt để residual cần STRESS đa-process production để tái hiện (owner-sống + lock-poison) — CHƯA verify được
+isolated/no-GPU → KHÔNG vá speculative (đúng "không kiểm được + quan trọng → dừng/hỏi"). Đã ghi K-081.
 """
 from __future__ import annotations
 import multiprocessing as mp

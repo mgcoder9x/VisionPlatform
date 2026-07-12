@@ -130,6 +130,11 @@ vĩnh viễn; đối xứng ở reader (mark DONE timeout → kẹt `READING`). 
 Code GHI RÕ đây là giới hạn demo (production cần lease-timeout + QUARANTINED recovery). Trung thực, không giấu.
 **Đề xuất:** đây là hố GPU/production thật — khi làm nhánh production, wire lease-deadline (field v2 đã có sẵn
 `OFFSET_LEASE_DEADLINE_NS`) + recovery cho slot self-owned-timeout. Không phải bug ở phạm vi hiện tại (demo/no-GPU).
+**Cập nhật (#344, đọc-lại-valid):** THU HẸP — lock-poison LẦN 1 THỰC TẾ ĐÃ có recovery WIRE (`quarantine_poisoned_slot`
+double-snapshot+liveness+lease-expiry, gọi cả write & read) + lease 2s + `_reap_dead_readers` + multi-reader registry
+đều ACTIVE (docstring "demo chưa dùng" đã STALE → sửa #344). Residual chỉ còn lock-poison LẦN 2 + owner-CÒN-SỐNG
+(degraded an toàn: writer return None chưa-publish, reader return frame_copy đã-copy → KHÔNG mất data; recovery khi
+owner chết). Fix triệt để cần STRESS đa-process production để tái hiện → defer, KHÔNG vá speculative (K-081).
 
 ### D.3 [Low → ✅ FIXED #321] RTSP `_reconnects` là ngân sách TRỌN-ĐỜI, không reset khi đọc lại thành công
 > **ĐÃ FIX (#321, TDD):** thêm `self._reconnects = 0` khi `read()` trả FRAME thành công → `max_reconnect` giờ

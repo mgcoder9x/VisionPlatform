@@ -808,3 +808,11 @@ Vì sao ghi: (1) preserve kết luận review → phiên/máy sau KHÔNG review 
 - **F7 [Low]:** nhiều profile entry → thêm docstring "demo/legacy/web, không phải entry chính".
 **Phạm vi CHƯA phủ (trung thực):** `runtime/ipc/*` (SHM ring/epoch), từng adapter I/O, từng stage — vòng review sau nếu cần.
 **Cách làm đề xuất:** mỗi F = 1 spec nhỏ design→review→code TDD; giữ `vp verify` xanh + `lint-imports` 0-broken; F1 làm đầu.
+
+### K-081 — 🟡 (2026-07-12) D.2/ERRATA E-15 lock-poison LẦN 2 (SHM ring) — RESIDUAL thu hẹp, defer (cần stress production)
+Scope: `runtime/ipc/shm_frame_ring.py` — `ShmFrameWriter.write` (commit READY) + `ShmFrameReader.read` (unpin/DONE)
+Nguồn: LOG Entry #344 · review 2026-07-11 §D.2 · ĐỌC code thật (write/read path + quarantine_poisoned_slot + lease)
+Đã xác minh (đọc code #344): lock-poison LẦN 1 ĐÃ có recovery WIRE (cả write & read): timeout→emit→`quarantine_poisoned_slot` (double-snapshot P1-1 + liveness + lease-expiry 2s WRITE/READ_LEASE_NS) + `_reap_dead_readers`. Multi-reader registry + QUARANTINED state đều ACTIVE (không còn "demo chưa dùng" như docstring cũ — đã sửa stale #344).
+RESIDUAL (chưa đóng): lock-poison LẦN 2 (acquire lại để commit/unpin) khi OWNER CÒN SỐNG mà lock vẫn poison (process KHÁC chết giữa critical-section) = edge cực hẹp. Hiện: writer `return None` (slot kẹt WRITING, KHÔNG mất data, lease 2s); reader `return frame_copy` (ĐÃ copy, KHÔNG mất data; ô registry reap sau). Recovery-tức-thì chỉ khi owner CHẾT.
+Vì sao DEFER (không vá speculative): tái hiện cần STRESS đa-process production (owner-sống đồng thời lock-poison) — CHƯA verify được isolated/no-GPU. Theo luật "không kiểm được + quan trọng → DỪNG/HỎI, không đoán liều". Fix khả dĩ tương lai: lease-deadline cưỡng chế reclaim (không chỉ chỉ-báo) — nhưng phải có test tái hiện TRƯỚC.
+Đóng khi: có test stress đa-process tái hiện residual + fix verify được (máy/CI đủ mạnh).

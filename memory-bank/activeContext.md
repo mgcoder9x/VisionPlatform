@@ -1,8 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T14:00:00+07:00.
-**[🔒 GIT] #343 FIX F3 (gom hằng observe-default) — sẽ commit + push NHẸ. Code đổi additive (628/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T14:45:00+07:00.
+**[🔒 GIT] #344 D.2 đọc-lại-valid + sửa docstring SHM stale — sẽ commit + push NHẸ. Docstring-only (628/2 giữ).**
+**[🟡 #344 — D.2 (SHM lock-poison) đọc-lại-valid: recovery lần-1 ĐÃ WIRE → sửa docstring STALE + defer residual (+K-081)]**
+- Nhắm D.2 design-first → ĐỌC code thật `shm_frame_ring.py` (write/read + quarantine + lease) TRƯỚC. Phát hiện: lock-poison LẦN 1 đã có recovery WIRE (quarantine double-snapshot+liveness+lease-expiry, cả write&read; reap; multi-reader; QUARANTINED active — Task 3/4/5 landed). Docstring "Simplified vs production" + ERRATA E-15 STALE (mô tả demo "chưa dùng").
+- **KHÔNG vá speculative** (đúng "không kiểm được→không đoán"): residual = lock-poison lần-2 + owner-CÒN-SỐNG (degraded an toàn, KHÔNG mất data; recovery khi owner chết) → cần stress đa-process production tái hiện. Sửa docstring khớp code + ghi K-081 (điều-kiện-đóng).
+- Đồng bộ: D.2 trong ARCHITECTURE §12 (⬜→🟡 THU HẸP) + review §D.2 (tránh doc↔doc drift).
+- **Ghi sổ:** LOG #344 · +K-081 (🟡) · INDEX canonical #343→#344 · Σ222→Σ223 (K80→K81) · dòng K-081 · block này.
+- **Bước kế (CHỜ user — mốc dừng SẠCH):** review findings còn lại: F4 (wire guard RTSP — cần quyết định thiết kế) · F5/F6/F7 (Low tổ chức) · E.2 (chặn GPU). D.2 residual + E.2 + nhánh CUDA đều cần môi trường/đèn-xanh. Giá-trị-cao nhất không-chặn: **cổng Feynman** (cần user). Hoặc tổng kết.
+---
 **[✅ #343 — FIX review F3 (Low): gom magic 5.0s observe-default → 1 hằng `_DEFAULT_OBSERVE_INTERVAL_S` (D-090 ✅)]**
 - "5.0" observe-default trước lặp 2 nơi (`main` + `_run_from_config`) = vector drift → gom 1 hằng module-level, cả 2 tham chiếu. Grep xác nhận đúng 2 chỗ, không có chỗ 3. Giữ trong profiles (không đẩy runtime — cross-layer thừa).
 - Kèm Verify-Symbol dogfood C8 (nay kiểm 5 symbol). Đánh dấu F3 ✅ trong ARCHITECTURE §12 + review doc.
