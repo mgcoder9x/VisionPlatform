@@ -6687,3 +6687,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** deep-dive: #11✅ #12✅ · #13 🔵 nền (10 mẩu ⬜). Điểm dạy #13: port thuần (PULL, lõi tách Prometheus), fps interval, MetricSample có-cấu-trúc (chống lossy parse), render chuẩn 0.0.4, `_serving` chống deadlock (K-071), secure-default localhost.
 
 **Đã verify:** đọc 4 file observability thật (phiên này) + cite; tạo 2 file + cập nhật INDEX code-lessons. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#335). · **Chưa verify:** mẩu 01–10 #13.
+
+### Entry #336 — 2026-07-12 — Deep-dive code-lessons #13: viết mẩu 01–04 (khâu ĐO) — Kiro-Opus
+
+**Bối cảnh:** tiếp #335 (mở #13). Viết cụm ĐO: port + snapshot + emit + observers.
+
+**1. Quyết định AI tự ra:** viết 4 mẩu: 01 PULL-vs-PUSH + IPipelineObserver port · 02 PipelineSnapshot fps-interval · 03 `_emit` theo-giờ-đầu-loop + cô-lập-lỗi-observer · 04 observers (Noop/Logging/Metrics, nhãn bounded). Quote nguyên văn + cite.
+
+**2. Chỗ phải đổi:** không.
+
+**3. Trade-off:** cụm ĐO (kernel port + runtime) trước cụm render/serve (adapters). #13 KHÔNG lặp #08 (InMemoryMetrics 3-loại/structlog) — chỉ dạy phần mới (port pipeline-observability + Prometheus chain).
+
+**4. Điều bạn nên biết:** #13 tiến độ 4/10 (01–04 ✅). Điểm dạy: PULL (lõi tách Prometheus), fps interval (không che sự cố), emit-đầu-loop (mất-camera vẫn phát), cô-lập-lỗi-observer (quan sát không kéo sập nghiệp vụ), nhãn bounded. Còn 05–10 (MetricSample/iter_metrics/render/exporter/deadlock/wiring).
+
+**Đã verify:** quote đúng từ `observability_port.py`/`pipeline_runner.py`/`observers.py` (đọc thật phiên này) + cite; cập nhật muc-luc 01–04→✅. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#336). · **Chưa verify:** mẩu 05–10 #13.

@@ -5,10 +5,10 @@
 
 | # | Mẩu (ý nhỏ nhất) | File code thật | Trạng thái |
 |---|---|---|---|
-| 01 | PULL vs PUSH + `IPipelineObserver` port (@kernel, thuần, non-blocking) — lõi không phụ thuộc Prometheus | `kernel/observability_port.py` | ⬜ |
-| 02 | `PipelineSnapshot` (frozen) — fps INTERVAL (không che sự cố) vs trung-bình-tích-luỹ | `kernel/observability_port.py` | ⬜ |
-| 03 | `PipelineRunner.emit()` — emit theo-giờ ở ĐẦU loop (mất-camera vẫn phát) + cô lập lỗi observer | `runtime/pipeline_runner.py` | ⬜ |
-| 04 | Observers: `Noop` (default opt-in) · `Logging` (structlog) · `Metrics` (gauge, nhãn bounded `source`) | `runtime/observers.py` | ⬜ |
+| 01 | PULL vs PUSH + `IPipelineObserver` port (@kernel, thuần, non-blocking) — lõi không phụ thuộc Prometheus | `kernel/observability_port.py` | ✅ `01-pull-vs-push-port.md` |
+| 02 | `PipelineSnapshot` (frozen) — fps INTERVAL (không che sự cố) vs trung-bình-tích-luỹ | `kernel/observability_port.py` | ✅ `02-pipeline-snapshot-fps-interval.md` |
+| 03 | `PipelineRunner.emit()` — emit theo-giờ ở ĐẦU loop (mất-camera vẫn phát) + cô lập lỗi observer | `runtime/pipeline_runner.py` | ✅ `03-emit-interval-isolation.md` |
+| 04 | Observers: `Noop` (default opt-in) · `Logging` (structlog) · `Metrics` (gauge, nhãn bounded `source`) | `runtime/observers.py` | ✅ `04-observers.md` |
 | 05 | `MetricSample` DTO — vì sao CÓ CẤU TRÚC (name+labels tách) thay chuỗi `name{k=v}` (lossy parse) | `kernel/metric_sample.py` | ⬜ |
 | 06 | `InMemoryMetrics.iter_metrics()` — snapshot có cấu trúc + `_labelsets` (ghi lúc write, khỏi parse ngược) | `runtime/observability.py` | ⬜ |
 | 07 | `render_prometheus` — `# TYPE`, escape nhãn, `+Inf`/`NaN`, SORT xác định, raise name↔type xung đột | `adapters/metrics_exposition.py` | ⬜ |

@@ -1,8 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T07:20:00+07:00.
-**[🔒 GIT] #335 mở deep-dive #13 observability-metrics — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T07:50:00+07:00.
+**[🔒 GIT] #336 deep-dive #13 mẩu 01–04 (ĐO) — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**[🔵 #336 — Deep-dive #13 observability: viết mẩu 01–04 (khâu ĐO)]**
+- Viết cụm ĐO: 01 PULL-vs-PUSH+port · 02 snapshot fps-interval · 03 emit-đầu-loop+cô-lập-lỗi · 04 observers. Quote + cite.
+- #13 tiến độ **4/10 mẩu**. Còn: 05 MetricSample · 06 iter_metrics · 07 render_prometheus · 08 exporter · 09 `_serving` deadlock · 10 wiring.
+- **Ghi sổ:** LOG #336 · INDEX canonical #335→#336 (Σ219 giữ) · muc-luc · block này.
+- **Bước kế (CHỜ user):** cụm RENDER (05/06/07) + SERVE (08/09) + wiring (10) → HOÀN TẤT #13 → #14 capability-aware.
+---
 **[🔵 #335 — MỞ deep-dive code-lessons #13 observability-metrics (cau-chuyen + muc-luc)]**
 - Đọc 4 file observability thật (observers/metrics_exposition/metrics_http_server/metric_sample) → tạo `13-observability-metrics/00-cau-chuyen.md` (vòng cung 6 nhịp: PULL-vs-PUSH, lõi-tách-Prometheus, fps-interval, render-chuẩn, serve-an-toàn) + `00-muc-luc.md` (10 mẩu).
 - Deep-dive: **#11 ✅ · #12 ✅ · #13 🔵 nền** (10 mẩu ⬜).
