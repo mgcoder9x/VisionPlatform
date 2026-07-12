@@ -1,8 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T22:10:00+07:00.
-**[🔒 GIT] #318 review kiến trúc — sẽ commit + push NHẸ (text). Không đổi code (623/2 giữ).**
+**Cập nhật lúc:** 2026-07-11T22:45:00+07:00.
+**[🔒 GIT] #319 review vòng 2 — sẽ commit + push NHẸ (text). Không đổi code (623/2 giữ).**
+**[✅ #319 — REVIEW vòng 2 (phủ IPC/RTSP/observability) → bổ sung `review/2026-07-11-architecture-review.md` §D]**
+- Vòng 1 (#318) ghi chưa phủ ipc/adapter/observability → đọc thêm 5 file THẬT: `shm_frame_ring` (trọn, gồm reader ABA-path) + `ring_control_plane` + `ring_pool` + `rtsp_frame_source` + `observability`.
+- **IPC = SOUND (D.1):** state-ghi-cuối=authority, gen+epoch ABA-check, reader-registry đa-reader, double-snapshot recovery, drain-before-reuse cưỡng chế, single-writer invariant. KHÔNG đề xuất sửa (phần khó nhất làm tốt).
+- **Phát hiện mới (Low):** D.2 (code tự ghi) lock-poison LẦN-2 → slot kẹt WRITING/READING (production wire lease-deadline). D.3 (review) `RtspFrameSource._reconnects` trọn-đời không reset khi đọc thành công → `max_reconnect` hữu hạn có thể ERROR oan qua phiên dài; fix: reset khi FRAME. D.4 observability 4 kênh.
+- **Ghi sổ:** LOG #319 (mở rộng review, không thêm D/C/T/K) · INDEX canonical #318→#319 (Σ218 giữ) · review doc §D · block này.
+- **Đánh giá tổng thể tới đây:** kiến trúc + IPC VỮNG; mọi phát hiện Low→Medium, KHÔNG lỗi đúng-sai nghiêm trọng. Ưu tiên: **F1** vẫn số 1.
+- **Bước kế (CHỜ user):** (a) triển khai F1 (spec nhỏ TDD); (b) vòng 3 review detector/sink/stages/zmq; (c) fix nhanh D.3 (1 dòng RTSP); (d) chốt.
+---
 **[✅ #318 — REVIEW toàn hệ kiến trúc/pattern/tổ chức code → `review/2026-07-11-architecture-review.md` (F1–F7) — +K-080]**
 - User xin review toàn hệ (thiết kế/pattern/struct/tổ chức/phân tách) + nơi xem để đánh giá tổng thể.
 - Đọc CODE THẬT 13 file (composition/config/factory/mechanism/supervisor/ports) → kết tinh `review/2026-07-11-architecture-review.md`: A) 9 điểm SOUND · B) F1–F7 (cite+severity) · C) bảng ưu tiên.

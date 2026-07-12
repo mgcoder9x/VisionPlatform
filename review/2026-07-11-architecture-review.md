@@ -103,3 +103,50 @@ rõ ràng "future API — chưa hiệu lực" để không hiểu nhầm mức b
 
 > **Lưu ý phạm vi (trung thực):** review này KHÔNG phủ nội bộ `runtime/ipc/*` (SHM ring/epoch — phần khó nhất),
 > từng adapter I/O, và từng stage. Muốn review sâu các phần đó cần đọc thêm — có thể làm ở vòng review sau.
+
+
+---
+
+## D. Review vòng 2 — phủ IPC / adapter biên / observability runtime (bổ sung 2026-07-11, #319)
+
+**Đã đọc thêm:** `runtime/ipc/shm_frame_ring.py` (TRỌN, gồm reader ABA-path) · `runtime/ipc/ring_control_plane.py`
+· `runtime/ipc/ring_pool.py` · `adapters/rtsp_frame_source.py` · `runtime/observability.py`.
+
+### D.1 IPC / SHM ring — SOUND (chất lượng cao, hiếm gặp)
+Đọc kỹ, xác nhận **thiết kế concurrent vững**:
+- **`state` ghi CUỐI = authority** (`_write_header` pack state sau cùng); reader check `generation` + `ring_epoch`
+  → chống ABA + stale-sau-switchover. Peek `state` lock-free (4B aligned) để bỏ QUARANTINED trước khi đụng lock.
+- **Reader registry đa-reader** (reader_count dẫn xuất từ ô active) + **reap reader chết** (lease quá hạn ∧ DEAD).
+- **Double-snapshot recovery** (`quarantine_poisoned_slot`: 2 snapshot header giống nhau mới hành động → tránh torn).
+- **Single-writer invariant** cưỡng chế (`register_writer` reject writer sống/UNKNOWN, KHÔNG takeover writer chết → yêu cầu rebuild).
+- **Drain-before-reuse CƯỠNG CHẾ** (`reset_for_reuse` refuse nếu còn reader hiệu lực) + TOCTOU được ghi rõ + ràng
+  buộc CHỈ gọi qua `RingPool(pool_size>=2)` (ring reset ≠ ring hiện hành). Cold-start dùng uuid name (không attach segment sót).
+→ Đây là phần khó nhất và **làm tốt** (có PBT + test cross-process hậu thuẫn). KHÔNG có đề xuất sửa.
+
+### D.2 [Low-Medium] Giới hạn lock-poison LẦN-2 (chính CODE đã tự ghi — E-15/E-15b)
+**Bằng chứng (docstring + code):** nếu writer acquire-lock LẦN 2 (commit READY) timeout → slot kẹt `WRITING`
+vĩnh viễn; đối xứng ở reader (mark DONE timeout → kẹt `READING`). Owner=self còn sống nên KHÔNG tự quarantine.
+Code GHI RÕ đây là giới hạn demo (production cần lease-timeout + QUARANTINED recovery). Trung thực, không giấu.
+**Đề xuất:** đây là hố GPU/production thật — khi làm nhánh production, wire lease-deadline (field v2 đã có sẵn
+`OFFSET_LEASE_DEADLINE_NS`) + recovery cho slot self-owned-timeout. Không phải bug ở phạm vi hiện tại (demo/no-GPU).
+
+### D.3 [Low] RTSP `_reconnects` là ngân sách TRỌN-ĐỜI, không reset khi đọc lại thành công
+**Bằng chứng (`rtsp_frame_source.py`):** `read()` khi mở lại → `self._reconnects += 1`; khi đọc FRAME thành công
+KHÔNG reset `_reconnects` về 0. `setup()` mới reset. → với `max_reconnect` đặt số hữu hạn, camera chớp-tắt lai
+rai qua phiên dài sẽ TÍCH LUỸ tới ngưỡng rồi báo `ERROR` VĨNH VIỄN dù hiện đang khoẻ. (Deploy thường dùng
+`max_reconnect=None` = vô hạn → hố này LATENT, chưa cắn.)
+**Đề xuất (fix bản chất):** reset `self._reconnects = 0` khi `read()` trả FRAME thành công → biến `max_reconnect`
+thành "số lần rớt LIÊN TIẾP" (ngữ nghĩa thường mong đợi) thay vì trọn-đời. Nhỏ, 1 dòng, đúng ý niệm self-heal.
+
+### D.4 [Low / quan sát] Observability phân mảnh 4 cơ chế
+**Bằng chứng:** `ObservabilityHook` (sự kiện SHM ở ipc) · `structlog` (logs) · `InMemoryMetrics` (metrics) ·
+`IPipelineObserver`/`PipelineSnapshot` (số liệu pipeline). Mỗi cái đúng-mục-đích-riêng (không sai), nhưng người
+review cần biết "observability" trải 4 nơi. `InMemoryMetrics` SOUND (thread-safe, labelset có cấu trúc chống
+parse-lossy, getter `.get` không tạo key rác, cardinality cảnh báo K-019).
+**Đề xuất:** không gộp (khác tầng/mục đích); chỉ nên 1 mục trong `docs/ARCHITECTURE.md` liệt kê 4 kênh để điều hướng.
+
+### D.5 Cập nhật phạm vi
+Vòng 2 đã phủ IPC + RTSP + observability runtime. **Vẫn CHƯA đọc sâu:** `onnx_detector`/`yolov5_pt_detector`
+(detector adapter), các sink (jsonl/sqlite), phần lớn `runtime/stages/*`, `zmq_inference_client`/`inference_server`.
+Đánh giá tổng thể tới đây: **kiến trúc + phần khó (IPC) vững; các phát hiện đều Low→Medium, không có lỗi đúng-sai
+nghiêm trọng trong phạm vi đã đọc.** Ưu tiên hành động không đổi: **F1** (hợp nhất 2 đường lắp-ráp) vẫn là số 1.

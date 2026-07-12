@@ -6449,3 +6449,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết (K-080):** review findings F1–F7 sống ở `review/2026-07-11-architecture-review.md`. F1 = ưu tiên 1 (hợp nhất CLI→PipelineConfig→build_runner, 1 đường lắp-ráp). Cách làm đề xuất: mỗi F = 1 spec nhỏ design→review→code TDD, giữ vp verify xanh. Review CHƯA phủ ipc/SHM + từng adapter/stage (vòng sau nếu cần).
 
 **Đã verify:** đọc 13 file code thật (cite trong review doc); đối chiếu F1 bằng so params MotionGateStage giữa main() vs `_stage_motion_gate` (thật); tạo review doc. Không đổi code (623/2 giữ). `vp check` sẽ PASS (#318). · **Chưa verify:** nội bộ `runtime/ipc/*` + từng adapter/stage (ghi rõ phạm vi trong review); các đề xuất F1–F7 chưa triển khai (mới là khuyến nghị).
+
+### Entry #319 — 2026-07-11 — REVIEW vòng 2 (phủ IPC/RTSP/observability) → bổ sung `review/2026-07-11-architecture-review.md` §D — Kiro-Opus
+
+**Bối cảnh:** review vòng 1 (#318) ghi rõ CHƯA phủ ipc/SHM + adapter + observability runtime. Đọc thêm 5 file thật để hoàn tất nền đánh giá tổng thể (đúng "kiểm chứng được rồi mới kết luận"): `shm_frame_ring.py` (TRỌN, gồm reader ABA-path) + `ring_control_plane.py` + `ring_pool.py` + `rtsp_frame_source.py` + `observability.py`.
+
+**1. Quyết định AI tự ra:** CẬP NHẬT review doc (thêm §D vòng 2) thay vì tạo file mới (user: "có rồi thì cập nhật vào"). Ghi SOUND ở chỗ SOUND (IPC), chỉ nêu phát hiện có bằng chứng.
+
+**2. Chỗ phải đổi so với hiểu biết trước:** IPC — trước chỉ "biết tên" (D.1), giờ ĐỌC THẬT xác nhận vững: state-ghi-cuối=authority, gen+epoch ABA-check, reader-registry đa-reader, double-snapshot recovery, drain-before-reuse cưỡng chế, single-writer invariant. Không đề xuất sửa IPC.
+
+**3. Trade-off đã cân nhắc:** severity trung thực — phát hiện mới đều Low→Low-Med, KHÔNG lỗi đúng-sai nghiêm trọng. Phân biệt "giới hạn code TỰ ghi" (E-15 lock-poison lần-2, D.2) vs "phát hiện của review" (D.3 RTSP). Không thổi phồng.
+
+**4. Điều bạn nên biết:** (D.2) E-15/E-15b: writer/reader acquire-lock LẦN-2 timeout → slot kẹt WRITING/READING vĩnh viễn (owner=self sống nên không tự quarantine) — code tự ghi là giới hạn demo, production wire lease-deadline (field v2 sẵn). (D.3 — phát hiện mới có giá trị) `RtspFrameSource._reconnects` là ngân sách TRỌN-ĐỜI (không reset khi read FRAME thành công) → `max_reconnect` hữu hạn + camera chớp-tắt lai rai qua phiên dài → ERROR vĩnh viễn oan. Fix bản chất: reset `_reconnects=0` khi đọc thành công (ngữ nghĩa "rớt liên tiếp"). LATENT vì deploy thường `max_reconnect=None`. (D.4) observability trải 4 kênh (ObservabilityHook/structlog/InMemoryMetrics/IPipelineObserver) — đúng-mục-đích-riêng, nên liệt kê trong ARCHITECTURE.md để điều hướng.
+
+**Đã verify:** đọc TRỌN 5 file (cite §D); đối chiếu D.3 bằng đọc `read()` RTSP (nhánh FRAME không reset `_reconnects`, chỉ `setup()` reset) — có bằng chứng; cập nhật review doc §D. Không đổi code (623/2 giữ). `vp check` sẽ PASS (#319). · **Chưa verify:** detector adapter (onnx/pt), sink, phần lớn stages, zmq (ghi rõ §D.5) — vòng 3 nếu cần; D.2/D.3 chưa fix (mới là phát hiện).
