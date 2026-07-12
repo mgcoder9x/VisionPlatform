@@ -6561,3 +6561,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** bộ tài liệu giờ 2 mức — `docs/ARCHITECTURE.md` (tổng quan reviewer) + `code-lessons/` (deep, mẩu-by-mẩu). Deep-dive phần MỚI mới có #11 nền (cau-chuyen+muc-luc); các chủ đề khác (analytics/observability-metrics/capability) sẽ thêm dần. Mẩu 01–15 của #11 còn ⬜.
 
 **Đã verify:** đọc code thật 4 file (config.py/config_loader.py/pipeline_factory.py/vision_slice_app.py — phiên này #322/#324) để viết cau-chuyen bám sát; tạo 2 file + cập nhật INDEX code-lessons. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#326). · **Chưa verify:** mẩu chi tiết 01–15 (chưa viết); nội dung cau-chuyen là giải-thích (không phải khẳng-định-hành-vi cần chạy) — số/hành vi dẫn từ code+journal đã verify.
+
+### Entry #327 — 2026-07-12 — Deep-dive code-lessons #11: viết mẩu 01–03 (tầng DTO `config.py`) — Kiro-Opus
+
+**Bối cảnh:** tiếp #326 (mở #11 config-declarative). Theo thứ tự khuyến nghị nền→sản phẩm→vận hành, viết cụm mẩu đầu = tầng DTO (`kernel/config.py`) — cụm mạch lạc, đã đọc code thật phiên này nên quote chính xác.
+
+**1. Quyết định AI tự ra:** viết 3 mẩu (01 frozen dataclass · 02 đóng-băng-sâu `_freeze_params`+tuple · 03 cây DTO) theo template LESSON-RULES 14 mục (Là gì/Tại sao/Dùng ở đâu/Không có thì sao/ví von/cạm bẫy/tự kiểm...). Quote NGUYÊN VĂN từ `config.py` + cite path.
+
+**2. Chỗ phải đổi so với hiểu biết trước:** không.
+
+**3. Trade-off đã cân nhắc:** viết cả 15 mẩu 1 lượt (nhanh) vs cụm-mạch-lạc từng lượt (chất lượng + đúng "không hàng loạt"). Chọn cụm 01–03 (toàn bộ tầng DTO config.py) lượt này; 04+ (loader) lượt sau.
+
+**4. Điều bạn nên biết:** #11 tiến độ 3/15 mẩu (01–03 ✅ tầng DTO). Còn 04–15 (loader/registry/factory/F1) ⬜. Mọi mẩu bám code thật, quote + cite, không dán vào chat (§1.8).
+
+**Đã verify:** đọc `kernel/config.py` (thật #322/#324) → quote đúng vào 3 mẩu; cập nhật muc-luc 01–03→✅. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#327). · **Chưa verify:** mẩu 04–15 (chưa viết); nội dung mẩu là giải-thích (không phải khẳng-định-hành-vi cần chạy; hành vi FrozenInstanceError là đặc tính dataclass chuẩn).

@@ -5,9 +5,9 @@
 
 | # | Mẩu (ý nhỏ nhất) | File code thật bám vào | Trạng thái |
 |---|---|---|---|
-| 01 | `@dataclass(frozen=True)` cho config — vì sao BẤT BIẾN (chống sửa lén cấu hình toàn cục) | `kernel/config.py` (SourceConfig) | ⬜ |
-| 02 | `MappingProxyType` + `tuple` — đóng băng `params`/list sau parse (`_freeze_params`, `__post_init__`) | `kernel/config.py` | ⬜ |
-| 03 | Cây DTO: `AppConfig` → `PipelineConfig` → Source/Stage/Sink/Detector/Observability | `kernel/config.py` | ⬜ |
+| 01 | `@dataclass(frozen=True)` cho config — vì sao BẤT BIẾN (chống sửa lén cấu hình toàn cục) | `kernel/config.py` (SourceConfig) | ✅ `01-dataclass-frozen.md` |
+| 02 | `MappingProxyType` + `tuple` — đóng băng `params`/list sau parse (`_freeze_params`, `__post_init__`) | `kernel/config.py` | ✅ `02-freeze-params-tuple.md` |
+| 03 | Cây DTO: `AppConfig` → `PipelineConfig` → Source/Stage/Sink/Detector/Observability | `kernel/config.py` | ✅ `03-cay-dto.md` |
 | 04 | `tomllib.load` (stdlib 3.11) + mở `'rb'` — đọc TOML KHÔNG thêm dependency | `application/config_loader.py::load_app_config` | ⬜ |
 | 05 | `_require`/`_require_str`/`_typed` — validate CẤU TRÚC + `ConfigError` fail-fast kèm vị trí | `application/config_loader.py` | ⬜ |
 | 06 | Vì sao loader (application) KHÔNG kiểm `type ∈ registry` — giữ ranh giới không phụ thuộc adapter | `config_loader.py` vs `pipeline_factory.py` | ⬜ |

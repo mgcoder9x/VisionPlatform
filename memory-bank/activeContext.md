@@ -1,8 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T02:40:00+07:00.
-**[🔒 GIT] #326 mở deep-dive code-lessons #11 — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T03:10:00+07:00.
+**[🔒 GIT] #327 deep-dive #11 mẩu 01–03 — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**[🔵 #327 — Deep-dive code-lessons #11: viết mẩu 01–03 (tầng DTO `config.py`)]**
+- Theo thứ tự nền→sản phẩm→vận hành: viết cụm mẩu đầu #11 = tầng DTO. 3 file: `01-dataclass-frozen.md` · `02-freeze-params-tuple.md` · `03-cay-dto.md` (template 14 mục, quote nguyên văn `kernel/config.py` + cite path).
+- #11 tiến độ **3/15 mẩu** (01–03 ✅). Còn 04–15 (loader/registry/factory/F1) ⬜.
+- **Ghi sổ:** LOG #327 · INDEX canonical #326→#327 (Σ219 giữ) · muc-luc 01–03→✅ · block này.
+- **Bước kế (CHỜ user):** viết tiếp mẩu 04–07 (loader) → 08–13 (registry/factory) → 14–15 (F1); hoặc mở chủ đề #12 analytics; hoặc dừng. Tạo dần.
+---
 **[🔵 #326 — MỞ deep-dive `code-lessons/11-config-declarative/` (cau-chuyen + muc-luc) — lấp khoảng-trống dạy-code sau #10]**
 - User cần tài liệu "đọc là hiểu mọi thứ tới mẩu nhỏ nhất" = `code-lessons/` (khác ARCHITECTURE.md tổng-quan). code-lessons phủ sâu #01–#10+sub-spec nhưng KHOẢNG TRỐNG: tính năng sau #10 chưa có bài.
 - Bắt đầu lấp: chủ đề #11 config-declarative (nền "tổ chức/phân tách code"). Tạo `00-cau-chuyen.md` (vòng cung 6 nhịp, bám 4 file code thật) + `00-muc-luc.md` (15 mẩu). Cập nhật INDEX code-lessons + ghi rõ chương trình lấp-dần.
