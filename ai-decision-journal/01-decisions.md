@@ -1002,3 +1002,12 @@ Nội dung: CLI-direct sinh `PipelineConfig` in-memory (`_args_to_pipeline_confi
 Vì sao (bản chất): 2 đường lắp-ráp = 2 nguồn sự thật → phân kỳ năng lực (motion-gate CLI thiếu pixel_diff_threshold/min_area_ratio). Hợp nhất = fix GỐC (thêm stage chỉ sửa 1 chỗ registry).
 Tự-review 6 hố (phải xử trước code): H1 device-log chuyển vào `_det_pt` (1 nơi) · H2 giữ exit-2 khi CapabilityError (main bắt quanh build_runner) · H3 `--frames`→source.max_frames vs `--max-frames`→run() · H4 `_validate` chạy trước map · H5 [CẦN KIỂM] default `MotionGateStage.__init__` vs `_stage_motion_gate` có LỆCH (chống đổi hành vi im lặng) · H6 giữ test cũ xanh + thêm test map thuần.
 Non-goal v1: KHÔNG thêm cờ CLI motion-gate mới; KHÔNG đổi schema TOML; KHÔNG đổi output summary.
+
+### D-089 — 2026-07-12 — Mở thiết kế C8 "living citation" — chống drift TÀI LIỆU↔CODE (design-first)
+Status: 🔵 design-only (CHỜ user VALID → PHA code TDD)
+Scope: design `review/C8-doc-code-drift-check-design.md`. PHA code sẽ đụng `tests/test_memory_consistency.py` (+C8 trong check() + tham số `symbol_exists` + 3 self-test case) · `ai-decision-journal/README.md` (mô tả trường `Verify-Symbol` + quy tắc đảo→gỡ) · (H9, cần kiểm) `ai-learning-os-kit/` mirror checker.
+Nguồn: LOG Entry #340 · đọc THẬT `tests/drift_check.py` + `tests/test_memory_consistency.py` + `ai-decision-journal/README.md`
+Links: D-052 (linter nhất quán bộ nhớ C1–C7) · D-053 (hook+kit) · D-085 (self_test meta-test) · D-083 (kit=repo tránh drift)
+Nội dung: thêm check C8 — với mỗi trường OPT-IN `Verify-Symbol: <relpath>::<symbol>` trong 4 file journal, kiểm (1) file tồn tại (2) symbol được định nghĩa (regex def/class/assign). Giữ `self_test` thuần-in-memory bằng cách TIÊM resolver giả (`symbol_exists` Callable, mặc định None→đọc file thật). Opt-in ⇒ backward-compat tuyệt đối 219 mục cũ.
+Vì sao (bản chất): C1–C7 chỉ đối chiếu bản-ghi↔bản-ghi; drift class doc↔code (mục ✅ code nhưng symbol đã bị xoá) HOÀN TOÀN chưa phủ → audit-trail có thể sai-sự-thật mà máy vẫn PASS. C8 đóng đúng lỗ đó. Dùng trường MỚI (không parse `Nguồn:` free-form → tránh false-positive) + cấm line-number (chống-drift-by-construction) = fix gốc không fix ngọn.
+Non-goal v1: KHÔNG kiểm hành-vi-đúng (việc của pytest); KHÔNG bắt buộc hồi tố mọi mục; KHÔNG dùng line-number.

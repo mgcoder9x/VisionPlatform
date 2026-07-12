@@ -1,8 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T10:30:00+07:00.
-**[🔒 GIT] #339 hoàn tất #14 — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T11:45:00+07:00.
+**[🔒 GIT] #340 mở thiết kế C8 (design-only) — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**[🔵 #340 — MỞ thiết kế C8 "living citation" chống drift TÀI LIỆU↔CODE (design-first, D-089) — CHỜ user VALID]**
+- User lặp "cần cách CỰC MẠNH tránh drift" → xác minh journal 4-file + drift_check 3 tầng ĐÃ có + PASS. Đọc THẬT `drift_check.py`+`test_memory_consistency.py`+`README.md` → phát hiện drift class DUY NHẤT còn hở: C1–C7 chỉ bản-ghi↔bản-ghi, KHÔNG bản-ghi↔CODE.
+- **Thiết kế C8:** trường opt-in `Verify-Symbol: path::symbol` → kiểm symbol còn định-nghĩa trong code (file tồn tại + regex def/class/assign). Giữ self_test in-memory bằng TIÊM resolver giả. Trường MỚI (không parse `Nguồn:` free-form) + cấm line-number = fix gốc chống false-positive. Opt-in ⇒ backward-compat 219 mục. Tự-review 10 hố ở `review/C8-doc-code-drift-check-design.md`.
+- **Ghi sổ:** LOG #340 · +D-089 (🔵 design-only) · INDEX canonical #339→#340 · Σ219→Σ220 (D88→D89) · dòng D-089 · block này.
+- **Bước kế (CHỜ user VALID design C8):** nếu OK → PHA code TDD (thêm C8 trong `test_memory_consistency.check()` + tham số `symbol_exists` + 3 self-test case; cập nhật `README.md`; H9 kiểm+port kit; verify NEGATIVE thật đổi-tên-symbol→C8 FAIL→hoàn tác; `vp verify` EXIT 0). Nếu thấy chưa cần (opt-in) → giữ 3 tầng, mốc dừng sạch.
+---
 **[✅ #339 — HOÀN TẤT deep-dive code-lessons #14 capability-aware (8/8 mẩu) — KHÉP chương trình lấp khoảng-trống sau #10]**
 - Viết mẩu 08 cuối `08-wiring-det-pt-exit2.md` (GHÉP toàn chuỗi: `_det_pt` probe→resolve→log-device-1-nơi H1/#324 + `main` bắt `CapabilityError`→stderr gọn+exit 2 H2) + cổng Feynman tổng-hợp #14 (5 câu tình huống). Đánh ✅ mẩu 01–08 muc-luc + `#14 🔵→✅ ĐỦ 8/8` INDEX code-lessons.
 - **Deep-dive TRỌN:** #11 config ✅ (15/15) · #12 analytics ✅ (14/14) · #13 observability ✅ (10/10) · #14 capability ✅ (8/8). Chương trình dạy-code sâu tính-năng-sau-#10 ĐỦ. Tất cả chờ Feynman (người học tự giải thích lại).
