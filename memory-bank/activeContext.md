@@ -1,8 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T03:40:00+07:00.
-**[🔒 GIT] #328 deep-dive #11 mẩu 04–07 — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T04:15:00+07:00.
+**[🔒 GIT] #329 deep-dive #11 mẩu 08–13 — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**[🔵 #329 — Deep-dive code-lessons #11: viết mẩu 08–13 (tầng factory `pipeline_factory.py`)]**
+- Viết cụm factory: 08 REGISTRY(Open/Closed) · 09 lazy-import · 10 typo-guard(K-046) · 11 `_lookup` · 12 validate_config-vs-build_runner · 13 build_runner(+extra_sinks). Quote nguyên văn + cite.
+- #11 tiến độ **13/15 mẩu** (01–13 ✅: DTO+loader+factory). Còn 14–15 (F1).
+- **Ghi sổ:** LOG #329 · INDEX canonical #328→#329 (Σ219 giữ) · muc-luc 08–13→✅ · block này.
+- **Bước kế (CHỜ user):** mẩu 14–15 (F1: `_args_to_pipeline_config`+`extra_sinks`) → HOÀN TẤT #11 → sang #12 analytics.
+---
 **[🔵 #328 — Deep-dive code-lessons #11: viết mẩu 04–07 (tầng loader `config_loader.py`)]**
 - Viết cụm loader: 04 tomllib+ConfigError · 05 validate-cấu-trúc+vị-trí · 06 loader-không-biết-registry (ranh giới tầng) · 07 `_parse_observability` chặn bool-lọt-int. Quote nguyên văn + cite path.
 - #11 tiến độ **7/15 mẩu** (01–07 ✅: DTO + loader). Còn 08–13 (registry/factory) + 14–15 (F1).

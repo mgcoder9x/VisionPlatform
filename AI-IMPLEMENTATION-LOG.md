@@ -6589,3 +6589,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** #11 tiến độ 7/15 (01–07 ✅: DTO + loader). Còn 08–13 (registry/factory) + 14–15 (F1). Mẩu 07 dạy bẫy Python `bool` là con `int` — thực dụng, gắn code thật.
 
 **Đã verify:** quote đúng từ `config_loader.py` (đọc thật #322/#324) + cite path; cập nhật muc-luc 04–07→✅. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#328). · **Chưa verify:** mẩu 08–15.
+
+### Entry #329 — 2026-07-12 — Deep-dive code-lessons #11: viết mẩu 08–13 (tầng factory `pipeline_factory.py`) — Kiro-Opus
+
+**Bối cảnh:** tiếp #328 (mẩu 01–07 DTO+loader). Viết cụm factory (profiles) — `pipeline_factory.py` (đọc thật phiên này, gồm F1 edits).
+
+**1. Quyết định AI tự ra:** viết 6 mẩu: 08 REGISTRY (Open/Closed) · 09 lazy-import · 10 `allowed_params`/`_check_params` typo-guard K-046 · 11 `_lookup` · 12 `validate_config` vs `build_runner` (dry-run no-GPU) · 13 `build_runner` (ráp → PipelineRunner + extra_sinks). Quote nguyên văn + cite path.
+
+**2. Chỗ phải đổi:** không.
+
+**3. Trade-off:** viết 6 mẩu 1 lượt (factory là cụm mạch lạc — registry+lazy+guard+lookup+validate+build đi liền); để 14–15 (F1) lượt sau (cụm riêng).
+
+**4. Điều bạn nên biết:** #11 tiến độ 13/15 (01–13 ✅: DTO+loader+factory). Còn 14–15 (F1: `_args_to_pipeline_config`+`extra_sinks`). Cụm factory dạy trọng tâm "tổ chức/phân tách": registry Open/Closed + lazy-import (chạy máy no-GPU) + validate-vs-build.
+
+**Đã verify:** quote đúng từ `pipeline_factory.py` (đọc thật #322/#324) + cite path; cập nhật muc-luc 08–13→✅. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#329). · **Chưa verify:** mẩu 14–15.

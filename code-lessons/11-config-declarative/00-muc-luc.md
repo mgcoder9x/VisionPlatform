@@ -12,12 +12,12 @@
 | 05 | `_require`/`_require_str`/`_typed` — validate CẤU TRÚC + `ConfigError` fail-fast kèm vị trí | `application/config_loader.py` | ✅ `05-validate-cau-truc.md` |
 | 06 | Vì sao loader (application) KHÔNG kiểm `type ∈ registry` — giữ ranh giới không phụ thuộc adapter | `config_loader.py` vs `pipeline_factory.py` | ✅ `06-loader-khong-biet-registry.md` |
 | 07 | `_parse_observability` — validate KIỂU tường minh (chặn `bool` lọt `int`: `isinstance(True,int)`) | `config_loader.py::_parse_observability` | ✅ `07-parse-observability-bool-int.md` |
-| 08 | REGISTRY `DEFAULT_REGISTRY` — bảng `type`(chuỗi)→builder; thêm loại = 1 entry (Open/Closed) | `pipeline_factory.py` | ⬜ |
-| 09 | Builder + lazy-import (vì sao import trong hàm, không đầu file — né kéo torch/cv2) | `pipeline_factory.py::_det_pt/_src_rtsp/...` | ⬜ |
-| 10 | `allowed_params` + `_check_params` — typo-guard (K-046), chặn key lạ nuốt im lặng | `pipeline_factory.py` | ⬜ |
-| 11 | `_lookup` — tra registry, type lạ → `ConfigError` liệt kê type hợp lệ | `pipeline_factory.py::_lookup` | ⬜ |
-| 12 | `validate_config` (dry-run, no-GPU) vs `build_runner` (dựng thật) — vì sao tách 2 | `pipeline_factory.py` | ⬜ |
-| 13 | `build_runner` — ráp source+stages+sinks → `SyncLinearExecutor`+`CompositeSink`→`PipelineRunner` | `pipeline_factory.py::build_runner` | ⬜ |
+| 08 | REGISTRY `DEFAULT_REGISTRY` — bảng `type`(chuỗi)→builder; thêm loại = 1 entry (Open/Closed) | `pipeline_factory.py` | ✅ `08-registry.md` |
+| 09 | Builder + lazy-import (vì sao import trong hàm, không đầu file — né kéo torch/cv2) | `pipeline_factory.py::_det_pt/_src_rtsp/...` | ✅ `09-lazy-import.md` |
+| 10 | `allowed_params` + `_check_params` — typo-guard (K-046), chặn key lạ nuốt im lặng | `pipeline_factory.py` | ✅ `10-allowed-params-typo-guard.md` |
+| 11 | `_lookup` — tra registry, type lạ → `ConfigError` liệt kê type hợp lệ | `pipeline_factory.py::_lookup` | ✅ `11-lookup.md` |
+| 12 | `validate_config` (dry-run, no-GPU) vs `build_runner` (dựng thật) — vì sao tách 2 | `pipeline_factory.py` | ✅ `12-validate-config-vs-build.md` |
+| 13 | `build_runner` — ráp source+stages+sinks → `SyncLinearExecutor`+`CompositeSink`→`PipelineRunner` | `pipeline_factory.py::build_runner` | ✅ `13-build-runner.md` |
 | 14 | F1 (#324): `_args_to_pipeline_config` — CLI cũng sinh `PipelineConfig` → cùng `build_runner` (1 nguồn lắp-ráp) | `vision_slice_app.py::_args_to_pipeline_config` | ⬜ |
 | 15 | `extra_sinks` — chèn sink presentation (`_TrackSummarySink`) ngoài-config vào composite | `pipeline_factory.py::build_runner` + `vision_slice_app.py` | ⬜ |
 
