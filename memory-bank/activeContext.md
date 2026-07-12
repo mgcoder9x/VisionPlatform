@@ -1,8 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T04:45:00+07:00.
-**[🔒 GIT] #330 HOÀN TẤT deep-dive #11 (15/15) — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T05:15:00+07:00.
+**[🔒 GIT] #331 mở deep-dive #12 analytics — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**[🔵 #331 — MỞ deep-dive code-lessons #12 analytics (cau-chuyen + muc-luc)]**
+- Đọc 10 file analytics thật (domain tracking/geometry/motion + iou_tracker + stages + kernel Track/CrossingEvent) → tạo `12-analytics/00-cau-chuyen.md` (vòng cung 6 nhịp: đếm-không-trùng/qua-vạch-hướng/detector-quá-tải) + `00-muc-luc.md` (14 mẩu).
+- Deep-dive tiến độ: **#11 ✅ (15/15)** · **#12 🔵 nền** (14 mẩu ⬜).
+- **Ghi sổ:** LOG #331 · INDEX canonical #330→#331 (Σ219 giữ) · INDEX code-lessons +#12 · block này.
+- **Bước kế (CHỜ user):** viết mẩu #12 (cụm domain 02-03+07-08+11-12 → runtime 04/06/09/13 → DTO 05/10 → wiring 14); hoặc dừng. Tạo dần.
+---
 **[✅ #330 — HOÀN TẤT deep-dive code-lessons #11 config-declarative (15/15 mẩu)]**
 - Viết mẩu cuối 14 (`_args_to_pipeline_config`, F1) + 15 (`extra_sinks`) → #11 ĐỦ 15/15.
 - Chuỗi dạy trọn: TOML→`AppConfig`(kernel DTO frozen)→loader(application, validate cấu trúc, không-biết-registry)→factory(profiles, registry Open/Closed + lazy-import + typo-guard + build_runner)→F1(CLI dùng chung).

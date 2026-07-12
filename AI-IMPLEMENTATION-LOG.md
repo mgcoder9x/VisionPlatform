@@ -6617,3 +6617,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** **#11 config-declarative HOÀN TẤT 15/15 mẩu** — deep-dive đầu tiên của phần sản phẩm sau #10. Chuỗi: TOML→AppConfig(kernel)→loader(application, validate cấu trúc)→factory(profiles, registry+build)→F1(CLI dùng chung). Chờ Feynman (user tự giải thích lại để chốt ✅). Bước kế: #12 analytics.
 
 **Đã verify:** quote đúng từ `vision_slice_app.py`/`pipeline_factory.py` (đọc thật #324) + cite path; cập nhật muc-luc 14–15→✅ + INDEX code-lessons #11→ĐỦ. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#330). · **Chưa verify:** #12+ (chưa mở); cổng Feynman #11 (chờ user học).
+
+### Entry #331 — 2026-07-12 — MỞ deep-dive code-lessons #12 analytics (cau-chuyen + muc-luc) — Kiro-Opus
+
+**Bối cảnh:** tiếp #330 (đóng #11). Theo thứ tự nền→sản phẩm→vận hành → mở #12 analytics (tracking/line-crossing/motion-gate). Đọc code THẬT trước: `domain/{tracking,geometry,motion}.py` + `runtime/iou_tracker.py` + stages + `kernel/{tracking_protocol,crossing_event}.py`.
+
+**1. Quyết định AI tự ra:** tạo `code-lessons/12-analytics/00-cau-chuyen.md` (vòng cung 6 nhịp: 3 vấn-đề đếm-không-trùng/qua-vạch-hướng/detector-quá-tải → forces → IoU-greedy vs Kalman / orientation / motion-gate → tách tầng domain-thuần/runtime-state/kernel-DTO) + `00-muc-luc.md` (14 mẩu). Cập nhật INDEX code-lessons.
+
+**2. Chỗ phải đổi:** không.
+
+**3. Trade-off:** gộp motion-gate vào #12 (cùng cụm "analytics + cắt tải") thay vì chủ đề riêng — vì nó phục vụ trực tiếp pipeline analytics (giảm tải detector). 14 mẩu bao domain+runtime+kernel+wiring.
+
+**4. Điều bạn nên biết:** deep-dive tiến độ: #11 ✅ (15/15) · #12 🔵 nền (cau-chuyen+muc-luc, 14 mẩu ⬜). Điểm dạy trọng tâm #12: domain index-based (cấm import kernel), tie-break xác định, int16-cast chống underflow, orientation cho cắt+hướng, tách tầng.
+
+**Đã verify:** đọc 10 file analytics thật (phiên này) để viết cau-chuyen bám sát; tạo 2 file + cập nhật INDEX code-lessons. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#331). · **Chưa verify:** mẩu 01–14 #12 (chưa viết).
