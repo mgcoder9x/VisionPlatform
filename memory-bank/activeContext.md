@@ -1,8 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T21:40:00+07:00.
-**[🔒 GIT] #317 đồng bộ README — sẽ commit + push NHẸ (text). Không đổi code (623/2 giữ).**
+**Cập nhật lúc:** 2026-07-11T22:10:00+07:00.
+**[🔒 GIT] #318 review kiến trúc — sẽ commit + push NHẸ (text). Không đổi code (623/2 giữ).**
+**[✅ #318 — REVIEW toàn hệ kiến trúc/pattern/tổ chức code → `review/2026-07-11-architecture-review.md` (F1–F7) — +K-080]**
+- User xin review toàn hệ (thiết kế/pattern/struct/tổ chức/phân tách) + nơi xem để đánh giá tổng thể.
+- Đọc CODE THẬT 13 file (composition/config/factory/mechanism/supervisor/ports) → kết tinh `review/2026-07-11-architecture-review.md`: A) 9 điểm SOUND · B) F1–F7 (cite+severity) · C) bảng ưu tiên.
+- **Kết luận trung thực:** nền VỮNG, KHÔNG bug logic trong phạm vi đọc. Cải tiến chính: **F1 [Med-High]** CLI-direct (`main()`) vs config (`build_runner`) lắp-ráp pipeline SONG SONG → phân kỳ năng lực (motion-gate thiếu tham số ở CLI-direct). Fix gốc: CLI→PipelineConfig→build_runner (1 đường). F2 main dài · F3 magic 5.0s ×2 · F4 guard RTSP chưa-wire · F5/F6/F7 nhỏ.
+- **Phạm vi CHƯA phủ (trung thực):** `runtime/ipc/*` (SHM/epoch), từng adapter/stage — vòng sau.
+- **Ghi sổ:** LOG #318 · +K-080 (con trỏ review) · INDEX #318/Σ218/K80 + dòng K-080 · block này. Không đổi code.
+- **Bước kế (CHỜ user chọn):** (a) triển khai F1 (spec nhỏ design→review→code TDD — ưu tiên 1); (b) review sâu ipc/SHM + adapter; (c) chốt điểm dừng.
+---
 **[✅ #317 — Đồng bộ `vision-platform/README.md` (đóng nợ nhỏ #316): bỏ số hardcode cũ + hiện trạng + trỏ ARCHITECTURE.md]**
 - README cũ kẹt mốc ~#09 ("290 test", "4 layer", composition root=demo_pipeline, observability="hoãn") = nguồn drift cuối trong tài liệu.
 - **Viết lại:** quick-start + trỏ `docs/ARCHITECTURE.md`; cùng nguyên tắc chống-drift (A) — KHÔNG hardcode số, trỏ `vp verify`/`lint-imports`. Cập nhật 6 package, entry `vision_slice_app`, patterns đủ (analytics+observability+capability), Đã-xong-vs-Còn-hoãn trung thực.

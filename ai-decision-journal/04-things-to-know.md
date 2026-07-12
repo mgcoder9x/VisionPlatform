@@ -795,3 +795,16 @@ Vì sao ghi: (1) preserve kết luận review → phiên/máy sau KHÔNG review 
 - quét đệ quy `torch\version.py` dưới `C:\Users\toann` (depth 6) = RỖNG.
 **Kết luận:** torch VẮNG toàn hệ (mở rộng K-077 vốn chỉ kiểm venv). GPU phần cứng vẫn CÓ (nvidia-smi OK). Lời user "đã cài hết" bị verify BÁC BỎ — không suy đoán lý do.
 **Hệ quả:** verify nhánh CUDA (D-073) BẮT BUỘC cài torch = op NẶNG-mạng (K-078 nhóm ⛔) → chờ user bật đèn xanh. Khi có phép: `set VP_EXTRAS=dev,onnx,cv2,web,pt` (trong `scripts/env.local.cmd`) → `vp setup`; nhớ K-066 (Windows dễ kéo torch CPU-only → cần CUDA wheel `+cu124`). **[chưa kiểm]** torch có wheel cho Python 3.13.12 không (cần mạng để tra pytorch.org — rủi ro cần lường trước khi cài).
+
+### K-080 — ✅ (2026-07-11) Review kiến trúc toàn hệ (F1–F7) sống ở `review/2026-07-11-architecture-review.md`
+**Bối cảnh:** review toàn về thiết kế/pattern/tổ chức code (đọc 13 file thật). Kết luận: nền kiến trúc VỮNG (hexagonal ép import-linter, ports Protocol, teardown/observer-isolation, bulkhead, config frozen+registry) — 9 điểm SOUND; KHÔNG tìm thấy bug logic trong phạm vi đọc.
+**Phát hiện (cần sửa/cải tiến, xem review doc chi tiết + cite):**
+- **F1 [Medium-High]:** đường CLI-direct (`main()`) và config (`build_runner`) lắp-ráp pipeline SONG SONG → phân kỳ (motion-gate: CLI thiếu `pixel_diff_threshold`/`min_area_ratio`). Fix gốc: CLI args → PipelineConfig in-memory → build_runner (1 đường). **Ưu tiên 1.**
+- **F2 [Medium]:** `main()` quá dài (SRP) → tách argparser/run_cli_direct/print_summary.
+- **F3 [Medium]:** magic "5.0s" observe-default ở 2 nơi (main + _run_from_config) → gom hằng + helper.
+- **F4 [Low-Med]:** `assert_policy_allowed_for_source` (cấm BLOCK+RTSP) viết xong nhưng CHƯA wire (schema thiếu policy per-source, D-050/K-053) → wire hoặc đánh dấu future-API.
+- **F5 [Low]:** `_CompositeObserver` nên dời `runtime/observers.py` (tái dùng).
+- **F6 [Low]:** `_build_config_observability` trộn build+start+print → tách.
+- **F7 [Low]:** nhiều profile entry → thêm docstring "demo/legacy/web, không phải entry chính".
+**Phạm vi CHƯA phủ (trung thực):** `runtime/ipc/*` (SHM ring/epoch), từng adapter I/O, từng stage — vòng review sau nếu cần.
+**Cách làm đề xuất:** mỗi F = 1 spec nhỏ design→review→code TDD; giữ `vp verify` xanh + `lint-imports` 0-broken; F1 làm đầu.

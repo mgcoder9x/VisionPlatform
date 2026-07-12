@@ -6435,3 +6435,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** mọi lệnh CLI trong README VERIFY từ argparse thật (`main()` trong vision_slice_app.py: --config/--validate/--source/--detector/--device/--motion-gate*/--track*/--line/--out/--crossing-*/--observe*/--metrics-*/--capabilities) + config mẫu tồn tại thật (`configs/example_analytics.toml`, `example_rtsp_gpu.toml`). Không bịa cờ/không bịa file.
 
 **Đã verify:** đọc argparse `main()` thật lấy đúng cờ CLI; `configs/*.toml` tồn tại (đã list); `/healthz` tồn tại (grep #316). Viết lại `vision-platform/README.md`. Không đổi code (623/2 giữ). `vp check` sẽ PASS (#317). · **Chưa verify:** chưa chạy end-to-end mọi lệnh ví dụ (là lệnh minh hoạ user chạy; cờ đã khớp code thật).
+
+### Entry #318 — 2026-07-11 — REVIEW toàn hệ kiến trúc/pattern/tổ chức code → `review/2026-07-11-architecture-review.md` (F1–F7) — Kiro-Opus
+
+**Bối cảnh:** User xin review toàn về thiết kế/pattern/struct/tổ chức/phân tách code — chỉ chỗ cần sửa/cải tiến + nơi xem để đánh giá tổng thể. Đọc CODE THẬT 13 file (composition/config/factory/mechanism/supervisor/ports) trước khi kết luận (không bịa, chỗ SOUND ghi SOUND).
+
+**1. Quyết định AI tự ra:** kết tinh review thành 1 tài liệu `review/2026-07-11-architecture-review.md` (đặt ở `review/` — nơi review đã có sẵn). Cấu trúc: A) điểm SOUND (9 mục) · B) phát hiện F1–F7 (cite file + severity) · C) bảng ưu tiên. Ghi rõ PHẠM VI chưa phủ (ipc/SHM nội bộ, từng adapter/stage) — trung thực.
+
+**2. Chỗ phải đổi so với hiểu biết trước:** phát hiện F1 (thật, đã đối chiếu code): đường CLI-direct (`main()`) và đường config (`build_runner`) lắp-ráp pipeline SONG SONG → phân kỳ năng lực (motion-gate: CLI-direct thiếu `pixel_diff_threshold`/`min_area_ratio` mà factory có). = 2 nguồn sự thật → drift hành vi tiềm ẩn.
+
+**3. Trade-off đã cân nhắc:** severity trung thực — KHÔNG thổi phồng. Không tìm thấy bug logic đúng-sai trong phạm vi đọc; F1–F7 phần lớn là tổ chức/khử-trùng-lặp (F1 Medium-High, còn lại Low-Medium). Nói rõ "phần lớn SOUND" thay vì bịa lỗi để trông bận (đúng "đừng fix cái không tồn tại"). Ghi phạm vi chưa-đọc thay vì kết luận liều về ipc/adapter.
+
+**4. Điều bạn nên biết (K-080):** review findings F1–F7 sống ở `review/2026-07-11-architecture-review.md`. F1 = ưu tiên 1 (hợp nhất CLI→PipelineConfig→build_runner, 1 đường lắp-ráp). Cách làm đề xuất: mỗi F = 1 spec nhỏ design→review→code TDD, giữ vp verify xanh. Review CHƯA phủ ipc/SHM + từng adapter/stage (vòng sau nếu cần).
+
+**Đã verify:** đọc 13 file code thật (cite trong review doc); đối chiếu F1 bằng so params MotionGateStage giữa main() vs `_stage_motion_gate` (thật); tạo review doc. Không đổi code (623/2 giữ). `vp check` sẽ PASS (#318). · **Chưa verify:** nội bộ `runtime/ipc/*` + từng adapter/stage (ghi rõ phạm vi trong review); các đề xuất F1–F7 chưa triển khai (mới là khuyến nghị).
