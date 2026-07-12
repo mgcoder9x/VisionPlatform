@@ -1,8 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T06:50:00+07:00.
-**[🔒 GIT] #334 HOÀN TẤT deep-dive #12 (14/14) — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T07:20:00+07:00.
+**[🔒 GIT] #335 mở deep-dive #13 observability-metrics — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**[🔵 #335 — MỞ deep-dive code-lessons #13 observability-metrics (cau-chuyen + muc-luc)]**
+- Đọc 4 file observability thật (observers/metrics_exposition/metrics_http_server/metric_sample) → tạo `13-observability-metrics/00-cau-chuyen.md` (vòng cung 6 nhịp: PULL-vs-PUSH, lõi-tách-Prometheus, fps-interval, render-chuẩn, serve-an-toàn) + `00-muc-luc.md` (10 mẩu).
+- Deep-dive: **#11 ✅ · #12 ✅ · #13 🔵 nền** (10 mẩu ⬜).
+- **Ghi sổ:** LOG #335 · INDEX canonical #334→#335 (Σ219 giữ) · INDEX code-lessons +#13 · block này.
+- **Bước kế (CHỜ user):** viết mẩu #13 (kernel port/DTO 01/02/05 → runtime observers/emit/iter 03/04/06 → adapters render/serve 07/08/09 → wiring 10); hoặc dừng.
+---
 **[✅ #334 — HOÀN TẤT deep-dive code-lessons #12 analytics (14/14 mẩu)]**
 - Viết 6 mẩu cuối: 04 IouTracker · 05 Track DTO · 06 TrackingStage · 09 LineCrossingStage · 10 CrossingEvent · 14 wiring (cổng Feynman tổng-hợp).
 - Bức tranh #12: domain thuần (association/geometry/motion) → runtime stateful (tracker/stages) → kernel DTO (Track/CrossingEvent) → ghép qua artifacts + executor dừng-sớm (cắt tải motion-gate đầu chuỗi).

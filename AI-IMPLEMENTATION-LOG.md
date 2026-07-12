@@ -6673,3 +6673,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** **#12 analytics HOÀN TẤT 14/14** — deep-dive thứ 2 sau #11. Bức tranh: domain thuần (association/geometry/motion) → runtime stateful (IouTracker/stages) → kernel DTO (Track/CrossingEvent) → ghép qua artifacts + executor. Chờ Feynman. Deep-dive: #11✅ #12✅. Kế: #13 observability-metrics · #14 capability-aware.
 
 **Đã verify:** quote đúng từ `iou_tracker.py`/`tracking_stage.py`/`line_crossing_stage.py`/`kernel/{tracking_protocol,crossing_event}.py` (đọc thật phiên này) + cite path; cập nhật muc-luc + INDEX code-lessons #12→ĐỦ. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#334). · **Chưa verify:** #13+ (chưa mở); cổng Feynman #11/#12 (chờ user học).
+
+### Entry #335 — 2026-07-12 — MỞ deep-dive code-lessons #13 observability-metrics (cau-chuyen + muc-luc) — Kiro-Opus
+
+**Bối cảnh:** tiếp #334 (đóng #12). Mở #13 (đo→render→serve /metrics). Đọc code THẬT: `observers.py`+`metrics_exposition.py`+`metrics_http_server.py`+`metric_sample.py` (+ observability_port/observability đã đọc).
+
+**1. Quyết định AI tự ra:** tạo `13-observability-metrics/00-cau-chuyen.md` (vòng cung 6 nhịp: PULL-vs-PUSH · lõi-không-phụ-thuộc-Prometheus · fps-interval-không-che-sự-cố · render-đúng-chuẩn · serve-an-toàn) + `00-muc-luc.md` (10 mẩu). Ghi rõ #13 dạy phần MỚI sau #08 (không lặp InMemoryMetrics cơ bản).
+
+**2. Chỗ phải đổi:** không.
+
+**3. Trade-off:** #13 tập trung chuỗi measure→render→serve (phần #274–#291) — KHÔNG lặp #08 (structlog/log_context/InMemoryMetrics 3-loại đã dạy). Chỉ nhắc lại iter_metrics (mới) + MetricSample.
+
+**4. Điều bạn nên biết:** deep-dive: #11✅ #12✅ · #13 🔵 nền (10 mẩu ⬜). Điểm dạy #13: port thuần (PULL, lõi tách Prometheus), fps interval, MetricSample có-cấu-trúc (chống lossy parse), render chuẩn 0.0.4, `_serving` chống deadlock (K-071), secure-default localhost.
+
+**Đã verify:** đọc 4 file observability thật (phiên này) + cite; tạo 2 file + cập nhật INDEX code-lessons. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#335). · **Chưa verify:** mẩu 01–10 #13.
