@@ -1,8 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
-## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-12T00:15:00+07:00.
-**[🔒 GIT] #322 design F1 — sẽ commit + push NHẸ (text). Không đổi code (624/2 giữ).**
+## Trạng thái hiện tại (2026-07-12)
+**Cập nhật lúc:** 2026-07-12T00:40:00+07:00.
+**[🔒 GIT] #323 validate design F1 (đóng H5) — sẽ commit + push NHẸ. Không đổi code (624/2 giữ).**
+**[🔵→valid #323 — VALIDATE design F1: đóng hố H5 (default motion-gate KHỚP) — design verify-được hoàn toàn]**
+- Đọc code thật đóng hố `[CẦN KIỂM]` cuối: `MotionGateStage.__init__` default (25/0.005) == `_stage_motion_gate` `get(...,25/0.005)`; CLI-direct không truyền 2 param → dùng default → map qua config cho hành vi Y HỆT. Mọi default builder khớp cờ CLI (model_size 640·iou 0.3·max_age 30·max_frames 20).
+- **Kết luận:** F1 KHÔNG có rủi ro đổi-hành-vi-im-lặng. Design valid hoàn toàn, chỉ còn H1 (device-log chuyển chỗ = chủ đích) cần user OK.
+- **Ghi sổ:** LOG #323 (đóng H5, không thêm ID) · INDEX canonical #322→#323 (Σ219 giữ) · design doc H5→✅ + Rủi ro · block này.
+- **Bước kế (CHỜ user OK design F1):** PHA code TDD 5 bước (extra_sinks → device-log → `_args_to_pipeline_config` → rút gọn main + `_print_summary` → xoá cũ; verify ≥624·5/0). Nếu user chưa muốn refactor → giữ mốc sạch (F1 design sẵn sàng dùng sau).
+---
 **[🔵 #322 — DESIGN F1 (hợp nhất 2 đường lắp-ráp pipeline) — design-first, chờ user VALID → +D-088]**
 - F1 (review ưu tiên 1) = refactor cấu trúc → soạn thiết kế + tự-review đối kháng TRƯỚC, chờ valid rồi code.
 - **Approach (D-088):** CLI-direct sinh `PipelineConfig` in-memory (`_args_to_pipeline_config` thuần) → `build_runner` (1 đường); `build_runner` +param additive `extra_sinks` (chèn `_TrackSummarySink`). Xoá ~90 dòng hand-assembly.

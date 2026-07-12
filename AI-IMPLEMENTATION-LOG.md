@@ -6505,3 +6505,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** tự-review đối kháng đã nêu 6 hố PHẢI xử trước code: H1 device-log-chuyển-chỗ · H2 giữ exit-2 CapabilityError (main bắt quanh build_runner) · H3 `--frames`(source.max_frames) vs `--max-frames`(run) · H4 chạy `_validate` trước map · H5 [cần verify] default MotionGateStage vs `_stage_motion_gate` có LỆCH không (chống đổi hành vi im lặng) · H6 giữ test cũ xanh + thêm test map thuần. CHƯA code — chờ user valid.
 
 **Đã verify:** đọc `main()` + `build_runner` thật để design bám code; tạo design doc + self-review 6 hố. Không đổi code sản phẩm (624/2 giữ). `vp check` sẽ PASS (#322). · **Chưa verify:** H5 (default motion-gate — sẽ đọc `MotionGateStage.__init__` khi code); runtime của refactor (PHA code sau valid).
+
+### Entry #323 — 2026-07-11 — VALIDATE design F1: đóng hố H5 (default motion-gate KHỚP) — design giờ verify-được hoàn toàn — Kiro-Opus
+
+**Bối cảnh:** design F1 (#322) còn 1 hố `[CẦN KIỂM]` = H5 (default `MotionGateStage` vs `_stage_motion_gate` có lệch → unify đổi hành vi im lặng?). Đúng "chính xác kiểm-chứng-được rồi mới triển khai" → ĐỌC code thật đóng hố TRƯỚC khi code.
+
+**1. Quyết định AI tự ra:** verify H5 bằng đọc `MotionGateStage.__init__` + `_stage_motion_gate` + call-site CLI hiện tại, thay vì đoán. Cập nhật design doc H5→✅ + mục Rủi ro.
+
+**2. Chỗ phải đổi so với hiểu biết trước:** không đổi — H5 xác nhận GIẢ THUYẾT "defaults khớp" ĐÚNG (không phải phát hiện lệch). 
+
+**3. Trade-off đã cân nhắc:** không có (thuần verify).
+
+**4. Điều bạn nên biết (H5 ĐÓNG — bằng chứng):** `MotionGateStage.__init__` default `pixel_diff_threshold=25, min_area_ratio=0.005`; `_stage_motion_gate` dùng `params.get("pixel_diff_threshold",25)`/`get("min_area_ratio",0.005)`; CLI-direct hiện KHÔNG truyền 2 param → dùng __init__ default. → map CLI→config (bỏ 2 param) cho hành vi Y HỆT. Đối chiếu thêm mọi default builder khớp cờ CLI: fake model_size 640=640 · track iou 0.3=0.3/max_age 30=30 · fake/noise max_frames 20=20. ⇒ F1 KHÔNG có rủi ro đổi-hành-vi-im-lặng. Design F1 giờ valid hoàn toàn (verify-được), chỉ còn H1 (device-log chuyển chỗ = chủ đích, cần user OK).
+
+**Đã verify:** đọc `motion_gate_stage.py::__init__` (default 25/0.005) + `pipeline_factory._stage_motion_gate` (get default 25/0.005) + CLI call-site (không truyền) — KHỚP; đối chiếu default track/fake/source. Không đổi code (624/2 giữ). `vp check` sẽ PASS (#323). · **Chưa verify:** runtime refactor F1 (PHA code — chờ user OK design + H1).

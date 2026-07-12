@@ -64,9 +64,11 @@ _print_summary(stats, track_summary, args)   # tách hàm (F2)
   KHÔNG tự truyền pcfg.max_frames vào run (nó không gọi run — chỉ main gọi). ✅ an toàn.
 - **H4 — validate cờ:** `_validate(args, parser)` (rtsp cần --rtsp, pt cần --weights, --line cần --track...) phải chạy
   TRƯỚC khi map. **Xử:** giữ `_validate` nguyên, gọi trước `_args_to_pipeline_config`.
-- **H5 — motion-gate param gap:** unify khiến CLI motion-gate đi qua `_stage_motion_gate` (defaults pixel_diff=25,
-  min_area=0.005) — GIỐNG default MotionGateStage hiện main dùng? **PHẢI KIỂM:** đọc `MotionGateStage.__init__`
-  default có == `_stage_motion_gate` default không (nếu lệch → đổi hành vi im lặng). [cần verify khi code].
+- **H5 — motion-gate param gap → ✅ ĐÃ KIỂM (#323): defaults KHỚP, AN TOÀN.** `MotionGateStage.__init__`
+  default `pixel_diff_threshold=25, min_area_ratio=0.005`; `_stage_motion_gate` dùng `get(...,25)`/`get(...,0.005)`
+  = ĐÚNG default đó; CLI-direct hiện KHÔNG truyền 2 param này (dùng __init__ default). → map qua config (bỏ 2
+  param) cho ra hành vi Y HỆT. Đối chiếu thêm: fake model_size 640=640 · track iou 0.3=0.3/max_age 30=30 · fake
+  source max_frames 20=20 — MỌI default khớp → unify KHÔNG đổi hành vi im lặng.
 - **H6 — test backward-compat:** phải giữ `test_vision_slice*.py` xanh (output summary + exit codes). Thêm test
   `_args_to_pipeline_config` (thuần, map đúng) + test CLI-direct qua build_runner cho ra runner tương đương.
 
@@ -79,5 +81,6 @@ _print_summary(stats, track_summary, args)   # tách hàm (F2)
 
 ## 6. Rủi ro & quyết định
 - **Rủi ro chính:** đổi hành vi im lặng (H5 default motion-gate, H1 device log). Giảm thiểu: kiểm default TRƯỚC code + giữ test cũ xanh.
+  → **H5 ĐÃ KIỂM (#323): defaults KHỚP hết → rủi ro-đổi-hành-vi-im-lặng ở motion-gate = KHÔNG CÓ.** Còn H1 (device-log-chuyển-chỗ) là chủ đích.
 - **Nếu H5 lộ default lệch:** căn chỉnh để `_args_to_pipeline_config` truyền default GIỐNG hành vi cũ (không đổi mặc định người dùng đang thấy).
 - **Đề xuất:** LÀM (giá trị: 1 nguồn lắp-ráp, đóng phân kỳ, giảm ~90 dòng). Nhưng CHỜ user valid design này (nhất là chấp nhận H1 device-log-chuyển-chỗ + Non-goal không thêm cờ motion-gate).
