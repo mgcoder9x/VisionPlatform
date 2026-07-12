@@ -1,8 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T03:10:00+07:00.
-**[🔒 GIT] #327 deep-dive #11 mẩu 01–03 — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T03:40:00+07:00.
+**[🔒 GIT] #328 deep-dive #11 mẩu 04–07 — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**[🔵 #328 — Deep-dive code-lessons #11: viết mẩu 04–07 (tầng loader `config_loader.py`)]**
+- Viết cụm loader: 04 tomllib+ConfigError · 05 validate-cấu-trúc+vị-trí · 06 loader-không-biết-registry (ranh giới tầng) · 07 `_parse_observability` chặn bool-lọt-int. Quote nguyên văn + cite path.
+- #11 tiến độ **7/15 mẩu** (01–07 ✅: DTO + loader). Còn 08–13 (registry/factory) + 14–15 (F1).
+- **Ghi sổ:** LOG #328 · INDEX canonical #327→#328 (Σ219 giữ) · muc-luc 04–07→✅ · block này.
+- **Bước kế (CHỜ user):** mẩu 08–13 (pipeline_factory: registry/lazy-import/allowed_params/validate_config vs build_runner) → 14–15 (F1); rồi #12 analytics. Tạo dần.
+---
 **[🔵 #327 — Deep-dive code-lessons #11: viết mẩu 01–03 (tầng DTO `config.py`)]**
 - Theo thứ tự nền→sản phẩm→vận hành: viết cụm mẩu đầu #11 = tầng DTO. 3 file: `01-dataclass-frozen.md` · `02-freeze-params-tuple.md` · `03-cay-dto.md` (template 14 mục, quote nguyên văn `kernel/config.py` + cite path).
 - #11 tiến độ **3/15 mẩu** (01–03 ✅). Còn 04–15 (loader/registry/factory/F1) ⬜.

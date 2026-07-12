@@ -8,10 +8,10 @@
 | 01 | `@dataclass(frozen=True)` cho config — vì sao BẤT BIẾN (chống sửa lén cấu hình toàn cục) | `kernel/config.py` (SourceConfig) | ✅ `01-dataclass-frozen.md` |
 | 02 | `MappingProxyType` + `tuple` — đóng băng `params`/list sau parse (`_freeze_params`, `__post_init__`) | `kernel/config.py` | ✅ `02-freeze-params-tuple.md` |
 | 03 | Cây DTO: `AppConfig` → `PipelineConfig` → Source/Stage/Sink/Detector/Observability | `kernel/config.py` | ✅ `03-cay-dto.md` |
-| 04 | `tomllib.load` (stdlib 3.11) + mở `'rb'` — đọc TOML KHÔNG thêm dependency | `application/config_loader.py::load_app_config` | ⬜ |
-| 05 | `_require`/`_require_str`/`_typed` — validate CẤU TRÚC + `ConfigError` fail-fast kèm vị trí | `application/config_loader.py` | ⬜ |
-| 06 | Vì sao loader (application) KHÔNG kiểm `type ∈ registry` — giữ ranh giới không phụ thuộc adapter | `config_loader.py` vs `pipeline_factory.py` | ⬜ |
-| 07 | `_parse_observability` — validate KIỂU tường minh (chặn `bool` lọt `int`: `isinstance(True,int)`) | `config_loader.py::_parse_observability` | ⬜ |
+| 04 | `tomllib.load` (stdlib 3.11) + mở `'rb'` — đọc TOML KHÔNG thêm dependency | `application/config_loader.py::load_app_config` | ✅ `04-tomllib-load.md` |
+| 05 | `_require`/`_require_str`/`_typed` — validate CẤU TRÚC + `ConfigError` fail-fast kèm vị trí | `application/config_loader.py` | ✅ `05-validate-cau-truc.md` |
+| 06 | Vì sao loader (application) KHÔNG kiểm `type ∈ registry` — giữ ranh giới không phụ thuộc adapter | `config_loader.py` vs `pipeline_factory.py` | ✅ `06-loader-khong-biet-registry.md` |
+| 07 | `_parse_observability` — validate KIỂU tường minh (chặn `bool` lọt `int`: `isinstance(True,int)`) | `config_loader.py::_parse_observability` | ✅ `07-parse-observability-bool-int.md` |
 | 08 | REGISTRY `DEFAULT_REGISTRY` — bảng `type`(chuỗi)→builder; thêm loại = 1 entry (Open/Closed) | `pipeline_factory.py` | ⬜ |
 | 09 | Builder + lazy-import (vì sao import trong hàm, không đầu file — né kéo torch/cv2) | `pipeline_factory.py::_det_pt/_src_rtsp/...` | ⬜ |
 | 10 | `allowed_params` + `_check_params` — typo-guard (K-046), chặn key lạ nuốt im lặng | `pipeline_factory.py` | ⬜ |

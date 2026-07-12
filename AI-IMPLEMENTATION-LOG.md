@@ -6575,3 +6575,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** #11 tiến độ 3/15 mẩu (01–03 ✅ tầng DTO). Còn 04–15 (loader/registry/factory/F1) ⬜. Mọi mẩu bám code thật, quote + cite, không dán vào chat (§1.8).
 
 **Đã verify:** đọc `kernel/config.py` (thật #322/#324) → quote đúng vào 3 mẩu; cập nhật muc-luc 01–03→✅. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#327). · **Chưa verify:** mẩu 04–15 (chưa viết); nội dung mẩu là giải-thích (không phải khẳng-định-hành-vi cần chạy; hành vi FrozenInstanceError là đặc tính dataclass chuẩn).
+
+### Entry #328 — 2026-07-12 — Deep-dive code-lessons #11: viết mẩu 04–07 (tầng loader `config_loader.py`) — Kiro-Opus
+
+**Bối cảnh:** tiếp #327 (mẩu 01–03 DTO). Viết cụm loader (application) — `config_loader.py` (đọc thật phiên này).
+
+**1. Quyết định AI tự ra:** viết 4 mẩu: 04 `tomllib.load`+ConfigError · 05 `_require`/`_typed` validate-cấu-trúc+vị-trí · 06 vì-sao-loader-không-biết-registry (ranh giới tầng, minh hoạ contract import-linter #4) · 07 `_parse_observability` chặn bool-lọt-int. Quote nguyên văn + cite path.
+
+**2. Chỗ phải đổi:** không.
+
+**3. Trade-off:** mẩu 06 là "quyết định kiến trúc" (không phải 1 dòng code) — vẫn đưa vào deep-dive vì hiểu "phân tách trách nhiệm" quan trọng ngang hiểu code (user nhấn "tổ chức/phân tách code").
+
+**4. Điều bạn nên biết:** #11 tiến độ 7/15 (01–07 ✅: DTO + loader). Còn 08–13 (registry/factory) + 14–15 (F1). Mẩu 07 dạy bẫy Python `bool` là con `int` — thực dụng, gắn code thật.
+
+**Đã verify:** quote đúng từ `config_loader.py` (đọc thật #322/#324) + cite path; cập nhật muc-luc 04–07→✅. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#328). · **Chưa verify:** mẩu 08–15.
