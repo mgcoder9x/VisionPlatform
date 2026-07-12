@@ -1,8 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T20:30:00+07:00.
-**[🔒 GIT] #315 ghi-sổ thuần (verify triệt để torch) — sẽ commit + push NHẸ (vài KB text, K-078 cho phép). Chưa đổi code (623/2 giữ).**
+**Cập nhật lúc:** 2026-07-11T21:15:00+07:00.
+**[🔒 GIT] #316 tạo tài liệu — sẽ commit + push NHẸ (text, K-078 cho phép). Không đổi code sản phẩm (623/2 giữ).**
+**[✅ #316 — TẠO `docs/ARCHITECTURE.md`: tài liệu đánh giá kiến trúc cho người ngoài (bám code thật, chống-drift-by-design) — +D-087]**
+- User hỏi "đã có tài liệu tổng hợp cho người ngoài đánh giá thiết kế/pattern/code/hiệu-năng chưa". Kiểm triệt để → CHƯA có: `Design/`=giáo-trình khái niệm; `vision-platform/README.md`=THẬT nhưng CŨ (kẹt ~#09/"290 test", thiếu #256–#315); `review/`=rời từng issue; journal=vi mô.
+- **Làm:** đọc CODE THẬT 6 layer (pyproject 5 contract + pipeline_runner + 6 ports + capabilities/config/observability_port) → viết `docs/ARCHITECTURE.md` 11 mục (cách-kiểm-chứng → context → 6 package+5 contract → ports → data-flow → patterns POSA Forces/giá/khi-KHÔNG-dùng → hiệu-năng đã-đo-vs-chưa → config TOML → observability/capability → giới-hạn-trung-thực → hướng-dẫn-review+probe).
+- **Chống-drift-by-design:** KHÔNG hardcode số dễ đổi (test/commit) → trỏ `vp verify`/`vp test`/`lint-imports` làm nguồn sống. Lý do: README cũ drift vì hardcode "290" → fix gốc không lặp. VERIFY symbol tồn tại trước khi viết (grep resolve_device/render_prometheus/healthz/MetricsHttpExporter + 5 contract verbatim).
+- **Ghi sổ:** LOG #316 · +D-087 · INDEX #316/Σ217/D87 + dòng D-087 · block này. Không đổi code.
+- **Nợ nhỏ (ghi rõ):** chưa đồng bộ `vision-platform/README.md` (số/patterns cũ) sang trỏ ARCHITECTURE.md — có thể làm lượt sau nếu user muốn.
+- **Bước kế (CHỜ user):** (a) đồng bộ README dự án; (b) verify nhánh CUDA (cần cài torch = nặng-mạng, K-078/K-079); (c) điểm dừng sạch.
+---
 **[✅ #315 — VERIFY TRIỆT ĐỂ: torch KHÔNG có ở BẤT KỲ interpreter/site nào máy `toann` — bác bỏ lời "đã cài hết" — +K-079]**
 - User khẳng định "đã cài hết rồi, kiểm tra đi". Không tin mù (§5) → dò TRIỆT ĐỂ read-only (thăm dò 1-lần, no-heavy-network):
   - `where python`/`py -0p` → CHỈ scoop python313 (không conda/CONDA_PREFIX, không py-launcher khác).

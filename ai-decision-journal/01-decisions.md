@@ -982,3 +982,13 @@ Links: D-082 (config-observability CLI), T-029 (cờ-CLI-vs-TOML, TOML=follow-on
 Nội dung: Section `[observability]` TOP-LEVEL trong TOML → DTO `ObservabilityConfig` @kernel (frozen) + parse @loader + `_merge_observability` (thuần) hợp nhất TOML↔CLI (precedence CLI-explicit>TOML>default; observe OR-semantics; sentinel None/0.0). TÁI DÙNG NGUYÊN đường #299 (observer/exporter/bulkhead). Additive, default TẮT (không section = hành vi #299). No-GPU verify.
 Vì sao (bản chất): deploy GitOps ~100 cam cần TOÀN BỘ cấu hình 1 process/camera trong 1 file version-controlled (kể cả /metrics port) → không rải cờ ngoài. Top-level (không per-pipeline) vì observability = fleet-level (tránh schema-bloat T-029). Chỉ thêm NGUỒN tham số (TOML) + merge, KHÔNG đường-observer-thứ-2.
 Hạn chế trung thực (design ghi): `observe` OR → không tắt-qua-CLI khi TOML bật (không `--no-observe`); sentinel 0.0/0 → không đè-tường-minh-0. Cả hai Non-Goal v1. Đổi argparse `--metrics-host default None` + dời smart-default sau-merge (cần cho precedence đúng).
+
+### D-087 — 2026-07-11 — Tạo `docs/ARCHITECTURE.md` (tài liệu đánh giá kiến trúc cho người ngoài, bám code thật, chống-drift-by-design)
+Status: ✅ (tài liệu — không đụng code sản phẩm)
+Scope: `docs/ARCHITECTURE.md` (mới). Đọc-để-viết: `pyproject.toml`, `runtime/pipeline_runner.py`, `kernel/ports/*`, `kernel/capabilities.py`, `kernel/config.py`, `kernel/observability_port.py`.
+Nguồn: LOG Entry #316
+Links: D-086/D-082 (observability), D-073 (capability-aware), K-079 (torch vắng), K-035 (flaky), K-072 (metrics security)
+Nội dung: 1 file reviewer-facing 11 mục (cách-kiểm-chứng → context → 6 package + 5 contract import-linter → 6 ports → data-flow engine → patterns POSA Forces/giá/khi-KHÔNG-dùng → hiệu-năng đã-đo-vs-chưa → config TOML frozen → observability đo→render→serve `/metrics` + capability → giới-hạn-trung-thực → hướng-dẫn-review + câu-hỏi-probe).
+Vì sao (bản chất): chưa có tài liệu tổng hợp cập nhật cho người ngoài (Design/=giáo-trình khái niệm; README dự án CŨ kẹt mốc ~#09/"290 test"; review/=rời từng issue; journal=vi mô). Reviewer cần 1 bản tường thuật hiện-trạng + cách tự-kiểm.
+Chống-drift (quyết định BẢN CHẤT): doc KHÔNG hardcode số dễ đổi (test count/commit) — trỏ `vp verify`/`vp test`/`lint-imports` làm nguồn sự thật SỐNG. Lý do: README cũ drift vì hardcode "290" → không lặp lỗi = fix gốc không fix ngọn. Fact cấu trúc ổn định (6 package, 5 contract) được import-linter ép sẵn nên dẫn an toàn. Mọi symbol cụ thể VERIFY tồn tại trước khi viết (grep resolve_device/render_prometheus/healthz/MetricsHttpExporter + 5 contract verbatim).
+Nợ nhỏ: chưa đồng bộ `vision-platform/README.md` (số/patterns cũ) sang trỏ ARCHITECTURE.md — ghi rõ trong doc §11 + LOG #316.

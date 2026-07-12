@@ -6407,3 +6407,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết (K-079):** trên máy `toann`, GPU phần cứng CÓ (nvidia-smi OK) nhưng torch VẮNG MẶT toàn hệ (venv + base + user-site + không conda). Muốn verify nhánh CUDA (D-073) BẮT BUỘC cài torch = op nặng-mạng → cần user bật đèn xanh rõ. Lệnh đúng khi có phép: `set VP_EXTRAS=dev,onnx,cv2,web,pt` (env.local.cmd) rồi `vp setup`, LƯU Ý K-066 (Windows `pip install .[pt]` dễ kéo torch CPU-only → cần index CUDA wheel `+cu124`). **[chưa kiểm]** wheel torch có hỗ trợ Python 3.13.12 hay không (không verify được offline — pytorch.org wheel matrix cần mạng); đây là RỦI RO cần lường trước khi cài.
 
 **Đã verify:** torch=False ở venv + base scoop python + user-site rỗng + filesystem scan rỗng (đọc/chạy thật, đọc output); GPU-HW có (nvidia-smi). Không đổi code (623/2 giữ); `vp check` sẽ PASS (#315). · **Chưa verify:** nhánh CUDA D-073 (chặn bởi torch-vắng → cài = nặng-mạng, chờ user); torch có wheel cho Python 3.13.12 không.
+
+### Entry #316 — 2026-07-11 — TẠO tài liệu đánh giá kiến trúc cho người ngoài: `docs/ARCHITECTURE.md` (bám code thật, chống-drift-by-design) — Kiro-Opus
+
+**Bối cảnh:** User hỏi "đã có tài liệu nào nói rõ mọi thứ đã làm để người ngoài đánh giá thiết kế/pattern/tổ chức code/hiệu năng chưa". Kiểm triệt để: `Design/`=giáo trình khái niệm (không phải hiện trạng); `vision-platform/README.md`=tổng quan THẬT nhưng CŨ (kẹt mốc ~#09, "290 test", thiếu #256–#315); `review/`=review rời từng issue; journal/LOG=xuất xứ nhưng quá vi mô. → KHÔNG có tài liệu tổng hợp cập nhật cho reviewer.
+
+**1. Quyết định AI tự ra (D-087):** tạo `docs/ARCHITECTURE.md` — 1 file reviewer-facing, BÁM CODE THẬT (đọc `pyproject.toml` 5 contract + `pipeline_runner` + 6 ports + `capabilities`/`config`/`observability_port` trước khi viết). Chọn 1-file (đọc liền mạch) thay vì thư mục chia mục. Nội dung 11 mục: cách-kiểm-chứng → context → 6 layer + 5 contract → ports → data-flow → patterns(Forces/giá/khi-KHÔNG-dùng) → hiệu-năng(đã-đo vs chưa) → config TOML → observability/capability → giới-hạn-trung-thực → hướng-dẫn-review.
+
+**2. Chỗ phải đổi so với hiểu biết trước:** README dự án bị xác nhận CŨ (lệch ~50 entry). Doc mới KHÔNG thay README; bổ sung §11 trỏ đường đọc. (Chưa sửa README lần này — tránh phình phạm vi; ghi nợ nhỏ: đồng bộ README số/patterns sang trỏ ARCHITECTURE.md.)
+
+**3. Trade-off đã cân nhắc:** (a) 1-file vs thư mục → chọn 1-file (reviewer đọc 1 mạch; chia mục để sau nếu phình). (b) **Số liệu trong doc:** đưa số THẬT (đẹp) vs không-hardcode (chống drift) → CHỌN không-hardcode, trỏ `vp verify`/`lint-imports` làm nguồn sự thật sống. Lý do BẢN CHẤT: README cũ drift CHÍNH VÌ hardcode "290 test" → lặp lại = fix ngọn. Fact cấu trúc ổn định (6 package, 5 contract) thì đã được import-linter ép sẵn nên dẫn được an toàn.
+
+**4. Điều bạn nên biết:** Doc tự-mô-tả là ảnh-chụp-thời-điểm (#316); nguồn sự thật sống = code + journal + `vp verify`. Mọi claim cụ thể đã VERIFY tồn tại trước khi viết (grep: `resolve_device`, `render_prometheus`, `/healthz`, `MetricsHttpExporter`, 5 contract verbatim từ pyproject). Doc KHÔNG thêm nguồn drift mới (không số dễ đổi) → không cần thêm check vào drift_check.
+
+**Đã verify:** đọc code thật 6 layer (ports/engine/config/capabilities/contracts) + grep xác minh 4 symbol cụ thể tồn tại; tạo `docs/ARCHITECTURE.md`. Không đổi code sản phẩm (623/2 giữ). `vp check` sẽ PASS (#316). · **Chưa verify:** chưa đồng bộ README dự án (nợ nhỏ, ghi rõ trong doc §11 + entry này).
