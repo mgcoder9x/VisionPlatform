@@ -1,13 +1,13 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T08:55:00+07:00.
-**[🔒 GIT] #338 mở deep-dive #14 capability-aware — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
-**[🔵 #338 — MỞ deep-dive code-lessons #14 capability-aware (cau-chuyen + muc-luc)]**
-- Đọc `capability_probe.py` + `conftest.py` thật → tạo `14-capability-aware/00-cau-chuyen.md` (vòng cung 6 nhịp: nỗi-đau-đổi-máy → tách DÒ/QUYẾT-ĐỊNH/DTO → fail-fast) + `00-muc-luc.md` (8 mẩu).
-- Deep-dive: **#11 ✅ · #12 ✅ · #13 ✅ · #14 🔵 nền** (8 mẩu ⬜). Sau #14 → chương trình lấp khoảng-trống (sau #10) TRỌN.
-- **Ghi sổ:** LOG #338 · INDEX canonical #337→#338 (Σ219 giữ) · INDEX code-lessons +#14 · block này.
-- **Bước kế (CHỜ user):** viết mẩu #14 (kernel 01/02/03 → probe 04/05 → gate/cli/wiring 06/07/08) → HOÀN TẤT chương trình.
+**Cập nhật lúc:** 2026-07-12T10:30:00+07:00.
+**[🔒 GIT] #339 hoàn tất #14 — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**[✅ #339 — HOÀN TẤT deep-dive code-lessons #14 capability-aware (8/8 mẩu) — KHÉP chương trình lấp khoảng-trống sau #10]**
+- Viết mẩu 08 cuối `08-wiring-det-pt-exit2.md` (GHÉP toàn chuỗi: `_det_pt` probe→resolve→log-device-1-nơi H1/#324 + `main` bắt `CapabilityError`→stderr gọn+exit 2 H2) + cổng Feynman tổng-hợp #14 (5 câu tình huống). Đánh ✅ mẩu 01–08 muc-luc + `#14 🔵→✅ ĐỦ 8/8` INDEX code-lessons.
+- **Deep-dive TRỌN:** #11 config ✅ (15/15) · #12 analytics ✅ (14/14) · #13 observability ✅ (10/10) · #14 capability ✅ (8/8). Chương trình dạy-code sâu tính-năng-sau-#10 ĐỦ. Tất cả chờ Feynman (người học tự giải thích lại).
+- **Ghi sổ:** LOG #339 · INDEX canonical #338→#339 (Σ219 giữ, không +D/C/T/K) · muc-luc 01–08→✅ · code-lessons INDEX #14→ĐỦ · block này.
+- **Bước kế (CHỜ user — điểm dừng SẠCH):** chương trình deep-dive trọn. Còn (a) cổng Feynman #11–#14 (user tự giải thích để chốt ✅ trục 2); (b) E.2 (scope torch.load, nhánh GPU) · F3-F7/D.2/D.4 (Low dọn dần); (c) verify nhánh CUDA (chờ đèn xanh mạng, K-078). Hoặc tổng kết.
 ---
 **[✅ #337 — HOÀN TẤT deep-dive code-lessons #13 observability-metrics (10/10 mẩu)]**
 - Viết 6 mẩu cuối: 05 MetricSample · 06 iter_metrics · 07 render_prometheus · 08 exporter · 09 `_serving` deadlock · 10 wiring (cổng Feynman).

@@ -6729,3 +6729,11 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** deep-dive: #11✅ #12✅ #13✅ · #14 🔵 nền (8 mẩu ⬜). Sau #14 → chương trình lấp khoảng-trống (sau #10) TRỌN. Điểm dạy #14: capability = DTO hạng nhất, probe không-raise, resolve thuần fail-fast, gate GPU test CI-xanh-mọi-máy.
 
 **Đã verify:** đọc 2 file thật (probe/conftest) + cite; tạo 2 file + cập nhật INDEX code-lessons. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#338). · **Chưa verify:** mẩu 01–08 #14.
+
+### Entry #339 — 2026-07-12 — HOÀN TẤT deep-dive code-lessons #14 capability-aware (8/8 mẩu) + KHÉP chương trình lấp khoảng-trống (sau #10) — Kiro-Opus
+**Bối cảnh:** tiếp #338 (mở nền #14). Viết mẩu 01–08 (01–07 landed qua compaction, mẩu này bổ sung 08 cuối). Đọc code THẬT `pipeline_factory.py::_det_pt` + `vision_slice_app.py::main` (khối CapabilityError) để quote nguyên văn.
+**1. Quyết định AI tự ra:** tạo `14-capability-aware/08-wiring-det-pt-exit2.md` (mẩu cuối) — GHÉP toàn chuỗi: `_det_pt` (probe→resolve→log device 1-nơi H1/#324) + `main` bắt `CapabilityError`→stderr gọn+`exporter.stop()`+exit 2 (H2). Kèm CỔNG FEYNMAN tổng-hợp #14 (5 câu tình huống). Đánh ✅ mẩu 01–08 trong `00-muc-luc.md` + `#14 🔵→✅ ĐỦ 8/8` trong `code-lessons/00-INDEX.md`.
+**2. Chỗ phải đổi:** không (thuần tài liệu).
+**3. Trade-off:** mẩu 08 gộp 2 điểm-nối (`_det_pt` + `main`) trong 1 mẩu vì chúng là 2 nửa của CÙNG một luồng (áp năng-lực → dịch lỗi) — dạy rời sẽ đứt mạch. Đánh đổi: mẩu 08 dài hơn mẩu thường, chấp nhận vì là mẩu KHÉP chủ đề (cần cổng Feynman tổng-hợp).
+**4. Điều bạn nên biết:** deep-dive lấp khoảng-trống (sau #10) TRỌN VẸN: **#11 config-declarative ✅ (15/15) · #12 analytics ✅ (14/14) · #13 observability-metrics ✅ (10/10) · #14 capability-aware ✅ (8/8)**. Tất cả CHỜ Feynman (người học tự giải thích lại). Chương trình dạy-code sâu tính năng-sau-#10 đã đủ. Điểm dừng sạch.
+**Đã verify:** đọc 2 symbol thật (`_det_pt` qua read_code + khối `main` qua read_file dòng 385–425) + quote nguyên văn + cite; tạo mẩu 08 + cập nhật muc-luc + INDEX code-lessons. Không đổi code sản phẩm (628/2 giữ). · **Chưa verify:** cổng Feynman #11–#14 (chờ người học); `vp check` sẽ chạy ngay dưới đây.
