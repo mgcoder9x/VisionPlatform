@@ -1,8 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T12:40:00+07:00.
-**[🔒 GIT] #341 HIỆN THỰC C8 doc↔code — sẽ commit + push NHẸ. Đụng checker + journal + README (test 628/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T13:20:00+07:00.
+**[🔒 GIT] #342 sửa GỐC staleness ARCHITECTURE.md — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**[✅ #342 — Sửa GỐC staleness `docs/ARCHITECTURE.md` (§0/§10 lệch thực tế drift-check)]**
+- User hỏi "ARCHITECTURE.md đủ để đánh giá?" → đọc trọn → phát hiện doc-drift: §0 bảng + §10 ghi "C1–C7 + self-test [3/3]" + mốc #325, lệch thực tế C8/11-case/#341. (C8 KHÔNG tự bắt vì chỉ quét journal — đúng giới hạn T-031.)
+- **Fix GỐC (không ngọn):** bỏ liệt-kê-số-đếm-được trong prose (sẽ drift lại khi C9), thay bằng mô tả NĂNG LỰC (bản-ghi↔bản-ghi + bản-ghi↔CODE + self-test + RULES sync) + trỏ "danh sách/số case sống = `vp check`" — đúng nguyên tắc §0. Header: kiến trúc §1–9 ảnh-chụp #325, §10 nâng gồm C8 (#341).
+- **Ghi sổ:** LOG #342 (doc hygiene, KHÔNG +D/C/T/K) · INDEX canonical #341→#342 (Σ221 giữ) · block này.
+- **Bước kế (CHỜ user — mốc dừng SẠCH):** ARCHITECTURE.md giờ 1-cửa-review chính xác + không-kẹt-số-cứng. Hướng giá-trị-cao còn lại: (a) cổng Feynman #11–#14 (biến tài-liệu→hiểu-thật, mục tiêu tối thượng); (b) F3–F7/E.2/D.2 (Low dọn dần); (c) nhánh GPU (chờ mạng K-078). Hoặc tổng kết.
+---
 **[✅ #341 — HIỆN THỰC C8 "living citation" (D-089 ✅ code, +T-031): drift_check giờ kiểm BẢN-GHI↔CODE]**
 - Code C8 trong `tests/test_memory_consistency.py`: helper `_verify_symbol_exists` (đọc file + regex def/class/assign) + tham số `symbol_exists` tiêm-được (self_test giả → giữ in-memory) + gom `Verify-Symbol: path::symbol` + block C8-DOC-CODE + 3 self-test case (8→11). README +trường Verify-Symbol + quy tắc đảo→gỡ (H4). 4 ví-dụ-sống D-073/D-088 (grep verify symbol trước khi gắn).
 - **NEGATIVE-test THẬT:** đổi 1 Verify-Symbol→symbol-ma → C8 FAIL + drift EXIT 1 → hoàn tác. Chứng minh resolver thật bắt được doc↔code lệch.

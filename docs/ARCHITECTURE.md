@@ -6,9 +6,9 @@
 > **Phạm vi:** mô tả hệ **đang có thật** trong `vision-platform/src/vision_platform/` (đọc code trực tiếp,
 > không phải blueprint trong `Design/`). `Design/` là giáo trình *khái niệm*; file này là *hiện trạng*.
 >
-> **Cập nhật:** 2026-07-12 · gắn với `AI-IMPLEMENTATION-LOG.md` Entry #325 (đã phản ánh F1 #324 — hợp nhất
-> đường lắp-ráp). Tài liệu là ảnh-chụp-thời-điểm; **nguồn sự thật SỐNG** = code + `ai-decision-journal/`
-> (quyết định) + kết quả `vp verify`.
+> **Cập nhật:** 2026-07-12 · mô tả kiến trúc §1–9 là ảnh-chụp gắn `AI-IMPLEMENTATION-LOG.md` Entry #325 (đã phản
+> ánh F1 #324 — hợp nhất đường lắp-ráp); §10 anti-drift đã nâng gồm **C8 doc↔code** (#341). **Nguồn sự thật SỐNG**
+> = code + `ai-decision-journal/` (quyết định) + kết quả `vp verify`/`vp check` — luôn tin lệnh hơn prose.
 >
 > 👉 **Người review:** đọc §1–11 để HIỂU hệ, rồi §12 (Đánh giá & vấn đề đã biết) + `review/2026-07-11-architecture-review.md`
 > để thấy KẾT LUẬN đánh giá + danh sách sửa/cải tiến. Hai file này là bộ trao-tay đầy đủ.
@@ -26,7 +26,7 @@ cũ từng kẹt "290 test"). Thay vào đó, mọi khẳng định kiểm-chứ
 | Toàn bộ test xanh | `cmd /c scripts\vp.cmd verify` | pytest + import-linter + drift-check |
 | Số test/skip THẬT hiện tại | `cmd /c scripts\vp.cmd test` | Dòng cuối `pytest` = con số chính xác lúc chạy |
 | Năng lực máy (GPU/torch/cv2) | `python -m vision_platform.profiles.vision_slice_app --capabilities` | In JSON `{has_torch,has_cuda,gpu_name,...}` |
-| Bản ghi quyết định nhất quán | `cmd /c scripts\vp.cmd check` | drift-check C1–C7 + self-test |
+| Bản ghi quyết định nhất quán | `cmd /c scripts\vp.cmd check` | drift-check nhất quán bản-ghi + doc↔code + self-test (danh sách/số case sống: xem output) |
 
 → Khi review, đừng tin số trong prose bất kỳ đâu — **chạy lệnh trên**. Đó là thiết kế chống-drift chủ đích.
 
@@ -252,9 +252,11 @@ không-firewall thì chưa có auth/rate-limit (ghi rõ ở journal K-072 — ch
 - **Ranh giới:** import-linter 5 contract (§2.1) — chạy `lint-imports`.
 - **Xuất xứ quyết định:** `ai-decision-journal/` (4 file: Quyết-định D / Đổi-yêu-cầu C / Trade-off T / Cần-biết K)
   + `AI-IMPLEMENTATION-LOG.md` (nhật ký thời gian). Mỗi khẳng định "vì sao" truy được về ID D/C/T/K.
-- **Chống-drift bằng máy:** `tests/drift_check.py` (chạy qua `vp check`) — C1–C7 kiểm bản ghi khớp thực tế +
-  self-test [3/3] (guard-the-guard) + RULES_VERSION sync 5 file. File ARCHITECTURE.md này **không hardcode số
-  dễ đổi** để không tạo nguồn drift mới (§0).
+- **Chống-drift bằng máy:** `tests/drift_check.py` (chạy qua `vp check`) kiểm nhất quán **bản-ghi↔bản-ghi**
+  (LOG/INDEX/journal/activeContext) **VÀ bản-ghi↔CODE** (trường opt-in `Verify-Symbol: path::symbol` → symbol
+  phải còn định nghĩa trong code) + **self-test guard-the-guard** (checker phải BẮT được drift, chống regex-rot)
+  + **RULES_VERSION sync** 5 file. *Danh sách check đầy đủ + số case = chạy `vp check` / đọc `tests/drift_check.py`*
+  (file ARCHITECTURE.md này CỐ Ý không liệt kê con số dễ đổi — §0 — để prose không thành nguồn drift mới).
 
 ---
 
