@@ -860,6 +860,8 @@ Scope: `kernel/capabilities.py` (MachineCapabilities DTO + CapabilityError + res
 Nguồn: LOG Entry #283 · hiện thực design D-072 (hardened #282) · vấn đề user đổi-máy-GPU↔không-GPU
 Evidence: `pytest tests/test_capability.py` 13 passed/1 skipped (gpu-test skip đúng ý đồ); full `pytest -q` **573 passed/2 skipped** (560/1→573/2 additive); `scripts\vp.cmd lint` **5 kept/0 broken**; drift PASS
 Links: D-072 (design), T-027, K-069 (review 4 lỗ), D-057 (env-layer vp.cmd), K-048/K-049
+Verify-Symbol: vision-platform/src/vision_platform/kernel/capabilities.py::resolve_device
+Verify-Symbol: vision-platform/src/vision_platform/adapters/capability_probe.py::probe_capabilities
 Nội dung: Năng-lực máy = khái niệm hạng nhất. `resolve_device` THUẦN @kernel (auto→best / cuda-tường-minh-thiếu→CapabilityError fail-fast + kiểm ordinal cuda:N vs device_count + chuẩn hoá lower) + `probe_capabilities` @adapters (torch/cv2 vắng→False không raise; has_cuda=is_available AND count>0). Wire cả đường config (`_det_pt`, CapabilityError→bulkhead cô lập) lẫn CLI direct (`_build_detector`+LOG device thực, `main` bắt→stderr+exit2). Gate test `@pytest.mark.gpu`+autoskip @conftest (CI xanh mọi máy). Test xác định no-GPU (tiêm caps + monkeypatch probe). Additive (default "cpu"; "auto" opt-in).
 Vì sao: đổi máy GPU↔không-GPU tái diễn + mismatch ngầm (fail mù torch / chạy CPU tưởng GPU). Fix BẢN CHẤT: năng-lực-là-dữ-liệu (DTO tiêm được) + quyết-định-là-hàm-thuần (test xác định) + probe cô lập ở adapters. Verify được ngay trên máy no-CUDA (nhánh ImportError thật + caps tiêm). Nhánh có-CUDA chờ máy GPU ([chưa kiểm]).
 
@@ -998,13 +1000,16 @@ Status: 🔵 design-only (CHỜ user VALID → PHA code TDD)
 Scope: design `review/F1-unify-pipeline-assembly-design.md`. PHA code sẽ đụng `profiles/vision_slice_app.py` (+`_args_to_pipeline_config`, rút gọn `main`, tách `_print_summary`) + `profiles/pipeline_factory.py` (+param `extra_sinks` cho `build_runner`, +log device trong `_det_pt`).
 Nguồn: LOG Entry #322 · review §F1 (Med-High, ưu tiên 1)
 Links: review 2026-07-11 §F1/§C · D-042 (config schema) · D.3/#321 (fix trước đó cùng đợt review)
+Verify-Symbol: vision-platform/src/vision_platform/profiles/vision_slice_app.py::_args_to_pipeline_config
+Verify-Symbol: vision-platform/src/vision_platform/profiles/pipeline_factory.py::_det_pt
 Nội dung: CLI-direct sinh `PipelineConfig` in-memory (`_args_to_pipeline_config` thuần, test được) → gọi `build_runner` (1 ĐƯỜNG lắp-ráp duy nhất, xoá ~90 dòng hand-assembly). `build_runner` +param additive `extra_sinks: Sequence[ISink]=()` để CLI chèn `_TrackSummarySink` (presentation) vào composite — default () → đường config KHÔNG đổi.
 Vì sao (bản chất): 2 đường lắp-ráp = 2 nguồn sự thật → phân kỳ năng lực (motion-gate CLI thiếu pixel_diff_threshold/min_area_ratio). Hợp nhất = fix GỐC (thêm stage chỉ sửa 1 chỗ registry).
 Tự-review 6 hố (phải xử trước code): H1 device-log chuyển vào `_det_pt` (1 nơi) · H2 giữ exit-2 khi CapabilityError (main bắt quanh build_runner) · H3 `--frames`→source.max_frames vs `--max-frames`→run() · H4 `_validate` chạy trước map · H5 [CẦN KIỂM] default `MotionGateStage.__init__` vs `_stage_motion_gate` có LỆCH (chống đổi hành vi im lặng) · H6 giữ test cũ xanh + thêm test map thuần.
 Non-goal v1: KHÔNG thêm cờ CLI motion-gate mới; KHÔNG đổi schema TOML; KHÔNG đổi output summary.
 
 ### D-089 — 2026-07-12 — Mở thiết kế C8 "living citation" — chống drift TÀI LIỆU↔CODE (design-first)
-Status: 🔵 design-only (CHỜ user VALID → PHA code TDD)
+Status: ✅ code (hiện thực #341 — 628/2 · lint 5/0 · drift PASS · negative-test chứng minh)
+Evidence: `vp verify` = 628 passed/2 skipped · lint 5 kept/0 broken · `C8-DOC-CODE: 4 Verify-Symbol khớp code` · self_test 11/11 (thêm C8-clean/catch-missing-symbol/catch-missing-file); NEGATIVE thật: đổi 1 Verify-Symbol→symbol-ma → C8 FAIL + drift EXIT 1 → hoàn tác (#341)
 Scope: design `review/C8-doc-code-drift-check-design.md`. PHA code sẽ đụng `tests/test_memory_consistency.py` (+C8 trong check() + tham số `symbol_exists` + 3 self-test case) · `ai-decision-journal/README.md` (mô tả trường `Verify-Symbol` + quy tắc đảo→gỡ) · (H9, cần kiểm) `ai-learning-os-kit/` mirror checker.
 Nguồn: LOG Entry #340 · đọc THẬT `tests/drift_check.py` + `tests/test_memory_consistency.py` + `ai-decision-journal/README.md`
 Links: D-052 (linter nhất quán bộ nhớ C1–C7) · D-053 (hook+kit) · D-085 (self_test meta-test) · D-083 (kit=repo tránh drift)

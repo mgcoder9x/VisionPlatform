@@ -15,6 +15,9 @@ Mỗi check nhắm ĐÚNG một loại drift ĐÃ TỪNG xảy ra (xem AI-IMPLEM
 - C5  Mọi ID journal có dòng bảng trong INDEX & ngược lại        (bắt orphan / thiếu dòng).
 - C6  activeContext có mốc "Cập nhật lúc" + có nhắc #maxEntry     (bắt con trỏ để cũ, không cập nhật per-turn).
 - C7  Mọi LOG-# trích trong INDEX đều TỒN TẠI trong LOG          (bắt sync-đè mất đuôi LOG mà INDEX còn trích #phantom).
+- C8  Mọi trường OPT-IN `Verify-Symbol: <relpath>::<symbol>` trong journal → symbol PHẢI còn ĐỊNH NGHĨA trong code
+      (bắt drift TÀI LIỆU↔CODE: mục ✅ nói đã build symbol X nhưng X bị xoá/đổi tên mà quên cập nhật journal — D-089).
+      Đây là drift class DUY NHẤT mà C1–C7 KHÔNG phủ (C1–C7 chỉ đối chiếu bản-ghi↔bản-ghi, C8 đối chiếu bản-ghi↔code).
 """
 from __future__ import annotations
 
@@ -56,6 +59,20 @@ def _index_row_ids(text: str, prefix: str) -> list[int]:
     return [int(m) for m in re.findall(rf"^\|\s*{prefix}-(\d+)\s*\|", text, re.M)]
 
 
+def _verify_symbol_exists(relpath: str, symbol: str) -> bool:
+    """C8: symbol còn ĐỊNH NGHĨA trong file code không? (def / async def / class / hằng module-level).
+
+    Bản chất chống-drift-by-construction: chỉ nhận `relpath::symbol` (KHÔNG line-number → không false-positive
+    khi code dịch dòng). File không tồn tại → False. Match rộng (mọi mức thụt) = an toàn cho mục tiêu "còn tồn tại".
+    Giới hạn (ghi rõ): `def <symbol>` trong docstring/comment cũng match → false-NEGATIVE của việc-bắt-xoá (hiếm, chấp nhận)."""
+    p = ROOT / relpath
+    if not p.exists():
+        return False
+    sym = re.escape(symbol)
+    pat = rf"^\s*(async\s+)?def\s+{sym}\b|^\s*class\s+{sym}\b|^{sym}\s*[:=]"
+    return re.search(pat, p.read_text(encoding="utf-8"), re.M) is not None
+
+
 def _contiguity(nums: list[int]) -> tuple[bool, int, list[int], list[int]]:
     """Trả (ok, maxn, duplicates, gaps). ok = không trùng AND đủ 1..max."""
     if not nums:
@@ -68,12 +85,15 @@ def _contiguity(nums: list[int]) -> tuple[bool, int, list[int], list[int]]:
 
 
 def check(log_text: str | None = None, index_text: str | None = None,
-          active_text: str | None = None, journal_texts: dict | None = None) -> tuple[bool, list[str]]:
+          active_text: str | None = None, journal_texts: dict | None = None,
+          symbol_exists=None) -> tuple[bool, list[str]]:
     """Trả (ok, dòng-báo-cáo). ok=True nếu MỌI check pass.
 
     Tham số text TIÊM (mặc định None → đọc file thật): cho META-TEST kiểm chính checker (D-085) — feed
     text drift tổng-hợp → assert đúng check FAIL. Gọi `check()` không tham số = HÀNH VI CŨ (đọc file), nên
-    `drift_check.py`/`vp` không đổi. `journal_texts` = dict prefix→text (None → đọc từng file journal)."""
+    `drift_check.py`/`vp` không đổi. `journal_texts` = dict prefix→text (None → đọc từng file journal).
+    `symbol_exists` (C8, D-089) = Callable(relpath, symbol)->bool để TIÊM cho self_test (mặc định None →
+    `_verify_symbol_exists` đọc file code thật). Tiêm resolver giả giữ self_test thuần-in-memory + xác định."""
     report: list[str] = []
     ok_all = True
 
@@ -108,9 +128,11 @@ def check(log_text: str | None = None, index_text: str | None = None,
 
     # ---- C3 + C5: journal per-file contiguity + khớp INDEX rows ----
     counts: dict[str, int] = {}
+    verify_syms: list[tuple[str, str]] = []   # C8: (relpath, symbol) từ trường Verify-Symbol (mọi file journal)
     for prefix, path in JOURNAL_FILES.items():
         jtext = _read(path) if journal_texts is None else journal_texts.get(prefix, "")
         file_ids = _ids_from_headings(jtext, prefix)
+        verify_syms += [(m[1], m[2]) for m in re.findall(r"^(Verify-Symbol):\s*(\S+?)::(\S+)\s*$", jtext, re.M)]
         ok, mx, dups, gaps = _contiguity(file_ids)
         counts[prefix] = mx
         line(ok, f"C3-{prefix}", f"{len(file_ids)} ID, max {prefix}-{mx:03d}"
@@ -157,6 +179,14 @@ def check(log_text: str | None = None, index_text: str | None = None,
     line(not phantom, "C7-INDEX-CITES",
          "mọi #N trích ∈ LOG" if not phantom else
          f"INDEX trích LOG #KHÔNG-tồn-tại={phantom} (LOG max #{max_entry}) — sync mất đuôi?")
+
+    # ---- C8: doc↔code — trường OPT-IN Verify-Symbol phải trỏ symbol CÒN ĐỊNH NGHĨA trong code (D-089) ----
+    # Đóng drift class cuối: mục journal ✅ nói "đã build symbol X" nhưng X bị xoá/đổi tên mà quên cập nhật.
+    resolver = _verify_symbol_exists if symbol_exists is None else symbol_exists
+    missing_syms = [f"{p}::{s}" for (p, s) in verify_syms if not resolver(p, s)]
+    line(not missing_syms, "C8-DOC-CODE",
+         f"{len(verify_syms)} Verify-Symbol khớp code" if not missing_syms else
+         f"symbol KHÔNG còn trong code={missing_syms} (code bị xoá/đổi tên mà journal chưa cập nhật?)")
 
     return ok_all, report
 
@@ -220,6 +250,18 @@ def self_test() -> tuple[bool, list[str]]:
     # C7: INDEX trích LOG-# phantom (#99 ∉ {1,2})
     _, r = check(log, index + "| Z | x | #99 |\n", active, journal)
     rec(_fail(r, "C7-INDEX-CITES"), "C7-catch-phantom-cite")
+
+    # C8: doc↔code — tiêm resolver GIẢ (in-memory, KHÔNG đọc file → xác định, không flake)
+    fake_ok = lambda pth, s: (pth, s) == ("p.py", "foo")  # noqa: E731 — chỉ biết đúng p.py::foo
+    j8 = dict(journal, D=journal["D"] + "Verify-Symbol: p.py::foo\n")
+    ok8, _ = check(log, index, active, j8, symbol_exists=fake_ok)
+    rec(ok8, "C8-clean-PASS")                                  # symbol tồn tại → toàn bộ PASS
+    j8sym = dict(journal, D=journal["D"] + "Verify-Symbol: p.py::ghost\n")
+    _, r = check(log, index, active, j8sym, symbol_exists=fake_ok)
+    rec(_fail(r, "C8-DOC-CODE"), "C8-catch-missing-symbol")    # symbol không có → FAIL
+    j8file = dict(journal, D=journal["D"] + "Verify-Symbol: nope.py::foo\n")
+    _, r = check(log, index, active, j8file, symbol_exists=fake_ok)
+    rec(_fail(r, "C8-DOC-CODE"), "C8-catch-missing-file")      # file/symbol không có → FAIL
 
     ok_all = all(line.startswith("[PASS]") for line in report)
     return ok_all, report

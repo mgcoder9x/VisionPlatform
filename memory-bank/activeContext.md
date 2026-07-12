@@ -1,9 +1,18 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T11:45:00+07:00.
-**[🔒 GIT] #340 mở thiết kế C8 (design-only) — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
-**[🔵 #340 — MỞ thiết kế C8 "living citation" chống drift TÀI LIỆU↔CODE (design-first, D-089) — CHỜ user VALID]**
+**Cập nhật lúc:** 2026-07-12T12:40:00+07:00.
+**[🔒 GIT] #341 HIỆN THỰC C8 doc↔code — sẽ commit + push NHẸ. Đụng checker + journal + README (test 628/2 giữ).**
+**[✅ #341 — HIỆN THỰC C8 "living citation" (D-089 ✅ code, +T-031): drift_check giờ kiểm BẢN-GHI↔CODE]**
+- Code C8 trong `tests/test_memory_consistency.py`: helper `_verify_symbol_exists` (đọc file + regex def/class/assign) + tham số `symbol_exists` tiêm-được (self_test giả → giữ in-memory) + gom `Verify-Symbol: path::symbol` + block C8-DOC-CODE + 3 self-test case (8→11). README +trường Verify-Symbol + quy tắc đảo→gỡ (H4). 4 ví-dụ-sống D-073/D-088 (grep verify symbol trước khi gắn).
+- **NEGATIVE-test THẬT:** đổi 1 Verify-Symbol→symbol-ma → C8 FAIL + drift EXIT 1 → hoàn tác. Chứng minh resolver thật bắt được doc↔code lệch.
+- **H9:** kit checker = starter đơn giản (C1–C6, không C7/self_test), KHÔNG bị rules_sync kiểm → port C8 sang kit DEFER (out of scope; đồng bộ kit = việc riêng).
+- **Anti-drift giờ 4 lớp thật:** C1–C7 (bản-ghi↔bản-ghi) + **C8 (bản-ghi↔CODE)** + RULES sync 5-file + self_test 11/11 guard regex-rot.
+- **Ghi sổ:** LOG #341 · D-089 🔵→✅ code · +T-031 · INDEX canonical #340→#341 · Σ220→Σ221 (T30→T31) · dòng D-089/T-031 · block này.
+- **VERIFY:** `vp verify` = 628/2 · lint 5/0 · C8 4 khớp · drift PASS · VERIFY OK (EXIT 0).
+- **Bước kế (CHỜ user — mốc dừng SẠCH):** (a) gắn Verify-Symbol cho thêm mục ✅-code giá-trị-cao (dần, khi đụng); (b) đồng bộ kit checker (C7/self_test/C8) nếu muốn tái dùng; (c) E.2/nhánh GPU (chờ đèn xanh mạng K-078); hoặc tổng kết.
+---
+**[🔵 #340 — MỞ thiết kế C8 "living citation" chống drift TÀI LIỆU↔CODE (design-first, D-089) — ĐÃ CODE ở #341]**
 - User lặp "cần cách CỰC MẠNH tránh drift" → xác minh journal 4-file + drift_check 3 tầng ĐÃ có + PASS. Đọc THẬT `drift_check.py`+`test_memory_consistency.py`+`README.md` → phát hiện drift class DUY NHẤT còn hở: C1–C7 chỉ bản-ghi↔bản-ghi, KHÔNG bản-ghi↔CODE.
 - **Thiết kế C8:** trường opt-in `Verify-Symbol: path::symbol` → kiểm symbol còn định-nghĩa trong code (file tồn tại + regex def/class/assign). Giữ self_test in-memory bằng TIÊM resolver giả. Trường MỚI (không parse `Nguồn:` free-form) + cấm line-number = fix gốc chống false-positive. Opt-in ⇒ backward-compat 219 mục. Tự-review 10 hố ở `review/C8-doc-code-drift-check-design.md`.
 - **Ghi sổ:** LOG #340 · +D-089 (🔵 design-only) · INDEX canonical #339→#340 · Σ219→Σ220 (D88→D89) · dòng D-089 · block này.

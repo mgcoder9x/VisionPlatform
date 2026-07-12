@@ -46,6 +46,13 @@ Vì sao: <lý do bản chất, không phải cái ngọn>
 - `Evidence` — với code: lệnh đã CHẠY + số thật (vd `pytest 200 passed/1 skipped`). Với kiến thức: link/độ chắc chắn.
 - `Links` — ID liên quan (một quyết định thường kèm 1 trade-off + đôi khi 1 điều-nên-biết).
 - `↩️` — nếu một entry bị đảo về sau: KHÔNG xoá; đổi `Status: ↩️` + thêm dòng `Đảo bởi: <ID/Entry>`.
+- `Verify-Symbol` *(OPT-IN, C8/D-089)* — với mục ✅ **code** trỏ tới symbol cụ thể, thêm 1 (hoặc nhiều) dòng:
+  `Verify-Symbol: <relpath-từ-repo-root>::<tên_symbol>` (vd `vision-platform/src/vision_platform/kernel/capabilities.py::resolve_device`).
+  `drift_check` (C8) sẽ kiểm symbol đó **còn ĐỊNH NGHĨA** trong code (def/class/hằng module-level) → nếu code bị xoá/đổi tên mà
+  quên cập nhật journal ⇒ drift-check FAIL. Đây là cách chống drift **TÀI LIỆU↔CODE** (C1–C7 chỉ đối chiếu bản-ghi↔bản-ghi).
+  **QUY TẮC BẢN CHẤT:** chỉ ghi `relpath::symbol` — **CẤM line-number** (line trôi → false-positive). Khi mục bị **đảo/gỡ code**
+  (`Status: ↩️`) ⇒ **GỠ luôn dòng `Verify-Symbol`** (sự hiện diện của trường = khẳng định "symbol này PHẢI còn sống").
+  Opt-in: mục không có trường này → C8 bỏ qua (không bắt buộc hồi tố).
 
 ## 2. Cách APPEND (mỗi lần AI triển khai có 1 trong 4 loại trên)
 1. Chọn đúng file (01/02/03/04), cấp ID kế tiếp (D/C/T/K + số tăng dần, KHÔNG tái dùng số cũ).

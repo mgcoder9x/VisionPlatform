@@ -309,3 +309,12 @@ Chọn (a): **KHÔNG cài graceful-shutdown** (SIGTERM→should_stop→teardown)
 Chọn (b): **test durability-không-teardown** (ghi→đọc-lại bằng handle/connection khác khi CHƯA teardown) thay vì test SIGTERM-subprocess-kill.
 - Cái mất: không kiểm trực tiếp hành vi kill-process thật (OS page cache survives) — nhưng đó là guarantee của OS/stdlib, không phải code mình.
 - Vì sao (bản chất): test durability-không-teardown chứng đúng FACT tải-trọng (per-event durable, code-mình-kiểm-soát), cross-platform + deterministic (SIGTERM Windows=TerminateProcess≠POSIX → subprocess-kill dễ flake — tránh vết K-035). Đồng thời mechanize "điều kiện đảo" thành regression tự-bắt (đổi sink bỏ flush → test FAIL).
+
+### T-031 — 2026-07-12 — C8 doc↔code: trường OPT-IN `Verify-Symbol` vs bắt buộc mọi mục / vs parse `Nguồn:` sẵn có
+Status: ✅ (code + negative-test #341 — 628/2 · lint 5/0 · drift PASS)
+Scope: `tests/test_memory_consistency.py` (C8) · `ai-decision-journal/README.md` · journal entries (trường opt-in)
+Nguồn: LOG Entry #341 · hiện thực design D-089 (`review/C8-doc-code-drift-check-design.md`)
+Links: D-089, D-052 (linter bộ nhớ), D-085 (self_test)
+Chọn: **OPT-IN** (chỉ mục tự thêm `Verify-Symbol` mới bị C8 kiểm) + **trường MỚI** (không parse `Nguồn:` free-form) + **cấm line-number** (chỉ `relpath::symbol`).
+- Cái mất: (1) lợi ích chỉ hiện với mục CHỦ ĐỘNG opt-in — 219 mục cũ không được phủ tự động (chấp nhận: hồi tố = công sức lớn, giá trị biên giảm dần với mục cũ). (2) Kỷ luật mới: khi đảo/gỡ code phải GỠ luôn dòng Verify-Symbol (H4). (3) Regex `def/class/assign` match cả trong docstring → false-NEGATIVE hiếm của việc-bắt-xoá.
+- Vì sao (bản chất): parse `Nguồn:` cũ (lẫn prose + line-number) → resolver KHÔNG đáng tin → false-positive → checker thành nhiễu → bị phớt lờ → TỆ HƠN không có. Opt-in + trường cứng + cấm line-number = chống-drift-by-construction (fix gốc), zero gánh nặng hồi tố, backward-compat tuyệt đối. Giữ `self_test` thuần-in-memory bằng TIÊM resolver giả (không đọc file) → không flake.
