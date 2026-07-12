@@ -6659,3 +6659,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** #12 tiến độ 8/14 (01-03,07-08,11-13 ✅). Điểm dạy: uint8-underflow (bẫy sáng→tối, cast int16), thứ-tự ROI-mean (bug tinh vi có test), frame-đầu-cho-đi-tiếp + van max_consecutive_skip. Còn 04/05/06/09/10/14.
 
 **Đã verify:** quote đúng từ `domain/motion.py`+`motion_gate_stage.py` (đọc thật phiên này) + cite path; cập nhật muc-luc 11–13→✅. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#333). · **Chưa verify:** mẩu 04/05/06/09/10/14.
+
+### Entry #334 — 2026-07-12 — HOÀN TẤT deep-dive code-lessons #12 analytics (14/14 mẩu) — Kiro-Opus
+
+**Bối cảnh:** đóng #12 — viết 6 mẩu cuối (runtime + DTO + wiring). Tiếp #333 (motion) + #332 (tracking/geometry domain).
+
+**1. Quyết định AI tự ra:** viết 04 IouTracker (update 6 bước, unique_count đơn điệu) · 05 Track DTO · 06 TrackingStage (camera-affinity fail-fast + artifacts fan-out) · 09 LineCrossingStage (bounded-memory prune, 1-nguồn-direction) · 10 CrossingEvent (wall-clock, không-BBox) · 14 wiring (thứ tự stage + fan-out + executor dừng-sớm, kèm cổng Feynman tổng-hợp #12). Quote nguyên văn + cite.
+
+**2. Chỗ phải đổi:** không.
+
+**3. Trade-off:** viết trọn 6 mẩu 1 lượt để ĐÓNG #12 (runtime/DTO/wiring là phần còn lại mạch lạc). Mẩu 14 kèm cổng Feynman tổng-hợp (vẽ 3 tầng domain/runtime/kernel).
+
+**4. Điều bạn nên biết:** **#12 analytics HOÀN TẤT 14/14** — deep-dive thứ 2 sau #11. Bức tranh: domain thuần (association/geometry/motion) → runtime stateful (IouTracker/stages) → kernel DTO (Track/CrossingEvent) → ghép qua artifacts + executor. Chờ Feynman. Deep-dive: #11✅ #12✅. Kế: #13 observability-metrics · #14 capability-aware.
+
+**Đã verify:** quote đúng từ `iou_tracker.py`/`tracking_stage.py`/`line_crossing_stage.py`/`kernel/{tracking_protocol,crossing_event}.py` (đọc thật phiên này) + cite path; cập nhật muc-luc + INDEX code-lessons #12→ĐỦ. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#334). · **Chưa verify:** #13+ (chưa mở); cổng Feynman #11/#12 (chờ user học).

@@ -1,8 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T06:15:00+07:00.
-**[🔒 GIT] #333 deep-dive #12 mẩu 11–13 (motion) — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T06:50:00+07:00.
+**[🔒 GIT] #334 HOÀN TẤT deep-dive #12 (14/14) — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**[✅ #334 — HOÀN TẤT deep-dive code-lessons #12 analytics (14/14 mẩu)]**
+- Viết 6 mẩu cuối: 04 IouTracker · 05 Track DTO · 06 TrackingStage · 09 LineCrossingStage · 10 CrossingEvent · 14 wiring (cổng Feynman tổng-hợp).
+- Bức tranh #12: domain thuần (association/geometry/motion) → runtime stateful (tracker/stages) → kernel DTO (Track/CrossingEvent) → ghép qua artifacts + executor dừng-sớm (cắt tải motion-gate đầu chuỗi).
+- **Deep-dive: #11 ✅ (15/15) · #12 ✅ (14/14).** Kế: #13 observability-metrics · #14 capability-aware.
+- **Ghi sổ:** LOG #334 · INDEX canonical #333→#334 (Σ219 giữ) · muc-luc + code-lessons INDEX #12→ĐỦ · block này.
+- **Bước kế (CHỜ user):** mở #13 observability-metrics (đo→render Prometheus→/metrics); hoặc dừng. Cổng Feynman #11/#12 chờ user.
+---
 **[🔵 #333 — Deep-dive #12 analytics: viết mẩu 11–13 (motion — cắt tải)]**
 - Viết cụm motion: 11 changed_ratio int16-underflow · 12 ROI/illumination thứ-tự + validate_roi-vs-roi_mask · 13 MotionGateStage. Quote + cite.
 - #12 tiến độ **8/14 mẩu** (01-03,07-08,11-13 ✅). Còn: 04/06 (IouTracker/TrackingStage) · 05/10 (DTO Track/CrossingEvent) · 09 (LineCrossingStage) · 14 (wiring).
