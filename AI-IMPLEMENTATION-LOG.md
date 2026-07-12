@@ -6477,3 +6477,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết (E.2 — phát hiện có giá trị):** `Yolov5PtDetector.setup()` thay `torch.load = _patched` (ép `weights_only=False` cho torch>=2.6) ở cấp MODULE, gắn cờ `_vp_patched` chống lặp NHƯNG KHÔNG khôi phục → sau setup mọi `torch.load` trong tiến trình mặc định `weights_only=False` (nới security-default rộng hơn ý định). Fix bản chất: patch NGAY TRƯỚC `yolov5.load` rồi restore trong `finally` (scoped). KẾT LUẬN TỔNG THỂ 3 vòng: kiến trúc VỮNG toàn diện, KHÔNG lỗi đúng-sai nghiêm trọng trong phạm vi đã đọc rộng; ưu tiên sửa: F1 > E.2 > D.3 > (F2-F7/D.2/D.4 dọn dần).
 
 **Đã verify:** đọc TRỌN 7 file (cite §E); đối chiếu E.2 bằng đọc `setup()` (patch `torch.load` không có restore, chỉ cờ `_vp_patched`) — có bằng chứng; cập nhật review doc §E + kết luận. Không đổi code (623/2 giữ). `vp check` sẽ PASS (#320). · **Chưa verify:** onnx_detector/sink JSONL/các stage còn lại/zmq/domain thuần (đọc nhẹ — ghi rõ §E.3); F1/E.2/D.3 chưa fix (mới là phát hiện+khuyến nghị).
+
+### Entry #321 — 2026-07-11 — FIX D.3 (review): RTSP `_reconnects` reset khi đọc thành công (TDD) — verify 624/2 — Kiro-Opus
+
+**Bối cảnh:** đóng phát hiện D.3 (review #319) — `RtspFrameSource._reconnects` cộng dồn TRỌN-ĐỜI, không reset khi đọc FRAME thành công → `max_reconnect` hữu hạn + camera chớp-tắt lai rai → ERROR oan. Fix bản chất (không fix ngọn): reset đếm khi self-heal thành công.
+
+**1. Quyết định AI tự ra:** làm D.3 TRƯỚC F1 vì D.3 = fix GỐC 1 điểm, verify-được ngay, rủi ro thấp; F1 = refactor lớn để dành spec riêng. TDD: viết test discriminating TRƯỚC → thấy FAIL → mới sửa.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** đổi ngữ nghĩa `max_reconnect` từ "ngân sách trọn-đời" (ngầm định cũ) → "số lần rớt LIÊN TIẾP" (self-heal đúng). Backward-compat: `test_max_reconnect_gives_error` (rớt liên tục, không FRAME xen giữa) VẪN ERROR sau ngưỡng — giữ nguyên.
+
+**3. Trade-off đã cân nhắc:** reset-on-success (rớt liên tiếp) vs giữ trọn-đời. Chọn reset — khớp docstring "self-heal, hệ không chết vì camera chớp tắt"; trọn-đời khiến camera khoẻ vẫn chết oan sau đủ blip rải rác. 1 dòng, đúng ý niệm.
+
+**4. Điều bạn nên biết:** TDD chứng minh có bằng chứng: test mới FAIL trên code cũ (statuses `[FRAME,REC,REC,FRAME,REC,REC,FRAME,REC,ERROR,...]` — ERROR oan read#9), PASS sau fix. Fix = thêm `self._reconnects = 0` ở nhánh FRAME của `read()`. Baseline 623→624 (+1 test).
+
+**Đã verify (CHẠY THẬT, đọc output):** `pytest test_rtsp_frame_source.py` 8 passed (7 cũ + 1 mới); test mới FAIL-trước-fix (đã chạy thấy), PASS-sau-fix; **full suite 624 passed/2 skipped** (cwd=vision-platform, tránh collect template kit); **lint 5 kept/0 broken**; **drift PASS**. · **Chưa verify:** hành vi với camera RTSP THẬT (test dùng FakeCapture DI — deterministic; logic reconnect đã khớp).

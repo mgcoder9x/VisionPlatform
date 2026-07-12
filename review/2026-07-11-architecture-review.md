@@ -130,7 +130,11 @@ Code GHI RÕ đây là giới hạn demo (production cần lease-timeout + QUARA
 **Đề xuất:** đây là hố GPU/production thật — khi làm nhánh production, wire lease-deadline (field v2 đã có sẵn
 `OFFSET_LEASE_DEADLINE_NS`) + recovery cho slot self-owned-timeout. Không phải bug ở phạm vi hiện tại (demo/no-GPU).
 
-### D.3 [Low] RTSP `_reconnects` là ngân sách TRỌN-ĐỜI, không reset khi đọc lại thành công
+### D.3 [Low → ✅ FIXED #321] RTSP `_reconnects` là ngân sách TRỌN-ĐỜI, không reset khi đọc lại thành công
+> **ĐÃ FIX (#321, TDD):** thêm `self._reconnects = 0` khi `read()` trả FRAME thành công → `max_reconnect` giờ
+> = "rớt LIÊN TIẾP". Test discriminating `test_max_reconnect_counts_consecutive_not_lifetime` (FAIL trước fix
+> tại read#9=ERROR, PASS sau fix). Verify full **624/2 · lint 5/0 · drift PASS**.
+
 **Bằng chứng (`rtsp_frame_source.py`):** `read()` khi mở lại → `self._reconnects += 1`; khi đọc FRAME thành công
 KHÔNG reset `_reconnects` về 0. `setup()` mới reset. → với `max_reconnect` đặt số hữu hạn, camera chớp-tắt lai
 rai qua phiên dài sẽ TÍCH LUỸ tới ngưỡng rồi báo `ERROR` VĨNH VIỄN dù hiện đang khoẻ. (Deploy thường dùng
@@ -195,5 +199,5 @@ motion_gate/tracking/count/detect/dark_filter/brightness, `zmq_inference_client`
 đúng-sai nghiêm trọng** trong phạm vi đã đọc (rộng). Danh sách sửa/cải tiến (theo ưu tiên):
 1. **F1** — hợp nhất 2 đường lắp-ráp pipeline (Medium-High, nền cho F2/F3).
 2. **E.2** — thu hẹp phạm vi patch `torch.load` (Low-Med, security-hygiene, sửa khi mở nhánh GPU).
-3. **D.3** — reset `_reconnects` RTSP khi đọc thành công (Low, 1 dòng).
+3. ~~**D.3** — reset `_reconnects` RTSP~~ ✅ **ĐÃ FIX (#321)**.
 4. **F2/F3/F4/F5/F6/F7/D.2/D.4** — dọn dẹp/điều hướng (Low), làm dần.

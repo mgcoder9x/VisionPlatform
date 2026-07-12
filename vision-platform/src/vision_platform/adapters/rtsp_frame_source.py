@@ -123,6 +123,9 @@ class RtspFrameSource:
         if not ok or frame is None:
             self._release_cap()      # rớt giữa chừng → ép mở lại lần đọc sau (self-heal)
             return ReadResult(status=ReadStatus.RECONNECTING, retry_after_ms=self._reconnect_delay_ms)
+        # D.3 (review #319): đọc THÀNH CÔNG → reset đếm rớt. `max_reconnect` = số lần rớt LIÊN TIẾP
+        # (self-heal thật), KHÔNG phải ngân sách trọn-đời → camera chớp-tắt lai rai không bị ERROR oan.
+        self._reconnects = 0
         return ReadResult(status=ReadStatus.FRAME, data=frame)
 
     def teardown(self) -> None:

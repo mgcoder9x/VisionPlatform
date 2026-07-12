@@ -1,8 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T23:15:00+07:00.
-**[🔒 GIT] #320 review vòng 3 (khép review) — sẽ commit + push NHẸ (text). Không đổi code (623/2 giữ).**
+**Cập nhật lúc:** 2026-07-11T23:45:00+07:00.
+**[🔒 GIT] #321 fix D.3 (RTSP) — sẽ commit + push NHẸ. Code đổi: baseline 623→624/2.**
+**[✅ #321 — FIX D.3: RTSP `_reconnects` reset khi đọc thành công (TDD) — verify 624/2·5/0]**
+- Đóng phát hiện D.3 (review #319): `_reconnects` cộng dồn TRỌN-ĐỜI → camera chớp-tắt lai rai + `max_reconnect` hữu hạn → ERROR oan. Fix GỐC: thêm `self._reconnects = 0` ở nhánh FRAME của `read()` → `max_reconnect` = "rớt LIÊN TIẾP".
+- **TDD:** test `test_max_reconnect_counts_consecutive_not_lifetime` FAIL-trước-fix (ERROR oan read#9), PASS-sau. `test_max_reconnect_gives_error` (rớt liên tục) VẪN ERROR — backward-compat.
+- **VERIFY THẬT:** full suite **624/2** (623→624 +1), lint 5/0, drift PASS (chạy cwd=vision-platform tránh collect template kit).
+- **Ghi sổ:** LOG #321 · INDEX canonical #320→#321 (Σ218 giữ) · review doc D.3→✅FIXED + priority list · block này.
+- **Bước kế (CHỜ user):** (a) E.2 (scope torch.load — nhánh GPU) · (b) F1 (spec riêng, refactor lớn) · (c) dừng mốc sạch. F2-F7/D.2/D.4 = dọn dần Low.
+---
 **[✅ #320 — REVIEW vòng 3 (detector/SQLite/analytics-geometry/wire-codec) → `review/...` §E + KẾT LUẬN tổng thể]**
 - Đọc thêm 7 file THẬT: detector_pipeline/yolo_postprocess/yolov5_pt_detector/crossing_event_sqlite_sink/line_crossing_stage/iou_tracker/inference_wire_codec.
 - **6/7 SOUND:** DetectorPipeline kỷ luật CoordinateSpace · SQLite param-hoá + durability · line-crossing domain-geometry + bounded memory · iou_tracker id đơn điệu · wire codec kernel-pure.

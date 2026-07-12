@@ -106,6 +106,25 @@ def test_max_reconnect_gives_error():
     assert isinstance(r.error, RuntimeError)
 
 
+def test_max_reconnect_counts_consecutive_not_lifetime():
+    """D.3 (review #319): `max_reconnect` = số lần rớt LIÊN TIẾP, KHÔNG phải trọn-đời.
+
+    Camera chớp-tắt lai rai — MỖI lần rớt đều có đọc thành công xen giữa (self-heal thật) — KHÔNG được
+    tích luỹ tới ngưỡng rồi ERROR oan. Trước fix: `_reconnects` cộng dồn trọn-đời → sau 3 blip (dù có
+    FRAME xen giữa) → ERROR. Sau fix: reset khi đọc FRAME thành công → chỉ rớt LIÊN TIẾP mới tính.
+    """
+    f = np.ones((2, 2, 3), dtype=np.uint8)
+    # mỗi capture: 1 frame THÀNH CÔNG rồi rớt → buộc reconnect; frame-tốt luôn xen giữa các blip.
+    caps = [FakeCapture(opened=True, reads=[(True, f), (False, None)]) for _ in range(5)]
+    src = RtspFrameSource(_URL, capture_factory=_factory(caps), max_reconnect=2)
+    src.setup()
+    statuses = [src.read().status for _ in range(12)]
+    src.teardown()
+    # ≥3 lần rớt xảy ra NHƯNG mỗi lần đều phục hồi (FRAME) → KHÔNG bao giờ ERROR oan.
+    assert ReadStatus.ERROR not in statuses, f"ERROR oan dù camera phục hồi liên tục: {statuses}"
+    assert statuses.count(ReadStatus.FRAME) >= 3   # phục hồi nhiều lần thật
+
+
 def test_is_finite_false_and_context_manager():
     frame = np.ones((2, 2, 3), dtype=np.uint8)
     cap = FakeCapture(opened=True, reads=[(True, frame)])
