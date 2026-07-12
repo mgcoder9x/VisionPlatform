@@ -6793,3 +6793,11 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **3. Trade-off:** không thêm T (fix thẳng, cách đúng duy nhất áp pre-open property).
 **4. Điều bạn nên biết:** ineffectiveness của code cũ = CHẮC CHẮN bằng logic (set sau open). Order-contract nay REGRESSION-TESTED (fake cv2). Nhưng độ-lớn-hang thực + hiệu-quả-timeout thực = [chưa kiểm runtime — cần RTSP host chết thật]; đã ghi nhãn trong D-092. onnx_detector đọc kỹ = SOUND (DI sạch, lazy-import fail-fast, license AGPL K-029 ghi rõ). Z2 (_responses unbounded) vẫn Low/mở.
 **Đã verify:** `vp verify` = **630 passed/2 skipped (629→630 +1) · lint 5 kept/0 broken · C8 6 khớp · DRIFT-CHECK PASS · VERIFY OK** (EXIT 0); test R1 RED→GREEN; get_diagnostics rtsp = sạch (ngầm qua verify). · **Chưa verify:** hiệu-quả-chống-treo runtime R1 (field-verify RTSP host); Z2 (defer).
+
+### Entry #347 — 2026-07-12 — Tạo `end.md` handoff chuyển máy + push tất cả — Kiro-Opus
+**Bối cảnh:** user chuyển máy → cần 1 file bàn-giao để phiên/máy khác biết trạng thái + việc đã làm.
+**1. Quyết định AI tự ra:** tạo `end.md` (gốc repo) — handoff 8 mục: §0 làm-gì-đầu-phiên · §1 trạng thái sản phẩm (630/2·5/0·drift PASS·#346) · §2 cơ chế vận hành (vp verify/check, ghi-sổ-mỗi-lượt, PowerShell workaround) · §3 chống-drift 4 lớp (C1–C8+RULES+self_test) · §4 đã-làm #339→#346 · §5 bug-hunting (Z1✅/R1✅/Z2🟡/D.2-residual🟡 + SOUND list) · §6 hướng tiếp · §7 chặn/ràng-buộc · §8 file quan trọng.
+**2. Chỗ phải đổi:** không.
+**3. Trade-off:** không.
+**4. Điều bạn nên biết:** `end.md` là ảnh-chụp bàn-giao; nguồn SỐNG vẫn = activeContext + journal + `vp verify`. Bám số đã verify #346 (không bịa).
+**Đã verify:** tạo `end.md`; `vp check` PASS (chạy dưới); push tất cả (xác nhận HEAD==upstream). Không đổi code (630/2 giữ). · **Chưa verify:** không.

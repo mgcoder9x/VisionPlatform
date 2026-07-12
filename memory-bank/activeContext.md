@@ -1,8 +1,13 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T16:10:00+07:00.
-**[🔒 GIT] #346 FIX R1 rtsp OPEN_TIMEOUT-trước-open — sẽ commit + push NHẸ. Code additive (630/2).**
+**Cập nhật lúc:** 2026-07-12T16:35:00+07:00.
+**[🔒 GIT] #347 tạo end.md handoff — push TẤT CẢ (user chuyển máy). Không đổi code (630/2 giữ).**
+**[✅ #347 — Tạo `end.md` handoff chuyển máy + push tất cả]**
+- User chuyển máy → tạo `end.md` (gốc repo) 8 mục: đầu-phiên · trạng thái #346 (630/2·5/0·drift PASS) · cơ chế vận hành · chống-drift 4 lớp · đã-làm #339→#346 · bug-hunting (Z1✅/R1✅/Z2🟡/D.2🟡 + SOUND) · hướng tiếp · chặn/ràng-buộc.
+- **Ghi sổ:** LOG #347 (handoff, không +D/C/T/K → Σ226 giữ) · INDEX canonical #346→#347 · block này.
+- **Bước kế (máy mới):** đọc `end.md` §0 → `vp check` → chọn hướng §6 (săn bug tiếp / Feynman / F4 / dừng).
+---
 **[✅ #346 — FIX săn-bug R1: `_default_cv2_capture` set OPEN_TIMEOUT TRƯỚC open (D-092 ✅, TDD)]**
 - Săn bug `rtsp_frame_source` + `onnx_detector`: onnx SOUND; rtsp reconnect/mask SOUND; nhưng `_default_cv2_capture` set `CAP_PROP_OPEN_TIMEOUT_MSEC` SAU `cv2.VideoCapture(url,...)` (constructor mở NGAY) → timeout vô hiệu → host chết vẫn treo. Lỗi logic chắc chắn.
 - **TDD:** test fake-cv2 ghi call-order (deterministic, KHÔNG cần camera) → RED (code cũ [set,set,set], không open) → FIX construct-rỗng→set→`cap.open` → GREEN.
