@@ -1,8 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T05:45:00+07:00.
-**[🔒 GIT] #332 deep-dive #12 mẩu 01-03+07-08 — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T06:15:00+07:00.
+**[🔒 GIT] #333 deep-dive #12 mẩu 11–13 (motion) — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**[🔵 #333 — Deep-dive #12 analytics: viết mẩu 11–13 (motion — cắt tải)]**
+- Viết cụm motion: 11 changed_ratio int16-underflow · 12 ROI/illumination thứ-tự + validate_roi-vs-roi_mask · 13 MotionGateStage. Quote + cite.
+- #12 tiến độ **8/14 mẩu** (01-03,07-08,11-13 ✅). Còn: 04/06 (IouTracker/TrackingStage) · 05/10 (DTO Track/CrossingEvent) · 09 (LineCrossingStage) · 14 (wiring).
+- **Ghi sổ:** LOG #333 · INDEX canonical #332→#333 (Σ219 giữ) · muc-luc · block này.
+- **Bước kế (CHỜ user):** cụm runtime tracker/stage (04/06/09) + DTO (05/10) + wiring (14) → HOÀN TẤT #12 → sang #13 observability-metrics.
+---
 **[🔵 #332 — Deep-dive #12 analytics: viết mẩu 01–03 (tracking domain) + 07–08 (geometry)]**
 - Viết cụm nền toán thuần: 01 stateful-vs-stateless · 02 greedy_associate INDEX-based · 03 tie-break xác định · 07 orient · 08 segments_intersect. Quote + cite.
 - #12 tiến độ **5/14 mẩu**. Còn: 04/06 (tracker/stage runtime) · 05/10 (DTO Track/CrossingEvent) · 09 (LineCrossingStage) · 11/12/13 (motion) · 14 (wiring).

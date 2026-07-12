@@ -15,9 +15,9 @@
 | 08 | `segments_intersect` — proper intersection; collinear/điểm-suy-biến = False (vì sao) | `domain/geometry.py` | ✅ `08-segments-intersect.md` |
 | 09 | `LineCrossingStage` — tâm prev↔curr cắt vạch → +1; `direction` từ dấu orient; bounded-memory prune | `runtime/stages/line_crossing_stage.py` | ⬜ |
 | 10 | `CrossingEvent` DTO — wall-clock ISO-8601 "Z", vì sao KHÔNG giữ BBox (chỉ cx,cy) | `kernel/crossing_event.py` | ⬜ |
-| 11 | `domain/motion.py::changed_ratio` — cast `int16` chống uint8 underflow (bẫy sáng→tối) | `domain/motion.py` | ⬜ |
-| 12 | ROI + illumination-robust — THỨ TỰ thu-ROI-trước-rồi-mean; `validate_roi` (config-time) vs `roi_mask` (runtime) | `domain/motion.py` | ⬜ |
-| 13 | `MotionGateStage` — skip frame tĩnh, frame-đầu cho-đi-tiếp, `max_consecutive_skip` ép chạy định kỳ | `runtime/stages/motion_gate_stage.py` | ⬜ |
+| 11 | `domain/motion.py::changed_ratio` — cast `int16` chống uint8 underflow (bẫy sáng→tối) | `domain/motion.py` | ✅ `11-changed-ratio-int16.md` |
+| 12 | ROI + illumination-robust — THỨ TỰ thu-ROI-trước-rồi-mean; `validate_roi` (config-time) vs `roi_mask` (runtime) | `domain/motion.py` | ✅ `12-roi-illumination-order.md` |
+| 13 | `MotionGateStage` — skip frame tĩnh, frame-đầu cho-đi-tiếp, `max_consecutive_skip` ép chạy định kỳ | `runtime/stages/motion_gate_stage.py` | ✅ `13-motion-gate-stage.md` |
 | 14 | Wiring: thứ tự stage motion_gate→detect→count→track→line + artifacts fan-out (SkipFrameSignal) | `sync_linear_executor` + stages | ⬜ |
 
 **Ghi chú:** #12 = analytics (spec object-tracking-count · line-crossing-count · crossing-event · motion-gate/-roi),

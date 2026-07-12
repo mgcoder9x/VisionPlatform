@@ -6645,3 +6645,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** #12 tiến độ 5/14 (01,02,03,07,08 ✅). Điểm dạy: domain index-based (ranh giới), tie-break xác định (test lặp-lại-được), orient=1-toán-2-công-dụng (cắt + hướng), strict `>` cho collinear.
 
 **Đã verify:** quote đúng từ `domain/tracking.py`+`domain/geometry.py`+`tracking_stage.py` (đọc thật phiên này) + cite path; cập nhật muc-luc. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#332). · **Chưa verify:** mẩu 04/05/06/09/10/11/12/13/14 #12.
+
+### Entry #333 — 2026-07-12 — Deep-dive code-lessons #12: viết mẩu 11–13 (motion — cắt tải) — Kiro-Opus
+
+**Bối cảnh:** tiếp #332 (tracking+geometry domain). Viết cụm motion (domain + stage).
+
+**1. Quyết định AI tự ra:** viết 3 mẩu: 11 `changed_ratio` cast-int16-chống-underflow · 12 ROI/illumination + thứ-tự thu-ROI-trước-mean + validate_roi(config-time)-vs-roi_mask(runtime) · 13 `MotionGateStage` skip/frame-đầu/max_consecutive_skip. Quote nguyên văn + cite.
+
+**2. Chỗ phải đổi:** không.
+
+**3. Trade-off:** cụm motion trước runtime tracker/stage (04/06/09) — motion là nền cắt-tải + toán thuần domain (mạch với 11-12 geometry đã viết). Runtime + DTO + wiring lượt sau.
+
+**4. Điều bạn nên biết:** #12 tiến độ 8/14 (01-03,07-08,11-13 ✅). Điểm dạy: uint8-underflow (bẫy sáng→tối, cast int16), thứ-tự ROI-mean (bug tinh vi có test), frame-đầu-cho-đi-tiếp + van max_consecutive_skip. Còn 04/05/06/09/10/14.
+
+**Đã verify:** quote đúng từ `domain/motion.py`+`motion_gate_stage.py` (đọc thật phiên này) + cite path; cập nhật muc-luc 11–13→✅. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#333). · **Chưa verify:** mẩu 04/05/06/09/10/14.
