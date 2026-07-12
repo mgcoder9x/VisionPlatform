@@ -1,8 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T07:50:00+07:00.
-**[🔒 GIT] #336 deep-dive #13 mẩu 01–04 (ĐO) — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T08:25:00+07:00.
+**[🔒 GIT] #337 HOÀN TẤT deep-dive #13 (10/10) — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**[✅ #337 — HOÀN TẤT deep-dive code-lessons #13 observability-metrics (10/10 mẩu)]**
+- Viết 6 mẩu cuối: 05 MetricSample · 06 iter_metrics · 07 render_prometheus · 08 exporter · 09 `_serving` deadlock · 10 wiring (cổng Feynman).
+- Bức tranh #13: đo (port/snapshot/observers) → gom (InMemoryMetrics/iter_metrics) → render (Prometheus 0.0.4) → serve (/metrics secure-default + stop-chống-deadlock) → wiring aggregate source_id.
+- **Deep-dive: #11 ✅ (15/15) · #12 ✅ (14/14) · #13 ✅ (10/10).** Kế: #14 capability-aware (chủ đề cuối).
+- **Ghi sổ:** LOG #337 · INDEX canonical #336→#337 (Σ219 giữ) · muc-luc + code-lessons INDEX #13→ĐỦ · block này.
+- **Bước kế (CHỜ user):** mở #14 capability-aware (MachineCapabilities + resolve_device + probe + gate GPU + --capabilities); hoặc dừng. Cổng Feynman #11/#12/#13 chờ user.
+---
 **[🔵 #336 — Deep-dive #13 observability: viết mẩu 01–04 (khâu ĐO)]**
 - Viết cụm ĐO: 01 PULL-vs-PUSH+port · 02 snapshot fps-interval · 03 emit-đầu-loop+cô-lập-lỗi · 04 observers. Quote + cite.
 - #13 tiến độ **4/10 mẩu**. Còn: 05 MetricSample · 06 iter_metrics · 07 render_prometheus · 08 exporter · 09 `_serving` deadlock · 10 wiring.

@@ -6701,3 +6701,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** #13 tiến độ 4/10 (01–04 ✅). Điểm dạy: PULL (lõi tách Prometheus), fps interval (không che sự cố), emit-đầu-loop (mất-camera vẫn phát), cô-lập-lỗi-observer (quan sát không kéo sập nghiệp vụ), nhãn bounded. Còn 05–10 (MetricSample/iter_metrics/render/exporter/deadlock/wiring).
 
 **Đã verify:** quote đúng từ `observability_port.py`/`pipeline_runner.py`/`observers.py` (đọc thật phiên này) + cite; cập nhật muc-luc 01–04→✅. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#336). · **Chưa verify:** mẩu 05–10 #13.
+
+### Entry #337 — 2026-07-12 — HOÀN TẤT deep-dive code-lessons #13 observability-metrics (10/10 mẩu) — Kiro-Opus
+
+**Bối cảnh:** đóng #13 — viết 6 mẩu cuối (RENDER + SERVE + wiring). Tiếp #336 (khâu ĐO).
+
+**1. Quyết định AI tự ra:** viết 05 MetricSample (chống lossy) · 06 iter_metrics/_labelsets · 07 render_prometheus (TYPE/escape/inf-nan/sorted/raise) · 08 MetricsHttpExporter (daemon PULL, secure-default, 500-không-sập) · 09 `_serving` chống-deadlock (K-071) · 10 wiring (1 InMemoryMetrics dùng chung → aggregate source_id, cổng Feynman tổng-hợp). Quote nguyên văn + cite.
+
+**2. Chỗ phải đổi:** không.
+
+**3. Trade-off:** viết trọn 6 mẩu 1 lượt để ĐÓNG #13.
+
+**4. Điều bạn nên biết:** **#13 HOÀN TẤT 10/10.** Deep-dive: #11✅ #12✅ #13✅. Bức tranh #13: đo (port+snapshot+observers) → gom (InMemoryMetrics+iter_metrics) → render (Prometheus 0.0.4) → serve (/metrics HTTP secure-default + stop chống-deadlock) → wiring aggregate. Kế: #14 capability-aware (chủ đề cuối chương trình lấp khoảng-trống).
+
+**Đã verify:** quote đúng từ `metric_sample.py`/`observability.py`/`metrics_exposition.py`/`metrics_http_server.py`/`vision_slice_app.py` (đọc thật phiên này) + cite; cập nhật muc-luc + INDEX code-lessons #13→ĐỦ. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#337). · **Chưa verify:** #14 (chưa mở); cổng Feynman #11/#12/#13 (chờ user học).
