@@ -1,8 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T14:45:00+07:00.
-**[🔒 GIT] #344 D.2 đọc-lại-valid + sửa docstring SHM stale — sẽ commit + push NHẸ. Docstring-only (628/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T15:30:00+07:00.
+**[🔒 GIT] #345 FIX Z1 bulkhead io-thread ZMQ — sẽ commit + push NHẸ. Code additive (629/2).**
+**[✅ #345 — FIX săn-bug Z1: bulkhead io-thread `ZmqInferenceClient` (D-091 ✅ +T-032, TDD)]**
+- User chuyển hướng: TÌM BUG + nâng thiết kế (không học). Săn bug: `nms`/`letterbox`/`yolo_postprocess` = SOUND; `zmq_inference_client` vs `inference_server` → **Z1**: server bulkhead per-request (K-024) nhưng client `_io_loop` KHÔNG bọc recv/unpack → 1 response rác giết io thread → client "hố đen".
+- **TDD:** test in-process ROUTER thô (event-driven, không spawn) → RED tái hiện (io-thread chết, msgpack.FormatError + Exception in thread) → FIX tách `_loop_body` + bọc `try/except`+`_io_errors`+sleep chống busy-spin → GREEN + **5/5 không-flaky**. Kèm Verify-Symbol dogfood C8 (5 symbol).
+- **Ghi sổ:** LOG #345 · +D-091 (✅) · +T-032 · INDEX canonical #344→#345 · Σ223→Σ225 (D91·T32) · dòng D-091/T-032 · Z1 vào ARCHITECTURE §12 + review · block này.
+- **VERIFY:** `vp verify` = 629/2 (+1) · lint 5/0 · 0 diag · C8 5 khớp · drift PASS · VERIFY OK.
+- **Bước kế (CHỜ user):** săn bug tiếp vùng khác (onnx_detector / sink JSONL / dark_filter+brightness / supervisor cascade / rtsp_frame_source) — hoặc Z2 (`_responses` unbounded, Low) — hoặc dừng mốc sạch. Đề nghị soi tiếp `onnx_detector` + `rtsp_frame_source` (bug-yield cao).
+---
 **[🟡 #344 — D.2 (SHM lock-poison) đọc-lại-valid: recovery lần-1 ĐÃ WIRE → sửa docstring STALE + defer residual (+K-081)]**
 - Nhắm D.2 design-first → ĐỌC code thật `shm_frame_ring.py` (write/read + quarantine + lease) TRƯỚC. Phát hiện: lock-poison LẦN 1 đã có recovery WIRE (quarantine double-snapshot+liveness+lease-expiry, cả write&read; reap; multi-reader; QUARANTINED active — Task 3/4/5 landed). Docstring "Simplified vs production" + ERRATA E-15 STALE (mô tả demo "chưa dùng").
 - **KHÔNG vá speculative** (đúng "không kiểm được→không đoán"): residual = lock-poison lần-2 + owner-CÒN-SỐNG (degraded an toàn, KHÔNG mất data; recovery khi owner chết) → cần stress đa-process production tái hiện. Sửa docstring khớp code + ghi K-081 (điều-kiện-đóng).

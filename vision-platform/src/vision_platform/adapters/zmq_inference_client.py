@@ -10,6 +10,7 @@ infer() SYNC blocking + timeout → InferenceError(retryable=True) (R5.1/R7.2), 
 from __future__ import annotations
 
 import queue
+import sys
 import threading
 import time
 
@@ -64,6 +65,7 @@ class ZmqInferenceClient:
         self._ok = 0
         self._err = 0
         self._timeout = 0
+        self._io_errors = 0   # Z1/#345: số vòng io-loop bị lỗi + cô lập (bulkhead) — quan sát/kiểm thử
         self._pending_async: dict[str, float] = {}   # request_id -> monotonic lúc gửi (io thread)
         self._responses: queue.Queue[InferenceResponse] = queue.Queue()
 
@@ -81,62 +83,74 @@ class ZmqInferenceClient:
         self._thread.start()
 
     def _io_loop(self) -> None:
+        """Vòng io duy-nhất-sở-hữu-socket. BULKHEAD (Z1/#345): lỗi 1 vòng (message rác / lỗi transport) được
+        CÔ LẬP → io thread KHÔNG chết (đối xứng `InferenceServer.serve` K-024). Không bọc → 1 response rác giết
+        thread → client thành hố đen (mọi infer/submit timeout mãi). Request đang chờ tự timeout=retryable."""
         poller = zmq.Poller()
         poller.register(self._sock, zmq.POLLIN)
         while self._running:
-            # 1) drain outbound SYNC → send (CHỈ thread này chạm socket).
             try:
-                while True:
-                    self._sock.send(self._outbound.get_nowait())
+                self._loop_body(poller)
+            except Exception as e:   # noqa: BLE001 — bulkhead io thread (Z1): giữ thread sống, bỏ vòng lỗi
+                self._io_errors += 1
+                print(f"[zmq-client] io-loop bỏ qua lỗi (giữ thread sống): {type(e).__name__}: {e}",
+                      file=sys.stderr)
+                time.sleep(0.005)   # tránh busy-spin nếu lỗi lặp liên tục
+
+    def _loop_body(self, poller) -> None:
+        # 1) drain outbound SYNC → send (CHỈ thread này chạm socket).
+        try:
+            while True:
+                self._sock.send(self._outbound.get_nowait())
+        except queue.Empty:
+            pass
+        # 1b) send ASYNC có FLOW-CONTROL: chỉ gửi khi cửa sổ chưa đầy (in_flight < window).
+        #     Frame bị BoundedQueue bỏ (DROP_OLDEST) KHÔNG bao giờ tới đây → không đếm submitted.
+        while self._in_flight < self._window_size:
+            try:
+                # timeout=0 = non-blocking: van rỗng → raise Empty NGAY (không chặn io thread).
+                req = self._async_outbound.get_or_raise(timeout=0)
             except queue.Empty:
-                pass
-            # 1b) send ASYNC có FLOW-CONTROL: chỉ gửi khi cửa sổ chưa đầy (in_flight < window).
-            #     Frame bị BoundedQueue bỏ (DROP_OLDEST) KHÔNG bao giờ tới đây → không đếm submitted.
-            while self._in_flight < self._window_size:
-                try:
-                    # timeout=0 = non-blocking: van rỗng → raise Empty NGAY (không chặn io thread).
-                    req = self._async_outbound.get_or_raise(timeout=0)
-                except queue.Empty:
-                    break
-                # Ghi nhận in-flight + submitted NGAY sau khi rời van, TRƯỚC send() (fix F1 review #252):
-                # đóng cửa sổ đua drain — nếu tăng SAU send, có khoảnh khắc (outbound_size==0 & in_flight==0)
-                # ở frame cuối làm vòng drain camera_worker thoát sớm. send() DEALER là fire-and-forget
-                # (window_size ≪ SNDHWM nên không block/raise) → thứ tự này an toàn + chính xác hơn cho flow-control.
-                self._pending_async[req.request_id] = time.monotonic()
-                self._in_flight += 1
-                self._sent += 1     # đếm TẠI LÚC GỬI (K-051)
-                self._sock.send(msgpack.packb(codec.request_to_dict(req)))
-            # 2) poll recv.
-            if dict(poller.poll(self._poll_ms)).get(self._sock) == zmq.POLLIN:
-                data = self._sock.recv()
-                d = msgpack.unpackb(data, raw=False)
-                rid = d["request_id"]
-                with self._lock:
-                    slot = self._pending.pop(rid, None)
-                if slot is not None:
-                    slot.put(d)     # đường SYNC — R3.3: id đã dọn (timeout) → slot None → bỏ an toàn
-                elif rid in self._pending_async:
-                    # đường ASYNC: phân loại ok/err → đẩy vào _responses, giảm in_flight.
-                    self._pending_async.pop(rid)
-                    resp = codec.dict_to_response(d)
-                    if resp.is_success:
-                        self._ok += 1
-                    else:
-                        self._err += 1
-                    self._responses.put(resp)
-                    self._in_flight -= 1
-            # 3) quét TIMEOUT các request async quá hạn (task 2.5): tạo response lỗi retryable.
-            if self._pending_async:
-                now = time.monotonic()
-                expired = [r for r, ts in self._pending_async.items() if now - ts > self._timeout_s]
-                for r in expired:
-                    self._pending_async.pop(r)
-                    self._responses.put(InferenceResponse(
-                        request_id=r,
-                        error=InferenceError("Timeout", f"no response in {self._timeout_s}s", retryable=True),
-                    ))
-                    self._timeout += 1
-                    self._in_flight -= 1
+                break
+            # Ghi nhận in-flight + submitted NGAY sau khi rời van, TRƯỚC send() (fix F1 review #252):
+            # đóng cửa sổ đua drain — nếu tăng SAU send, có khoảnh khắc (outbound_size==0 & in_flight==0)
+            # ở frame cuối làm vòng drain camera_worker thoát sớm. send() DEALER là fire-and-forget
+            # (window_size ≪ SNDHWM nên không block/raise) → thứ tự này an toàn + chính xác hơn cho flow-control.
+            self._pending_async[req.request_id] = time.monotonic()
+            self._in_flight += 1
+            self._sent += 1     # đếm TẠI LÚC GỬI (K-051)
+            self._sock.send(msgpack.packb(codec.request_to_dict(req)))
+        # 2) poll recv.
+        if dict(poller.poll(self._poll_ms)).get(self._sock) == zmq.POLLIN:
+            data = self._sock.recv()
+            d = msgpack.unpackb(data, raw=False)
+            rid = d["request_id"]
+            with self._lock:
+                slot = self._pending.pop(rid, None)
+            if slot is not None:
+                slot.put(d)     # đường SYNC — R3.3: id đã dọn (timeout) → slot None → bỏ an toàn
+            elif rid in self._pending_async:
+                # đường ASYNC: phân loại ok/err → đẩy vào _responses, giảm in_flight.
+                self._pending_async.pop(rid)
+                resp = codec.dict_to_response(d)
+                if resp.is_success:
+                    self._ok += 1
+                else:
+                    self._err += 1
+                self._responses.put(resp)
+                self._in_flight -= 1
+        # 3) quét TIMEOUT các request async quá hạn (task 2.5): tạo response lỗi retryable.
+        if self._pending_async:
+            now = time.monotonic()
+            expired = [r for r, ts in self._pending_async.items() if now - ts > self._timeout_s]
+            for r in expired:
+                self._pending_async.pop(r)
+                self._responses.put(InferenceResponse(
+                    request_id=r,
+                    error=InferenceError("Timeout", f"no response in {self._timeout_s}s", retryable=True),
+                ))
+                self._timeout += 1
+                self._in_flight -= 1
 
     def infer(self, request: InferenceRequest) -> InferenceResponse:
         slot: queue.Queue = queue.Queue(maxsize=1)

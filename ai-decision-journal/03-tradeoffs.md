@@ -318,3 +318,13 @@ Links: D-089, D-052 (linter bộ nhớ), D-085 (self_test)
 Chọn: **OPT-IN** (chỉ mục tự thêm `Verify-Symbol` mới bị C8 kiểm) + **trường MỚI** (không parse `Nguồn:` free-form) + **cấm line-number** (chỉ `relpath::symbol`).
 - Cái mất: (1) lợi ích chỉ hiện với mục CHỦ ĐỘNG opt-in — 219 mục cũ không được phủ tự động (chấp nhận: hồi tố = công sức lớn, giá trị biên giảm dần với mục cũ). (2) Kỷ luật mới: khi đảo/gỡ code phải GỠ luôn dòng Verify-Symbol (H4). (3) Regex `def/class/assign` match cả trong docstring → false-NEGATIVE hiếm của việc-bắt-xoá.
 - Vì sao (bản chất): parse `Nguồn:` cũ (lẫn prose + line-number) → resolver KHÔNG đáng tin → false-positive → checker thành nhiễu → bị phớt lờ → TỆ HƠN không có. Opt-in + trường cứng + cấm line-number = chống-drift-by-construction (fix gốc), zero gánh nặng hồi tố, backward-compat tuyệt đối. Giữ `self_test` thuần-in-memory bằng TIÊM resolver giả (không đọc file) → không flake.
+
+### T-032 — 2026-07-12 — Z1 bulkhead io-thread: catch `Exception` RỘNG + continue vs catch hẹp từng loại lỗi
+Status: ✅ (code #345 — verify 629/2 · 5/5 không-flaky)
+Scope: `adapters/zmq_inference_client.py::_io_loop`
+Nguồn: LOG Entry #345 · D-091
+Links: D-091, K-024 (server cùng cách), D-054 (cùng file)
+Chọn: **catch `Exception` rộng + log + continue** (đối xứng `InferenceServer.serve`), KHÔNG catch hẹp riêng `msgpack.FormatError`/`KeyError`/`zmq.ZMQError`.
+- Cái mất: catch rộng có thể che 1 lỗi lập-trình-thật (bug nội bộ) thành "bỏ vòng lặng" thay vì crash lộ. Giảm thiểu: `_io_errors` counter + log stderr mỗi lỗi (không nuốt im lặng) → quan sát được; test đếm được.
+- Vì sao (bản chất): threat model là "1 message/1 vòng lỗi KHÔNG được giết thread giữ-socket-duy-nhất". Liệt kê hẹp từng exception = mong manh (bỏ sót loại mới = tái diễn hố đen). Server đã chọn cùng chiến lược (K-024) → đối xứng, nhất quán. `BaseException` (Ctrl-C/SystemExit) KHÔNG bị bắt (dùng `except Exception`) → dừng thread được khi cần.
+- Chống busy-spin: `sleep(5ms)` trong nhánh lỗi (nếu lỗi lặp liên tục, vd socket hỏng vĩnh viễn tới khi teardown).

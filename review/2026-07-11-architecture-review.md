@@ -207,3 +207,23 @@ motion_gate/tracking/count/detect/dark_filter/brightness, `zmq_inference_client`
 2. **E.2** — thu hẹp phạm vi patch `torch.load` (Low-Med, security-hygiene, sửa khi mở nhánh GPU).
 3. ~~**D.3** — reset `_reconnects` RTSP~~ ✅ **ĐÃ FIX (#321)**.
 4. **F2/F3/F4/F5/F6/F7/D.2/D.4** — dọn dẹp/điều hướng (Low), làm dần.
+
+
+---
+
+## Vòng săn-bug bổ sung (2026-07-12, #344–#345) — vùng CHƯA phủ kỹ 3 vòng đầu
+
+Mục tiêu user: TÌM BUG + nâng thiết kế (không học). Soi vùng ghi "chưa phủ": toán toạ độ/NMS/postprocess + ZMQ.
+
+**SOUND (đọc kỹ, không bịa bug):**
+- `domain/nms.py`: greedy per-class, tie-break `(-score, index)` xác định, guard `union>0`, fail-fast khác-space. ✅
+- `domain/letterbox_transform.py::inverse_box`: clamp GÓC vào `[0,orig]` + tính lại w/h → w/h≥0 (scale>0 nên x1>x0, clamp giữ thứ tự). ✅
+- `adapters/yolo_postprocess.py` (v5/v8 decode): center→top-left đúng; v5 `conf=obj×class` / v8 `conf=max class`; layout guard rõ. Rủi ro còn lại = giả định layout output → đã ghi rõ phải `describe_onnx` xác nhận weight thật (KHÔNG phải bug).
+- `InferenceServer.serve`: bulkhead per-request + malformed-guard + retryable/permanent (K-023b/K-024). ✅
+
+**### Z1 [Low-Med, fault-isolation] — ✅ ĐÃ FIX (#345, D-091)**
+`ZmqInferenceClient._io_loop` (trước fix) chỉ bọc `try/except queue.Empty` quanh bước-1; recv/unpack/step1b-send TRẦN → 1 RESPONSE rác (msgpack hỏng / thiếu `request_id`) hoặc lỗi zmq transient → exception giết io thread (daemon) → client thành **HỐ ĐEN** (mọi infer/submit timeout mãi). BẤT ĐỐI XỨNG với server (đã bulkhead K-024) — client dễ tổn thương HƠN (1 thread duy nhất sở hữu socket).
+**Fix:** tách `_loop_body` + `_io_loop` bọc `try/except Exception`→log+`_io_errors++`+`sleep(5ms)`+continue. Request đang chờ tự timeout=retryable. **TDD:** `tests/test_zmq_client_bulkhead.py` (in-process ROUTER, event-driven) RED tái hiện io-thread-chết → GREEN + 5/5 không-flaky. Verify 629/2.
+
+**### Z2 [Low] — MỞ (chưa sửa)**
+`ZmqInferenceClient._responses` là `queue.Queue()` không chặn → nếu caller ngừng `poll_responses()` mà io thread vẫn nhận response → phình vô hạn. Hiện an toàn (in_flight ≤ window + camera poll mỗi vòng, documented). Ghi nhận; sửa nếu tái dùng client ở ngữ cảnh khác.

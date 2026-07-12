@@ -1027,3 +1027,14 @@ Verify-Symbol: vision-platform/src/vision_platform/profiles/vision_slice_app.py:
 Nội dung: "5.0" (nhịp emit snapshot mặc định khi bật observe/metrics mà chưa set nhịp) trước lặp Ở 2 CHỖ (dòng ~274 `_run_from_config` + ~381 `main`) → gom về 1 hằng module-level `_DEFAULT_OBSERVE_INTERVAL_S = 5.0`, cả 2 tham chiếu.
 Vì sao (bản chất): 2 bản sao 1 hằng = VECTOR DRIFT (sửa 1 chỗ quên chỗ kia → hành vi CLI-direct vs config lệch ngầm). Fix GỐC = single-source-of-truth (đúng chủ đề chống-drift). Giữ trong `profiles` (không đẩy xuống runtime) vì đây là chính-sách-smart-default của APP, không phải default của engine `PipelineRunner` (runtime giữ default riêng — không cross-layer coupling thừa).
 Non-goal: KHÔNG gộp với default `emit_interval_s` của PipelineRunner (khác tầng, khác ngữ nghĩa).
+
+### D-091 — 2026-07-12 — FIX Z1 (review săn bug): bulkhead io-thread `ZmqInferenceClient` (đối xứng server K-024)
+Status: ✅ code (TDD: RED tái hiện io-thread chết → GREEN; verify 629/2 · lint 5/0 · 5/5 không-flaky)
+Evidence: `vp test tests/test_zmq_client_bulkhead.py` — TRƯỚC fix FAIL đúng lý do (`msgpack.FormatError` @zmq_inference_client.py:112 + `PytestUnhandledThreadExceptionWarning: Exception in thread zmq-client-io`); SAU fix PASS 5/5 (~0.45s, không-flaky); `vp verify` = 629 passed/2 skipped (+1) · lint 5/0 · drift PASS
+Scope: `adapters/zmq_inference_client.py` (tách `_loop_body` + `_io_loop` bọc `try/except` + counter `_io_errors` + `import sys`); test mới `tests/test_zmq_client_bulkhead.py`
+Nguồn: LOG Entry #345 · review săn bug Z1 (#344 phiên trước) · đọc code thật `_io_loop` (không bọc) vs `InferenceServer.serve` (bọc K-024)
+Links: Z1 (review), D-028 (zmq-inference), K-024 (bulkhead server), D-054/D-055 (backpressure hardening cùng file)
+Verify-Symbol: vision-platform/src/vision_platform/adapters/zmq_inference_client.py::_loop_body
+Nội dung: `_io_loop` cũ chỉ bọc `try/except queue.Empty` quanh bước-1; recv/unpack/step1b-send TRẦN → 1 response rác (msgpack hỏng / thiếu request_id) hoặc lỗi zmq transient → exception giết io thread (daemon) → client thành HỐ ĐEN (mọi infer/submit timeout mãi). Fix: tách logic 1 vòng ra `_loop_body`, `_io_loop` bọc `try/except Exception` → log stderr + `_io_errors++` + `sleep(5ms)` chống busy-spin + `continue`. Request đang chờ tự timeout=retryable (degradation đúng ý đồ).
+Vì sao (bản chất): BẤT ĐỐI XỨNG fault-isolation — server đã bulkhead per-request (K-024) nhưng client (1 thread duy nhất sở hữu socket, dễ tổn thương HƠN) thì không. Cùng threat model (message rác) phải phòng cả 2 đầu cho sản phẩm cross-process thương mại.
+Non-goal: KHÔNG đổi giao thức/độ ngữ nghĩa; catch rộng có chủ đích (mọi lỗi 1-vòng = cô lập, giống server).

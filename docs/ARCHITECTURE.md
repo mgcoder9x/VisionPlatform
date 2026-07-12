@@ -308,6 +308,7 @@ wire-codec kernel-pure · config frozen + registry + typo-guard.
 | F6 | `_build_config_observability` trộn build+start+I/O | Low | ⬜ MỞ |
 | F7 | nhiều profile entry gây mơ hồ | Low | ⬜ MỞ — thêm docstring "demo/legacy/web" |
 | D.2 | lock-poison LẦN-2 (slot kẹt WRITING/READING) | Low-Med | 🟡 **THU HẸP (#344)** — recovery lock-poison lần-1 đã WIRE (quarantine+lease+reap); residual chỉ còn lần-2+owner-sống (degraded an toàn, không mất data) → defer cần stress production (K-081); docstring stale đã sửa |
+| Z1 | client io-thread ZMQ không bulkhead (1 response rác giết thread → hố đen) | Low-Med | ✅ **ĐÃ FIX (#345)** — `_io_loop` bọc try/except (đối xứng server K-024); TDD 629/2 · D-091 |
 | D.4 | observability trải 4 kênh | Low | ⬜ điều hướng (đã liệt kê §8 + review) |
 
 **Phạm vi CHƯA review sâu (trung thực):** `onnx_detector`, sink JSONL, vài stage phụ (dark_filter/brightness),
