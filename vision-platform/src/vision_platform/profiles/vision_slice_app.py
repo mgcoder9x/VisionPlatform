@@ -12,11 +12,8 @@ import argparse
 import sys
 
 from vision_platform.kernel.stage_contract import StageStatus
-from vision_platform.runtime.sync_linear_executor import SyncLinearExecutor
-from vision_platform.runtime.pipeline_runner import PipelineRunner
-from vision_platform.runtime.composite_sink import CompositeSink
-from vision_platform.runtime.stages.detect_stage import DetectStage
-from vision_platform.runtime.stages.count_stage import CountStage
+# F1 (#324): lắp-ráp pipeline dồn về `pipeline_factory.build_runner` (1 đường) → module này KHÔNG còn ráp tay
+# (bỏ import SyncLinearExecutor/PipelineRunner/CompositeSink/DetectStage/CountStage). `build_runner` import lazy trong hàm.
 
 
 class _TrackSummarySink:
@@ -119,52 +116,82 @@ def _merge_observability(cli: dict, toml_obs) -> dict:
     }
 
 
-def _build_source(args):
-    if args.source == "fake":
-        from vision_platform.adapters.fake_frame_source import FakeFrameSource
-        return FakeFrameSource(max_frames=args.frames)
-    if args.source == "noise":
-        from vision_platform.adapters.noise_frame_source import NoiseFrameSource
-        return NoiseFrameSource(max_frames=args.frames)
-    if args.source == "video":
-        from vision_platform.adapters.video_file_frame_source import VideoFileFrameSource
-        return VideoFileFrameSource(args.video)
-    if args.source == "rtsp":
-        from vision_platform.adapters.rtsp_frame_source import RtspFrameSource
-        return RtspFrameSource(args.rtsp, max_reconnect=args.max_reconnect)
-    raise ValueError(f"nguồn không hỗ trợ: {args.source}")
+def _args_to_pipeline_config(args):
+    """Map cờ CLI (argparse.Namespace) → 1 `PipelineConfig` in-memory (F1/#324, thuần — test được).
 
-
-def _build_detector(args):
-    """Trả về 1 IDetector đã sẵn sàng làm inner cho DetectStage.
-
-    - fake → DetectorPipeline(FakeDetector) để box về ORIGINAL_FRAME (FakeDetector trả MODEL_INPUT).
-    - pt   → Yolov5PtDetector THẲNG (đã ORIGINAL_FRAME, KHÔNG bọc DetectorPipeline).
+    Đường CLI-direct DÙNG CHUNG `build_runner` với đường `--config` → 1 nguồn lắp-ráp duy nhất (đóng phân kỳ,
+    review F1). GIỮ NGUYÊN thứ tự stage suy từ cờ: [motion_gate?] → detect → count → [track?] → [line?].
+    Default builder KHỚP default cũ (verify #323: motion-gate 25/0.005 · model_size 640 · iou 0.3/max_age 30 ·
+    max_frames 20) → KHÔNG đổi hành vi. `_validate(args, parser)` PHẢI chạy TRƯỚC (H4) — hàm này giả định cờ hợp lệ.
     """
+    from vision_platform.kernel.config import (
+        PipelineConfig, SourceConfig, StageConfig, SinkConfig, DetectorConfig,
+    )
+    # --- source ---
+    if args.source in ("fake", "noise"):
+        source = SourceConfig(args.source, {"max_frames": args.frames})
+    elif args.source == "video":
+        source = SourceConfig("video", {"path": args.video})
+    else:  # rtsp (đã validate có --rtsp)
+        source = SourceConfig("rtsp", {"url": args.rtsp, "max_reconnect": args.max_reconnect})
+    # --- detector (luôn có; 'fake' mặc định). Registry: fake→DetectorPipeline(FakeDetector), pt→Yolov5PtDetector ---
     if args.detector == "fake":
-        from vision_platform.adapters.fake_detector import FakeDetector
-        from vision_platform.adapters.detector_pipeline import DetectorPipeline
-        return DetectorPipeline(FakeDetector(), args.model_size, args.model_size)
-    if args.detector == "pt":
-        from vision_platform.adapters.yolov5_pt_detector import Yolov5PtDetector
-        dev = _resolve_device_logged(args.device)   # auto/cuda/cpu → device thật (fail-fast nếu ép cuda thiếu)
-        return Yolov5PtDetector(args.weights, device=dev)
-    raise ValueError(f"detector không hỗ trợ: {args.detector}")
+        detector = DetectorConfig("fake", {"model_size": args.model_size})
+    else:  # pt (đã validate có --weights)
+        detector = DetectorConfig("pt", {"weights": args.weights, "device": args.device})
+    # --- stages (GIỮ THỨ TỰ hiện tại) ---
+    stages = []
+    if args.motion_gate:
+        mg = {
+            "max_consecutive_skip": args.motion_gate_max_skip,
+            "illumination_robust": args.motion_gate_illum_robust,
+        }
+        if args.motion_gate_roi:
+            mg["roi"] = tuple(float(p) for p in args.motion_gate_roi.split(","))
+        stages.append(StageConfig("motion_gate", mg))
+    stages.append(StageConfig("detect", {}))
+    stages.append(StageConfig("count", {}))
+    if args.track:
+        stages.append(StageConfig("track", {"iou_threshold": args.track_iou, "max_age": args.track_max_age}))
+    if args.line:
+        ax, ay, bx, by = (float(p) for p in args.line.split(","))
+        stages.append(StageConfig("line_crossing", {"ax": ax, "ay": ay, "bx": bx, "by": by}))
+    # --- sinks ---
+    sinks = []
+    if args.out:
+        sinks.append(SinkConfig("jsonl", {"path": args.out}))
+    if args.crossing_out:
+        sinks.append(SinkConfig("crossing_events", {"path": args.crossing_out}))
+    if args.crossing_db:
+        sinks.append(SinkConfig("crossing_events_sqlite", {"path": args.crossing_db}))
+    return PipelineConfig(
+        id="cli", source=source, stages=stages, sinks=sinks,
+        detector=detector, max_frames=args.max_frames,
+    )
 
 
-def _resolve_device_logged(requested: str) -> str:
-    """Resolve device theo năng lực máy + LOG device THỰC TẾ đã chọn (R3.2: chống 'tưởng GPU mà chạy CPU').
-
-    probe 1 lần ở đây (đường CLI direct dựng 1 detector). Raise CapabilityError khi ép CUDA mà máy thiếu —
-    `main()` bắt → thông báo gọn + exit code (không traceback thô).
-    """
-    from vision_platform.kernel.capabilities import resolve_device
-    from vision_platform.adapters.capability_probe import probe_capabilities
-    caps = probe_capabilities()
-    resolved = resolve_device(requested, caps)
-    print(f"[device] yêu cầu={requested!r} → dùng={resolved!r} "
-          f"(has_cuda={caps.has_cuda}, gpu={caps.gpu_name})", file=sys.stderr)
-    return resolved
+def _print_summary(stats, track_summary, args) -> None:
+    """In summary CLI-direct ra stderr (F1/#324: tách khỏi `main` — F2). Giữ NGUYÊN từng dòng (backward-compat)."""
+    print("=== vision_slice summary ===", file=sys.stderr)
+    print(f"  frames_read : {stats.frames_read}", file=sys.stderr)
+    print(f"  processed   : {stats.processed}", file=sys.stderr)
+    print(f"  skipped     : {stats.skipped}", file=sys.stderr)
+    print(f"  stage_errors: {stats.stage_errors}", file=sys.stderr)
+    print(f"  source_errors: {stats.source_errors}", file=sys.stderr)
+    print(f"  eof         : {stats.eof}", file=sys.stderr)
+    if track_summary is not None:
+        print(f"  unique_tracks: {track_summary.unique}", file=sys.stderr)
+        print(f"  active_tracks: {track_summary.active}", file=sys.stderr)
+    if args.line:
+        print(f"  crossings_in : {track_summary.cross_in}", file=sys.stderr)
+        print(f"  crossings_out: {track_summary.cross_out}", file=sys.stderr)
+        print(f"  crossings_tot: {track_summary.cross_total}", file=sys.stderr)
+    if args.crossing_out:
+        print(f"  crossing events → {args.crossing_out}", file=sys.stderr)
+    if args.crossing_db:
+        print(f"  crossing events db → {args.crossing_db}", file=sys.stderr)
+    if args.out:
+        print(f"  events → {args.out}", file=sys.stderr)
 
 
 def _validate(args, parser):
@@ -274,7 +301,7 @@ def _run_from_config(path: str, *, build=None,
             exporter.stop()   # R3.2: luôn đóng cổng/thread (kể cả 1 pipeline raise ra ngoài / KeyboardInterrupt)
 
 
-def main(argv=None) -> int:
+def _build_argparser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="vision_platform.profiles.vision_slice_app")
     parser.add_argument("--config", default=None,
                         help="file .toml khai báo pipeline(s) — bật đường declarative (bỏ qua các cờ --source/... khi có)")
@@ -322,6 +349,11 @@ def main(argv=None) -> int:
                         help="địa chỉ bind exporter /metrics (không set → 127.0.0.1 an toàn; 0.0.0.0=phơi mạng, KHÔNG auth → chỉ mạng nội bộ). Sentinel None để merge với [observability] TOML")
     parser.add_argument("--capabilities", action="store_true",
                         help="IN năng lực máy hiện tại (torch/cuda/cv2/gpu) dạng JSON rồi thoát — kiểm máy TRƯỚC khi deploy (đổi máy GPU/không-GPU)")
+    return parser
+
+
+def main(argv=None) -> int:
+    parser = _build_argparser()
     args = parser.parse_args(argv)
 
     if args.capabilities:
@@ -355,91 +387,33 @@ def main(argv=None) -> int:
                                 observe_interval_s=args.observe_interval, observe_every_n=args.observe_every,
                                 metrics_port=args.metrics_port, metrics_host=args.metrics_host)
 
-    _validate(args, parser)
+    _validate(args, parser)   # H4: validate cờ TRƯỚC khi map sang PipelineConfig
 
     from vision_platform.kernel.capabilities import CapabilityError
-    source = _build_source(args)
-    try:
-        detector = _build_detector(args)
-    except CapabilityError as e:
-        print(f"LỖI NĂNG LỰC (device): {e}", file=sys.stderr)
-        return 2
-    stages = []
-    if args.motion_gate:
-        from vision_platform.runtime.stages.motion_gate_stage import MotionGateStage
-        roi = None
-        if args.motion_gate_roi:
-            parts = args.motion_gate_roi.split(",")
-            if len(parts) != 4:
-                parser.error("--motion-gate-roi cần 'x,y,w,h' (4 số)")
-            try:
-                roi = tuple(float(p) for p in parts)
-            except ValueError:
-                parser.error("--motion-gate-roi: 4 giá trị phải là số")
-        stages.append(MotionGateStage(   # ĐẦU chuỗi: chặn frame tĩnh trước detect
-            max_consecutive_skip=args.motion_gate_max_skip,
-            roi=roi,
-            illumination_robust=args.motion_gate_illum_robust,
-        ))
-    stages.append(DetectStage(detector))
-    stages.append(CountStage())
-    track_summary = None
-    if args.track:
-        from vision_platform.runtime.iou_tracker import IouTracker
-        from vision_platform.runtime.stages.tracking_stage import TrackingStage
-        stages.append(TrackingStage(IouTracker(iou_threshold=args.track_iou, max_age=args.track_max_age)))
-        track_summary = _TrackSummarySink()
-    if args.line:
-        from vision_platform.runtime.stages.line_crossing_stage import LineCrossingStage
-        ax, ay, bx, by = (float(p) for p in args.line.split(","))
-        stages.append(LineCrossingStage(ax, ay, bx, by))
-    executor = SyncLinearExecutor(stages)
+    from vision_platform.profiles.pipeline_factory import build_runner
 
-    sinks = []
-    if args.out:
-        from vision_platform.adapters.jsonl_event_sink import JsonlEventSink
-        sinks.append(JsonlEventSink(args.out))
-    if args.crossing_out:
-        from vision_platform.adapters.crossing_event_sink import CrossingEventJsonlSink
-        sinks.append(CrossingEventJsonlSink(args.crossing_out))
-    if args.crossing_db:
-        from vision_platform.adapters.crossing_event_sqlite_sink import CrossingEventSqliteSink
-        sinks.append(CrossingEventSqliteSink(args.crossing_db))
-    if track_summary is not None:
-        sinks.append(track_summary)
-    sink = CompositeSink(sinks)
+    # F1 (#324): CLI-direct DÙNG CHUNG build_runner (1 đường lắp-ráp, xoá hand-assembly) — map cờ → PipelineConfig.
+    pcfg = _args_to_pipeline_config(args)
+    track_summary = _TrackSummarySink() if args.track else None
+    extra_sinks = [track_summary] if track_summary is not None else []
 
     # Observer(s) + optional exporter /metrics (đường inline) — DÙNG CHUNG helper với đường --config (DRY, #298).
     observer, exporter = _build_config_observability(args.observe, args.metrics_port, args.metrics_host)
-
-    runner = PipelineRunner(source, executor, sink, observer=observer,
-                            emit_every_n=obs_every, emit_interval_s=obs_interval)
+    try:
+        runner = build_runner(pcfg, observer=observer, emit_every_n=obs_every,
+                              emit_interval_s=obs_interval, extra_sinks=extra_sinks)
+    except CapabilityError as e:   # H2: ép cuda thiếu GPU → thông báo gọn + exit 2 (không traceback thô)
+        print(f"LỖI NĂNG LỰC (device): {e}", file=sys.stderr)
+        if exporter is not None:
+            exporter.stop()   # exporter đã start trong _build_config_observability → đóng cổng, không rò
+        return 2
     try:
         stats = runner.run(max_frames=args.max_frames)
     finally:
         if exporter is not None:
             exporter.stop()
 
-    print("=== vision_slice summary ===", file=sys.stderr)
-    print(f"  frames_read : {stats.frames_read}", file=sys.stderr)
-    print(f"  processed   : {stats.processed}", file=sys.stderr)
-    print(f"  skipped     : {stats.skipped}", file=sys.stderr)
-    print(f"  stage_errors: {stats.stage_errors}", file=sys.stderr)
-    print(f"  source_errors: {stats.source_errors}", file=sys.stderr)
-    print(f"  eof         : {stats.eof}", file=sys.stderr)
-    if track_summary is not None:
-        print(f"  unique_tracks: {track_summary.unique}", file=sys.stderr)
-        print(f"  active_tracks: {track_summary.active}", file=sys.stderr)
-    if args.line:
-        print(f"  crossings_in : {track_summary.cross_in}", file=sys.stderr)
-        print(f"  crossings_out: {track_summary.cross_out}", file=sys.stderr)
-        print(f"  crossings_tot: {track_summary.cross_total}", file=sys.stderr)
-    if args.crossing_out:
-        print(f"  crossing events → {args.crossing_out}", file=sys.stderr)
-    if args.crossing_db:
-        print(f"  crossing events db → {args.crossing_db}", file=sys.stderr)
-    if args.out:
-        print(f"  events → {args.out}", file=sys.stderr)
+    _print_summary(stats, track_summary, args)
     return 0
 
 

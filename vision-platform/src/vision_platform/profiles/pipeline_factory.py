@@ -10,7 +10,8 @@ lúc nạp module; chỉ import khi thực sự dựng loại đó.
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping
+import sys
+from typing import Any, Callable, Mapping, Sequence
 
 from vision_platform.kernel.config import PipelineConfig
 from vision_platform.kernel.capabilities import resolve_device
@@ -57,7 +58,12 @@ def _det_pt(params: Mapping):
     # Capability-aware: resolve device theo năng lực máy (auto→best / cuda-thiếu→CapabilityError fail-fast).
     # probe TRƯỚC construct (construct không import torch → resolve raise được mà không kéo dep nặng).
     # CapabilityError (RuntimeError) ở đường config → _run_from_config bulkhead cô lập (log + chạy tiếp cam kế).
-    dev = resolve_device(params.get("device", "cpu"), probe_capabilities())
+    caps = probe_capabilities()
+    dev = resolve_device(params.get("device", "cpu"), caps)
+    # F1/H1 (#324): LOG device THỰC TẾ đã chọn ở ĐÂY (1 nơi, cả đường CLI-direct lẫn config cùng hưởng —
+    # chống "tưởng GPU mà chạy CPU", R3.2). Trước: chỉ đường CLI-direct log qua `_resolve_device_logged`.
+    print(f"[device] yêu cầu={params.get('device', 'cpu')!r} → dùng={dev!r} "
+          f"(has_cuda={caps.has_cuda}, gpu={caps.gpu_name})", file=sys.stderr)
     return Yolov5PtDetector(params["weights"], device=dev)
 
 
@@ -224,13 +230,19 @@ def validate_config(app, *, registry: Mapping = DEFAULT_REGISTRY) -> None:
 
 
 def build_runner(pcfg: PipelineConfig, *, registry: Mapping = DEFAULT_REGISTRY,
-                 observer=None, emit_every_n: int = 0, emit_interval_s: float = 0.0) -> PipelineRunner:
+                 observer=None, emit_every_n: int = 0, emit_interval_s: float = 0.0,
+                 extra_sinks: Sequence = ()) -> PipelineRunner:
     """Dựng `PipelineRunner` từ 1 `PipelineConfig`. Type lạ → `ConfigError` (liệt kê type hợp lệ).
 
     `observer`/`emit_every_n`/`emit_interval_s` (opt-in, mặc định = không quan sát → NoopObserver trong
     PipelineRunner): wire quan sát vận hành vào ĐƯỜNG CONFIG-DECLARATIVE (deploy ~100 cam qua TOML). Không
     truyền → hành vi #265 giữ nguyên (backward-compat tuyệt đối). KHÔNG đưa vào schema TOML: quan sát là quyết
     định VẬN HÀNH toàn-fleet cho 1 lần chạy (source_id đã label per-camera), không phải cấu hình per-pipeline.
+
+    `extra_sinks` (F1/#324, additive default `()`): các ISink dựng-sẵn NGOÀI config, append SAU sink-từ-config
+    vào `CompositeSink`. Dùng cho sink PRESENTATION không thuộc config (vd `_TrackSummarySink` đọc artifacts để
+    in summary CLI). Default `()` → đường config KHÔNG đổi hành vi. Đây là mảnh cho F1 hợp nhất đường CLI-direct
+    → dùng chung `build_runner` (1 nguồn lắp-ráp) mà vẫn giữ được summary CLI.
     """
     # _check_params TRƯỚC khi gọi builder → typo bị chặn trước cả lazy-import (torch/cv2) → an toàn máy no-GPU.
     detector = None
@@ -254,6 +266,7 @@ def build_runner(pcfg: PipelineConfig, *, registry: Mapping = DEFAULT_REGISTRY,
         skb = _lookup(registry, "sinks", sk.type)
         _check_params(skb, f"sink '{sk.type}'", sk.params)
         sinks.append(skb(sk.params))
+    sinks.extend(extra_sinks)   # F1/#324: sink presentation ngoài-config (vd _TrackSummarySink) — append cuối
 
     executor = SyncLinearExecutor(stages)
     sink = CompositeSink(sinks)

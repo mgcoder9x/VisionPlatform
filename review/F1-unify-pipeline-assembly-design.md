@@ -1,6 +1,8 @@
 # F1 — Design: Hợp nhất 2 đường lắp-ráp pipeline (CLI-direct → PipelineConfig → build_runner)
 
-> **Trạng thái:** 🔵 DESIGN-ONLY — chờ user VALID trước khi code (design-first). Gắn LOG #322 · D-088.
+> **Trạng thái:** ✅ ĐÃ CODE (#324) — verify 628/2 · lint 5/0. Gắn LOG #322 (design) · #323 (valid H5) · #324 (code) · D-088.
+
+## 1. Vấn đề (đã verify)
 > **Nguồn:** review `2026-07-11-architecture-review.md` §F1 (Medium-High). **Bám code thật đã đọc** (`vision_slice_app.main`, `pipeline_factory.build_runner`).
 
 ## 1. Vấn đề (đã verify)

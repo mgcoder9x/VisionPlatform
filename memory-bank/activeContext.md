@@ -1,8 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T00:40:00+07:00.
-**[🔒 GIT] #323 validate design F1 (đóng H5) — sẽ commit + push NHẸ. Không đổi code (624/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T01:30:00+07:00.
+**[🔒 GIT] #324 code F1 — sẽ commit + push. Code đổi: baseline 624→628/2 (3 file src/test).**
+**[✅ #324 — PHA2 code F1 HOÀN TẤT: hợp nhất 2 đường lắp-ráp pipeline — verify 628/2·5/0 — +D-088✅]**
+- Hiện thực design D-088 (#322)+valid H5 (#323). Working tree kết thúc ở F1 hoàn chỉnh (một phần landed qua compaction) → VERIFY end-to-end trước khi tin (628/2·5/0·đọc code khớp design·không trùng def).
+- **Code:** `_args_to_pipeline_config` (thuần, CLI→PipelineConfig) + `build_runner` +`extra_sinks` (chèn `_TrackSummarySink`) + tách `_print_summary`/`_build_argparser` (F2) + device-log dời vào `_det_pt` (H1). Xoá ~90 dòng hand-assembly.
+- **6 hố xử hết:** H1 device-log@`_det_pt` · H2 exit-2 CapabilityError quanh build_runner + stop exporter · H3 frames/max-frames · H4 validate trước map · H5 default khớp (#323) · H6 +4 test map thuần, mọi test cũ xanh.
+- **Records sửa drift:** D-088 🔵→✅ code; review doc F1→ĐÃ CODE. Baseline 624→628.
+- **Ghi sổ:** LOG #324 · D-088→✅ · INDEX canonical #323→#324 (Σ219 giữ) · review doc · block này.
+- **Bước kế (CHỜ user):** F1 xong → còn E.2 (scope torch.load, nhánh GPU) · F2 phần lớn xong (argparser/summary tách) · F3/F4-F7/D.2/D.4 dọn dần. Hoặc dừng mốc sạch.
+---
 **[🔵→valid #323 — VALIDATE design F1: đóng hố H5 (default motion-gate KHỚP) — design verify-được hoàn toàn]**
 - Đọc code thật đóng hố `[CẦN KIỂM]` cuối: `MotionGateStage.__init__` default (25/0.005) == `_stage_motion_gate` `get(...,25/0.005)`; CLI-direct không truyền 2 param → dùng default → map qua config cho hành vi Y HỆT. Mọi default builder khớp cờ CLI (model_size 640·iou 0.3·max_age 30·max_frames 20).
 - **Kết luận:** F1 KHÔNG có rủi ro đổi-hành-vi-im-lặng. Design valid hoàn toàn, chỉ còn H1 (device-log chuyển chỗ = chủ đích) cần user OK.

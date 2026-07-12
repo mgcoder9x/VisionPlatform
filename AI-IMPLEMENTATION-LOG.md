@@ -6519,3 +6519,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết (H5 ĐÓNG — bằng chứng):** `MotionGateStage.__init__` default `pixel_diff_threshold=25, min_area_ratio=0.005`; `_stage_motion_gate` dùng `params.get("pixel_diff_threshold",25)`/`get("min_area_ratio",0.005)`; CLI-direct hiện KHÔNG truyền 2 param → dùng __init__ default. → map CLI→config (bỏ 2 param) cho hành vi Y HỆT. Đối chiếu thêm mọi default builder khớp cờ CLI: fake model_size 640=640 · track iou 0.3=0.3/max_age 30=30 · fake/noise max_frames 20=20. ⇒ F1 KHÔNG có rủi ro đổi-hành-vi-im-lặng. Design F1 giờ valid hoàn toàn (verify-được), chỉ còn H1 (device-log chuyển chỗ = chủ đích, cần user OK).
 
 **Đã verify:** đọc `motion_gate_stage.py::__init__` (default 25/0.005) + `pipeline_factory._stage_motion_gate` (get default 25/0.005) + CLI call-site (không truyền) — KHỚP; đối chiếu default track/fake/source. Không đổi code (624/2 giữ). `vp check` sẽ PASS (#323). · **Chưa verify:** runtime refactor F1 (PHA code — chờ user OK design + H1).
+
+### Entry #324 — 2026-07-12 — PHA2 code F1 HOÀN TẤT (hợp nhất 2 đường lắp-ráp pipeline) — verify 628/2·5/0 — Kiro-Opus
+
+**Bối cảnh:** hiện thực design D-088 (#322) + valid H5 (#323). Working tree kết thúc ở trạng thái F1 HOÀN CHỈNH + mạch lạc (một phần code landed qua compaction phiên dài); tôi VERIFY end-to-end trước khi tin (cấm tin bên-thứ-3 mù quáng): chạy test + đọc code thật xác nhận khớp design.
+
+**1. Quyết định AI tự ra:** áp đúng design F1 — CLI-direct sinh `PipelineConfig` in-memory (`_args_to_pipeline_config` thuần) → `build_runner` (1 đường lắp-ráp); `build_runner` +param additive `extra_sinks` (chèn `_TrackSummarySink` presentation); tách `_print_summary` + `_build_argparser` (F2 kèm theo); log device dời vào `_det_pt` (H1). Xoá `_build_source`/`_build_detector`/`_resolve_device_logged` (~90 dòng hand-assembly).
+
+**2. Chỗ phải đổi so với hiểu biết trước:** records ghi D-088 🔵 design-only đã LỆCH thực tế (code đã xong, chưa commit) → sửa D-088 🔵→✅ code. H1 thực thi: dòng `[device]` giờ ở `_det_pt` (áp cả đường config). Baseline 624→628 (+4 test F1 trong test_vision_slice.py).
+
+**3. Trade-off đã cân nhắc:** minor nuance H2 — nếu `--metrics-port` + `--detector pt` + no-GPU đồng thời: exporter start rồi stop khi CapabilityError (trước F1: detector-fail TRƯỚC khi start exporter). Chấp nhận (edge hiếm; `exporter.stop()` đóng cổng sạch trong nhánh bắt lỗi). Đổi lại: 1 nguồn lắp-ráp, đóng phân kỳ motion-gate.
+
+**4. Điều bạn nên biết:** 6 hố design đều xử: H1 device-log ở `_det_pt` · H2 main bắt CapabilityError quanh `build_runner`→exit 2 + stop exporter · H3 `--frames`→source.max_frames, `--max-frames`→run() · H4 `_validate` trước map · H5 default khớp (verify #323) · H6 test map thuần + backward-compat (628/2, mọi test cũ xanh). Test F1 mới: `_args_to_pipeline_config` minimal/full-stage-order + qua `_build_argparser`.
+
+**Đã verify (CHẠY THẬT + ĐỌC code):** full suite **628 passed/2 skipped** (cwd=vision-platform); **lint 5 kept/0 broken**; đọc `_args_to_pipeline_config`/`_print_summary`/`main`/`build_runner+extra_sinks`/`_det_pt+device-log` — mạch lạc, khớp design, không rác; grep KHÔNG trùng def. `vp check` sẽ chạy sau ghi sổ. · **Chưa verify:** đường `--detector pt` runtime thật (cần torch — K-079 vắng; nhánh fake + config path đã phủ test).

@@ -163,3 +163,63 @@ def test_composite_sink_forwards_all():
     PipelineRunner(source, executor, CompositeSink([s1, s2])).run()
     assert len(s1.results) == 2
     assert len(s2.results) == 2
+
+
+# ---- F1 (#324): CLI args → PipelineConfig mapping (đường CLI-direct dùng chung build_runner) ----
+from vision_platform.profiles.vision_slice_app import _args_to_pipeline_config, _build_argparser
+
+
+def _args(argv):
+    return _build_argparser().parse_args(argv)
+
+
+def test_args_to_pcfg_minimal_noise():
+    pcfg = _args_to_pipeline_config(_args(["--source", "noise", "--frames", "5"]))
+    assert pcfg.source.type == "noise"
+    assert pcfg.source.params["max_frames"] == 5
+    assert [s.type for s in pcfg.stages] == ["detect", "count"]
+    assert pcfg.detector.type == "fake"
+    assert pcfg.detector.params["model_size"] == 640          # default KHỚP (verify #323)
+    assert pcfg.sinks == ()
+
+
+def test_args_to_pcfg_full_stage_order_and_sinks(tmp_path):
+    argv = [
+        "--source", "fake", "--motion-gate", "--motion-gate-roi", "0,0,0.5,0.5",
+        "--track", "--line", "0,0.5,1,0.5",
+        "--out", str(tmp_path / "e.jsonl"),
+        "--crossing-out", str(tmp_path / "c.jsonl"),
+        "--crossing-db", str(tmp_path / "c.sqlite"),
+    ]
+    pcfg = _args_to_pipeline_config(_args(argv))
+    # GIỮ THỨ TỰ stage suy từ cờ.
+    assert [s.type for s in pcfg.stages] == ["motion_gate", "detect", "count", "track", "line_crossing"]
+    mg = next(s for s in pcfg.stages if s.type == "motion_gate")
+    assert mg.params["roi"] == (0.0, 0.0, 0.5, 0.5)
+    assert mg.params["max_consecutive_skip"] == 0
+    assert mg.params["illumination_robust"] is False
+    tr = next(s for s in pcfg.stages if s.type == "track")
+    assert tr.params == {"iou_threshold": 0.3, "max_age": 30}   # default KHỚP
+    ln = next(s for s in pcfg.stages if s.type == "line_crossing")
+    assert ln.params == {"ax": 0.0, "ay": 0.5, "bx": 1.0, "by": 0.5}
+    assert [s.type for s in pcfg.sinks] == ["jsonl", "crossing_events", "crossing_events_sqlite"]
+
+
+def test_args_to_pcfg_rtsp_and_pt():
+    p1 = _args_to_pipeline_config(_args(["--source", "rtsp", "--rtsp", "rtsp://h/c"]))
+    assert p1.source.type == "rtsp"
+    assert p1.source.params["url"] == "rtsp://h/c"
+    assert p1.source.params["max_reconnect"] is None
+    p2 = _args_to_pipeline_config(_args(["--detector", "pt", "--weights", "w.pt", "--device", "auto"]))
+    assert p2.detector.type == "pt"
+    assert p2.detector.params == {"weights": "w.pt", "device": "auto"}
+
+
+def test_cli_direct_uses_build_runner_end_to_end_with_track_summary(capsys):
+    """Đường CLI-direct (sau F1) chạy qua build_runner + extra_sinks (_TrackSummarySink) → summary in đúng."""
+    from vision_platform.profiles.vision_slice_app import main
+    rc = main(["--source", "noise", "--frames", "3", "--track", "--line", "0,0.5,1,0.5"])
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert "vision_slice summary" in err
+    assert "unique_tracks" in err and "crossings_in" in err   # track_summary qua extra_sinks hoạt động
