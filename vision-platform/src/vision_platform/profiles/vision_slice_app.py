@@ -15,6 +15,10 @@ from vision_platform.kernel.stage_contract import StageStatus
 # F1 (#324): lắp-ráp pipeline dồn về `pipeline_factory.build_runner` (1 đường) → module này KHÔNG còn ráp tay
 # (bỏ import SyncLinearExecutor/PipelineRunner/CompositeSink/DetectStage/CountStage). `build_runner` import lazy trong hàm.
 
+# F3/#343 (review): nhịp emit snapshot MẶC ĐỊNH khi bật observe/metrics mà người dùng CHƯA set nhịp (theo-giờ/theo-frame).
+# MỘT nguồn sự thật — trước đây "5.0" lặp ở 2 chỗ (main + _run_from_config) = vector drift (2 bản có thể lệch). Gom về đây.
+_DEFAULT_OBSERVE_INTERVAL_S = 5.0
+
 
 class _TrackSummarySink:
     """Sink nhỏ (ISink) đọc `unique_count`/`active_count` từ ARTIFACTS pipeline (nguồn thật).
@@ -271,7 +275,7 @@ def _run_from_config(path: str, *, build=None,
             app.observability)
         # Smart-default nhịp emit SAU merge: (observe∨metrics) & chưa set nhịp → 5s (self-consistent).
         if (m["observe"] or m["metrics_port"] is not None) and m["observe_every_n"] == 0 and m["observe_interval_s"] == 0.0:
-            m["observe_interval_s"] = 5.0
+            m["observe_interval_s"] = _DEFAULT_OBSERVE_INTERVAL_S
         observer, exporter = _build_config_observability(m["observe"], m["metrics_port"], m["metrics_host"])
         if observer is not None:
             build = lambda pcfg: build_runner(  # noqa: E731 — observer DÙNG CHUNG mọi pipeline (source_id từ snapshot)
@@ -378,7 +382,7 @@ def main(argv=None) -> int:
     # --metrics-port cũng cần emit định kỳ (để /metrics cập nhật), không chỉ --observe.
     _want_periodic = args.observe or (args.metrics_port is not None)
     if _want_periodic and obs_every == 0 and obs_interval == 0.0:
-        obs_interval = 5.0
+        obs_interval = _DEFAULT_OBSERVE_INTERVAL_S
 
     if args.config:
         if args.validate:

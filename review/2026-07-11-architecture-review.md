@@ -59,10 +59,11 @@ Rủi ro thấp (build_runner đã có test); cần giữ nguyên thứ-tự-sta
 toàn bộ CLI-direct assembly + in summary. Khó test đơn vị (chỉ test được qua `argv`).
 **Đề xuất:** tách `build_argparser()`, `_run_cli_direct(args)`, `_print_summary(...)`. Nếu làm F1 thì main tự co lại nhiều.
 
-### F3 — [Medium] Magic number "5.0s" (smart-default observe) ở 2 nơi
+### F3 — [Medium] Magic number "5.0s" (smart-default observe) ở 2 nơi — ✅ ĐÃ FIX (#343, D-090)
 **Bằng chứng:** `main()` đặt `obs_interval = 5.0` (đường CLI-direct); `_run_from_config` tính LẠI `m["observe_interval_s"]=5.0`
 sau merge. Cùng một chính sách, 2 chỗ. (Journal C-021 đã ghi đường này rối.)
 **Đề xuất:** 1 hằng `_DEFAULT_OBSERVE_INTERVAL_S = 5.0` + 1 helper `_smart_default_interval(...)` dùng chung 2 đường.
+**Đã fix (#343):** gom về hằng module `_DEFAULT_OBSERVE_INTERVAL_S`, cả 2 call-site tham chiếu (single-source). KHÔNG tách helper riêng (2 điều-kiện-guard khác nhau nhẹ giữa 2 đường; gom hằng đã diệt vector drift chính — helper thêm = over-engineer). Verify 628/2 giữ.
 
 ### F4 — [Low-Medium] Guard backpressure viết xong nhưng CHƯA wire (code chờ)
 **Bằng chứng:** `config_loader.assert_policy_allowed_for_source` (cấm BLOCK cho RTSP) đầy đủ + đúng lý, NHƯNG

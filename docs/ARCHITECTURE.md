@@ -302,7 +302,7 @@ wire-codec kernel-pure · config frozen + registry + typo-guard.
 | D.3 | RTSP `_reconnects` trọn-đời → ERROR oan | Low | ✅ **ĐÃ FIX (#321)** — reset khi đọc thành công |
 | F2 | `main()` dài (SRP) | Med | ✅ phần lớn xong (tách `_build_argparser`/`_print_summary` kèm F1) |
 | E.2 | `Yolov5PtDetector` patch `torch.load` toàn cục | Low-Med (security-hygiene) | ⬜ MỞ — gắn nhánh GPU (chặn bởi torch vắng, K-079); scope + restore khi mở GPU |
-| F3 | magic "5.0s" observe-default ×2 nơi | Low | ⬜ MỞ — gom hằng + helper |
+| F3 | magic "5.0s" observe-default ×2 nơi | Low | ✅ **ĐÃ FIX (#343)** — gom về hằng `_DEFAULT_OBSERVE_INTERVAL_S` (single-source) |
 | F4 | guard `assert_policy_allowed_for_source` (BLOCK+RTSP) chưa wire | Low-Med | ⬜ MỞ — wire schema policy per-source hoặc đánh dấu future-API |
 | F5 | `_CompositeObserver` nên ở `runtime/observers.py` | Low | ⬜ MỞ |
 | F6 | `_build_config_observability` trộn build+start+I/O | Low | ⬜ MỞ |

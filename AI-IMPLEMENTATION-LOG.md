@@ -6761,3 +6761,11 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **3. Trade-off:** mô-tả-năng-lực thay liệt-kê-số → reviewer phải chạy `vp check` để thấy danh sách đầy đủ (thêm 1 lệnh) đổi lấy prose KHÔNG drift nữa. Đáng (prose tĩnh luôn thua nguồn sống).
 **4. Điều bạn nên biết:** đây là ví dụ sống của T-031 (C8 opt-in không phủ prose ngoài journal). Nếu muốn phủ prose ARCHITECTURE.md → cần cơ chế khác (vd không nhắc số trong prose — đã áp ở đây). ARCHITECTURE.md giờ: mọi con-số-dễ-đổi đều trỏ lệnh, không kẹt số cứng.
 **Đã verify:** đọc trọn ARCHITECTURE.md trước+sau sửa (3 chỗ: §0 bảng, §10, header); `vp check` sẽ chạy dưới. Không đổi code (628/2 giữ). · **Chưa verify:** không.
+
+### Entry #343 — 2026-07-12 — FIX F3 (review Low): gom magic 5.0s observe-default về 1 hằng (chống drift 2-bản-sao) — Kiro-Opus
+**Bối cảnh:** tiếp #342. Dọn finding Low F3 (review 2026-07-11 §F3): "5.0" observe-default lặp 2 nơi. Grep xác nhận ĐÚNG 2 chỗ trong `vision_slice_app.py` (dòng ~274 `_run_from_config` + ~381 `main`), không có chỗ thứ 3.
+**1. Quyết định AI tự ra (D-090, ✅ code):** thêm hằng module-level `_DEFAULT_OBSERVE_INTERVAL_S = 5.0` + 2 call-site tham chiếu. Kèm trường `Verify-Symbol` (dogfood C8 trên code MỚI → C8 giờ kiểm 5 symbol).
+**2. Chỗ phải đổi:** không (giữ hằng trong profiles, KHÔNG đẩy xuống runtime — tránh cross-layer coupling; PipelineRunner giữ default riêng).
+**3. Trade-off:** đã ghi ngầm — single-source-of-truth đổi lấy 1 hằng module (không đáng kể). Không thêm T mới (thuần dedupe).
+**4. Điều bạn nên biết:** 2 bản sao 1 hằng = vector drift (CLI-direct vs config lệch ngầm nếu sửa 1 quên 1) → fix GỐC bằng 1 nguồn. Đánh dấu F3 ✅ trong ARCHITECTURE §12 + review doc. Review findings còn MỞ (Low): E.2 (chặn GPU) · F4 (guard RTSP wire) · F5 (_CompositeObserver→runtime) · F6 (_build_config_observability tách build/start) · F7 (docstring profile) · D.2 (lock-poison lần-2).
+**Đã verify:** `vp verify` = **628 passed/2 skipped (GIỮ NGUYÊN → refactor bảo toàn hành vi) · lint 5 kept/0 broken · 0 diagnostic · C8 5 Verify-Symbol khớp · DRIFT-CHECK PASS · VERIFY OK** (đọc output thật, EXIT 0). · **Chưa verify:** không.

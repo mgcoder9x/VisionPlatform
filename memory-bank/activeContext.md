@@ -1,8 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T13:20:00+07:00.
-**[🔒 GIT] #342 sửa GỐC staleness ARCHITECTURE.md — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T14:00:00+07:00.
+**[🔒 GIT] #343 FIX F3 (gom hằng observe-default) — sẽ commit + push NHẸ. Code đổi additive (628/2 giữ).**
+**[✅ #343 — FIX review F3 (Low): gom magic 5.0s observe-default → 1 hằng `_DEFAULT_OBSERVE_INTERVAL_S` (D-090 ✅)]**
+- "5.0" observe-default trước lặp 2 nơi (`main` + `_run_from_config`) = vector drift → gom 1 hằng module-level, cả 2 tham chiếu. Grep xác nhận đúng 2 chỗ, không có chỗ 3. Giữ trong profiles (không đẩy runtime — cross-layer thừa).
+- Kèm Verify-Symbol dogfood C8 (nay kiểm 5 symbol). Đánh dấu F3 ✅ trong ARCHITECTURE §12 + review doc.
+- **Ghi sổ:** LOG #343 · +D-090 (✅ code) · INDEX canonical #342→#343 · Σ221→Σ222 (D89→D90) · dòng D-090 · block này.
+- **VERIFY:** `vp verify` = 628/2 GIỮ (bảo toàn hành vi) · lint 5/0 · 0 diag · C8 5 khớp · drift PASS · VERIFY OK.
+- **Bước kế (CHỜ user — mốc dừng SẠCH):** (a) cổng Feynman #11–#14 (giá-trị-cao nhất, cần user); (b) review Low còn MỞ: F4 (wire guard RTSP) · F5 (_CompositeObserver→runtime) · F6 (tách build/start observability) · F7 (docstring profile) · D.2 (lock-poison lần-2); E.2 chặn GPU. Hoặc tổng kết.
+---
 **[✅ #342 — Sửa GỐC staleness `docs/ARCHITECTURE.md` (§0/§10 lệch thực tế drift-check)]**
 - User hỏi "ARCHITECTURE.md đủ để đánh giá?" → đọc trọn → phát hiện doc-drift: §0 bảng + §10 ghi "C1–C7 + self-test [3/3]" + mốc #325, lệch thực tế C8/11-case/#341. (C8 KHÔNG tự bắt vì chỉ quét journal — đúng giới hạn T-031.)
 - **Fix GỐC (không ngọn):** bỏ liệt-kê-số-đếm-được trong prose (sẽ drift lại khi C9), thay bằng mô tả NĂNG LỰC (bản-ghi↔bản-ghi + bản-ghi↔CODE + self-test + RULES sync) + trỏ "danh sách/số case sống = `vp check`" — đúng nguyên tắc §0. Header: kiến trúc §1–9 ảnh-chụp #325, §10 nâng gồm C8 (#341).

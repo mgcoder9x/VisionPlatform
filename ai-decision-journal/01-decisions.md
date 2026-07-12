@@ -1016,3 +1016,14 @@ Links: D-052 (linter nhất quán bộ nhớ C1–C7) · D-053 (hook+kit) · D-0
 Nội dung: thêm check C8 — với mỗi trường OPT-IN `Verify-Symbol: <relpath>::<symbol>` trong 4 file journal, kiểm (1) file tồn tại (2) symbol được định nghĩa (regex def/class/assign). Giữ `self_test` thuần-in-memory bằng cách TIÊM resolver giả (`symbol_exists` Callable, mặc định None→đọc file thật). Opt-in ⇒ backward-compat tuyệt đối 219 mục cũ.
 Vì sao (bản chất): C1–C7 chỉ đối chiếu bản-ghi↔bản-ghi; drift class doc↔code (mục ✅ code nhưng symbol đã bị xoá) HOÀN TOÀN chưa phủ → audit-trail có thể sai-sự-thật mà máy vẫn PASS. C8 đóng đúng lỗ đó. Dùng trường MỚI (không parse `Nguồn:` free-form → tránh false-positive) + cấm line-number (chống-drift-by-construction) = fix gốc không fix ngọn.
 Non-goal v1: KHÔNG kiểm hành-vi-đúng (việc của pytest); KHÔNG bắt buộc hồi tố mọi mục; KHÔNG dùng line-number.
+
+### D-090 — 2026-07-12 — FIX F3 (review): gom magic `5.0s` observe-default về 1 hằng `_DEFAULT_OBSERVE_INTERVAL_S`
+Status: ✅ code (verify 628/2 · lint 5/0 · drift PASS — hành vi KHÔNG đổi)
+Evidence: `vp verify` = 628 passed/2 skipped (giữ nguyên → refactor bảo toàn hành vi) · lint 5 kept/0 broken · 0 diagnostic; C8 giờ kiểm 5 Verify-Symbol
+Scope: `vision-platform/src/vision_platform/profiles/vision_slice_app.py` (+hằng module-level, 2 call-site tham chiếu: `main` + `_run_from_config`)
+Nguồn: LOG Entry #343 · review `review/2026-07-11-architecture-review.md` §F3 (Low) · ARCHITECTURE.md §12
+Links: F3 (review), D-089/T-031 (chủ đề chống-drift), D-088 (F1/#324 chỗ observe-default)
+Verify-Symbol: vision-platform/src/vision_platform/profiles/vision_slice_app.py::_DEFAULT_OBSERVE_INTERVAL_S
+Nội dung: "5.0" (nhịp emit snapshot mặc định khi bật observe/metrics mà chưa set nhịp) trước lặp Ở 2 CHỖ (dòng ~274 `_run_from_config` + ~381 `main`) → gom về 1 hằng module-level `_DEFAULT_OBSERVE_INTERVAL_S = 5.0`, cả 2 tham chiếu.
+Vì sao (bản chất): 2 bản sao 1 hằng = VECTOR DRIFT (sửa 1 chỗ quên chỗ kia → hành vi CLI-direct vs config lệch ngầm). Fix GỐC = single-source-of-truth (đúng chủ đề chống-drift). Giữ trong `profiles` (không đẩy xuống runtime) vì đây là chính-sách-smart-default của APP, không phải default của engine `PipelineRunner` (runtime giữ default riêng — không cross-layer coupling thừa).
+Non-goal: KHÔNG gộp với default `emit_interval_s` của PipelineRunner (khác tầng, khác ngữ nghĩa).
