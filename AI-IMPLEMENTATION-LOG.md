@@ -6631,3 +6631,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** deep-dive tiến độ: #11 ✅ (15/15) · #12 🔵 nền (cau-chuyen+muc-luc, 14 mẩu ⬜). Điểm dạy trọng tâm #12: domain index-based (cấm import kernel), tie-break xác định, int16-cast chống underflow, orientation cho cắt+hướng, tách tầng.
 
 **Đã verify:** đọc 10 file analytics thật (phiên này) để viết cau-chuyen bám sát; tạo 2 file + cập nhật INDEX code-lessons. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#331). · **Chưa verify:** mẩu 01–14 #12 (chưa viết).
+
+### Entry #332 — 2026-07-12 — Deep-dive code-lessons #12: viết mẩu 01–03 (tracking domain) + 07–08 (geometry) — Kiro-Opus
+
+**Bối cảnh:** tiếp #331 (mở #12). Viết cụm nền toán thuần @domain + intro stateful.
+
+**1. Quyết định AI tự ra:** viết 5 mẩu: 01 stateful-vs-stateless (intro) · 02 greedy_associate INDEX-based (domain cấm kernel) · 03 tie-break xác định · 07 orient cross-product · 08 segments_intersect (collinear=False). Quote nguyên văn + cite path.
+
+**2. Chỗ phải đổi:** không.
+
+**3. Trade-off:** viết cụm domain (tracking+geometry) trước — nền toán thuần, hiểu trước khi lên runtime/stage. Motion (11–12) + runtime (04/06/09/13) + DTO (05/10) + wiring (14) lượt sau.
+
+**4. Điều bạn nên biết:** #12 tiến độ 5/14 (01,02,03,07,08 ✅). Điểm dạy: domain index-based (ranh giới), tie-break xác định (test lặp-lại-được), orient=1-toán-2-công-dụng (cắt + hướng), strict `>` cho collinear.
+
+**Đã verify:** quote đúng từ `domain/tracking.py`+`domain/geometry.py`+`tracking_stage.py` (đọc thật phiên này) + cite path; cập nhật muc-luc. Không đổi code sản phẩm (628/2 giữ). `vp check` sẽ PASS (#332). · **Chưa verify:** mẩu 04/05/06/09/10/11/12/13/14 #12.

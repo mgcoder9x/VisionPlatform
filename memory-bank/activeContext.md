@@ -1,8 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T05:15:00+07:00.
-**[🔒 GIT] #331 mở deep-dive #12 analytics — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**Cập nhật lúc:** 2026-07-12T05:45:00+07:00.
+**[🔒 GIT] #332 deep-dive #12 mẩu 01-03+07-08 — sẽ commit + push NHẸ. Không đổi code (628/2 giữ).**
+**[🔵 #332 — Deep-dive #12 analytics: viết mẩu 01–03 (tracking domain) + 07–08 (geometry)]**
+- Viết cụm nền toán thuần: 01 stateful-vs-stateless · 02 greedy_associate INDEX-based · 03 tie-break xác định · 07 orient · 08 segments_intersect. Quote + cite.
+- #12 tiến độ **5/14 mẩu**. Còn: 04/06 (tracker/stage runtime) · 05/10 (DTO Track/CrossingEvent) · 09 (LineCrossingStage) · 11/12/13 (motion) · 14 (wiring).
+- **Ghi sổ:** LOG #332 · INDEX canonical #331→#332 (Σ219 giữ) · muc-luc · block này.
+- **Bước kế (CHỜ user):** cụm motion (11–13) + runtime (04/06/09) + DTO (05/10) + wiring (14) → hoàn tất #12.
+---
 **[🔵 #331 — MỞ deep-dive code-lessons #12 analytics (cau-chuyen + muc-luc)]**
 - Đọc 10 file analytics thật (domain tracking/geometry/motion + iou_tracker + stages + kernel Track/CrossingEvent) → tạo `12-analytics/00-cau-chuyen.md` (vòng cung 6 nhịp: đếm-không-trùng/qua-vạch-hướng/detector-quá-tải) + `00-muc-luc.md` (14 mẩu).
 - Deep-dive tiến độ: **#11 ✅ (15/15)** · **#12 🔵 nền** (14 mẩu ⬜).
