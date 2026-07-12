@@ -6463,3 +6463,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** (D.2) E-15/E-15b: writer/reader acquire-lock LẦN-2 timeout → slot kẹt WRITING/READING vĩnh viễn (owner=self sống nên không tự quarantine) — code tự ghi là giới hạn demo, production wire lease-deadline (field v2 sẵn). (D.3 — phát hiện mới có giá trị) `RtspFrameSource._reconnects` là ngân sách TRỌN-ĐỜI (không reset khi read FRAME thành công) → `max_reconnect` hữu hạn + camera chớp-tắt lai rai qua phiên dài → ERROR vĩnh viễn oan. Fix bản chất: reset `_reconnects=0` khi đọc thành công (ngữ nghĩa "rớt liên tiếp"). LATENT vì deploy thường `max_reconnect=None`. (D.4) observability trải 4 kênh (ObservabilityHook/structlog/InMemoryMetrics/IPipelineObserver) — đúng-mục-đích-riêng, nên liệt kê trong ARCHITECTURE.md để điều hướng.
 
 **Đã verify:** đọc TRỌN 5 file (cite §D); đối chiếu D.3 bằng đọc `read()` RTSP (nhánh FRAME không reset `_reconnects`, chỉ `setup()` reset) — có bằng chứng; cập nhật review doc §D. Không đổi code (623/2 giữ). `vp check` sẽ PASS (#319). · **Chưa verify:** detector adapter (onnx/pt), sink, phần lớn stages, zmq (ghi rõ §D.5) — vòng 3 nếu cần; D.2/D.3 chưa fix (mới là phát hiện).
+
+### Entry #320 — 2026-07-11 — REVIEW vòng 3 (detector/SQLite/analytics-geometry/wire-codec) → bổ sung `review/2026-07-11-architecture-review.md` §E + KẾT LUẬN tổng thể — Kiro-Opus
+
+**Bối cảnh:** khép review toàn hệ (user cần nền đánh giá tổng thể). Đọc thêm 7 file THẬT: `detector_pipeline` + `yolo_postprocess` + `yolov5_pt_detector` + `crossing_event_sqlite_sink` + `line_crossing_stage` + `iou_tracker` + `inference_wire_codec`.
+
+**1. Quyết định AI tự ra:** cập nhật review doc (§E vòng 3) + viết KẾT LUẬN tổng thể 3 vòng + danh sách sửa theo ưu tiên. Ghi SOUND ở chỗ SOUND (6/7 file).
+
+**2. Chỗ phải đổi so với hiểu biết trước:** trước chỉ "biết tên" detector/analytics; giờ đọc THẬT xác nhận: DetectorPipeline kỷ luật CoordinateSpace, SQLite param-hoá + durability, line-crossing dùng domain geometry + bounded memory, iou_tracker id đơn điệu, wire codec kernel-pure. Đều SOUND.
+
+**3. Trade-off đã cân nhắc:** severity trung thực — 1 phát hiện mới Low-Med (E.2 torch.load global patch), còn lại SOUND. KHÔNG bịa lỗi. Phân biệt "chưa cắn ở no-GPU" (E.2 chỉ chạy khi có torch) nhưng nên sửa khi mở nhánh GPU.
+
+**4. Điều bạn nên biết (E.2 — phát hiện có giá trị):** `Yolov5PtDetector.setup()` thay `torch.load = _patched` (ép `weights_only=False` cho torch>=2.6) ở cấp MODULE, gắn cờ `_vp_patched` chống lặp NHƯNG KHÔNG khôi phục → sau setup mọi `torch.load` trong tiến trình mặc định `weights_only=False` (nới security-default rộng hơn ý định). Fix bản chất: patch NGAY TRƯỚC `yolov5.load` rồi restore trong `finally` (scoped). KẾT LUẬN TỔNG THỂ 3 vòng: kiến trúc VỮNG toàn diện, KHÔNG lỗi đúng-sai nghiêm trọng trong phạm vi đã đọc rộng; ưu tiên sửa: F1 > E.2 > D.3 > (F2-F7/D.2/D.4 dọn dần).
+
+**Đã verify:** đọc TRỌN 7 file (cite §E); đối chiếu E.2 bằng đọc `setup()` (patch `torch.load` không có restore, chỉ cờ `_vp_patched`) — có bằng chứng; cập nhật review doc §E + kết luận. Không đổi code (623/2 giữ). `vp check` sẽ PASS (#320). · **Chưa verify:** onnx_detector/sink JSONL/các stage còn lại/zmq/domain thuần (đọc nhẹ — ghi rõ §E.3); F1/E.2/D.3 chưa fix (mới là phát hiện+khuyến nghị).

@@ -150,3 +150,50 @@ Vòng 2 đã phủ IPC + RTSP + observability runtime. **Vẫn CHƯA đọc sâu
 (detector adapter), các sink (jsonl/sqlite), phần lớn `runtime/stages/*`, `zmq_inference_client`/`inference_server`.
 Đánh giá tổng thể tới đây: **kiến trúc + phần khó (IPC) vững; các phát hiện đều Low→Medium, không có lỗi đúng-sai
 nghiêm trọng trong phạm vi đã đọc.** Ưu tiên hành động không đổi: **F1** (hợp nhất 2 đường lắp-ráp) vẫn là số 1.
+
+
+---
+
+## E. Review vòng 3 — detector chain / SQLite sink / analytics geometry / wire codec (bổ sung 2026-07-11, #320)
+
+**Đã đọc thêm:** `adapters/detector_pipeline.py` · `adapters/yolo_postprocess.py` · `adapters/yolov5_pt_detector.py`
+· `adapters/crossing_event_sqlite_sink.py` · `runtime/stages/line_crossing_stage.py` · `runtime/iou_tracker.py`
+· `kernel/inference_wire_codec.py`.
+
+### E.1 SOUND (xác nhận đọc thật)
+- **`DetectorPipeline`** (Decorator): letterbox → inner.detect (MODEL_INPUT) → `inverse_box` → NMS. Kỷ luật
+  CoordinateSpace chặt; `resize_fn` là seam (numpy nearest cho test, cv2/onnx cho prod). ✅
+- **`yolo_postprocess`** — trung thực chống-bịa: ghi RÕ khác biệt layout v5 (obj×class) vs v8 (max-class) + caveat
+  `describe_onnx()` xác nhận shape trước khi tin. ✅
+- **`CrossingEventSqliteSink`** — **tham số hoá `?` (chống SQL-injection)**, `executemany`, **commit mỗi frame
+  (durability)**, `CREATE IF NOT EXISTS` idempotent + index (source_id, ts), thread-safety ghi rõ (1 thread runner). ✅
+- **`LineCrossingStage`** — geometry qua `domain` (`segments_intersect`/`orient`), hướng in/out từ DẤU orient (1
+  nguồn cho cả đếm lẫn event → không lệch), **bounded memory** (prune center_prev track vắng), camera-affinity guard. ✅
+- **`IouTracker`** — IoU-greedy, **track_id đơn điệu KHÔNG tái dùng** (`unique_count=_next_id`), age/retire, thuần
+  Python xác định (test không cần model). ✅
+- **`inference_wire_codec`** — kernel-pure DTO↔dict (msgpack/zmq ở RÌA transport), round-trip giữ `ring_epoch`/space. ✅
+
+### E.2 [Low-Medium / security-hygiene] `Yolov5PtDetector.setup()` monkey-patch `torch.load` TOÀN CỤC, KHÔNG khôi phục
+**Bằng chứng (`yolov5_pt_detector.py::setup`):** để `yolov5.load` (gọi `torch.load` bên trong) không bị chặn bởi
+`weights_only=True` (mặc định torch>=2.6), code thay `torch.load = _patched` (ép `weights_only=False`) ở cấp
+MODULE torch, gắn cờ `_vp_patched` chống lặp — nhưng **KHÔNG bao giờ khôi phục** `torch.load` gốc.
+**Hệ quả:** sau `setup()`, MỌI `torch.load` khác trong tiến trình đều mặc định `weights_only=False` (mở
+unpickle mã tuỳ ý) — nới mặc-định-bảo-mật RỘNG HƠN ý định (chỉ file weight tin-cậy của user cần). Rủi ro thấp
+trong app hiện tại (không có `torch.load` khác) nhưng là **security default weakening** process-wide.
+**Đề xuất (fix bản chất):** giới hạn phạm vi — patch `torch.load` NGAY TRƯỚC `yolov5.load` rồi **restore trong
+`finally`** (chỉ 1 lần load), hoặc nếu API cho phép thì truyền `weights_only=False` cục bộ. Giữ mặc-định-an-toàn
+cho phần còn lại của tiến trình. (Nhánh này chỉ chạy khi có torch → chưa cắn ở no-GPU, nhưng nên sửa khi mở GPU.)
+
+### E.3 Cập nhật phạm vi (tổng kết review 3 vòng)
+Đã phủ: composition/config/factory/mechanism/supervisor (§A-C) · IPC/RTSP/observability (§D) · detector chain/
+SQLite/line-crossing/tracker/wire-codec (§E). **Còn đọc nhẹ (trung thực):** `onnx_detector`, sink JSONL, các stage
+motion_gate/tracking/count/detect/dark_filter/brightness, `zmq_inference_client`/`inference_server`, domain thuần
+(bbox/geometry/nms/motion/tracking) — nhưng đã đọc đại diện + nhánh nhạy-đúng-sai của mỗi nhóm.
+
+**KẾT LUẬN TỔNG THỂ (3 vòng, trung thực):** kiến trúc **vững toàn diện** — hexagonal ép-máy, IPC/SHM chặt
+(phần khó nhất), analytics geometry đúng, sink an toàn (param-hoá + durability), codec kernel-pure. **KHÔNG có lỗi
+đúng-sai nghiêm trọng** trong phạm vi đã đọc (rộng). Danh sách sửa/cải tiến (theo ưu tiên):
+1. **F1** — hợp nhất 2 đường lắp-ráp pipeline (Medium-High, nền cho F2/F3).
+2. **E.2** — thu hẹp phạm vi patch `torch.load` (Low-Med, security-hygiene, sửa khi mở nhánh GPU).
+3. **D.3** — reset `_reconnects` RTSP khi đọc thành công (Low, 1 dòng).
+4. **F2/F3/F4/F5/F6/F7/D.2/D.4** — dọn dẹp/điều hướng (Low), làm dần.

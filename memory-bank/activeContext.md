@@ -1,8 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T22:45:00+07:00.
-**[🔒 GIT] #319 review vòng 2 — sẽ commit + push NHẸ (text). Không đổi code (623/2 giữ).**
+**Cập nhật lúc:** 2026-07-11T23:15:00+07:00.
+**[🔒 GIT] #320 review vòng 3 (khép review) — sẽ commit + push NHẸ (text). Không đổi code (623/2 giữ).**
+**[✅ #320 — REVIEW vòng 3 (detector/SQLite/analytics-geometry/wire-codec) → `review/...` §E + KẾT LUẬN tổng thể]**
+- Đọc thêm 7 file THẬT: detector_pipeline/yolo_postprocess/yolov5_pt_detector/crossing_event_sqlite_sink/line_crossing_stage/iou_tracker/inference_wire_codec.
+- **6/7 SOUND:** DetectorPipeline kỷ luật CoordinateSpace · SQLite param-hoá + durability · line-crossing domain-geometry + bounded memory · iou_tracker id đơn điệu · wire codec kernel-pure.
+- **Phát hiện mới (E.2, Low-Med security-hygiene):** `Yolov5PtDetector.setup()` patch `torch.load` TOÀN CỤC ép `weights_only=False`, KHÔNG restore → nới security-default process-wide. Fix: scope patch + restore `finally` (sửa khi mở nhánh GPU).
+- **KẾT LUẬN TỔNG THỂ (3 vòng):** kiến trúc VỮNG toàn diện (hexagonal ép-máy · IPC/SHM chặt · analytics đúng · sink an toàn · codec kernel-pure). KHÔNG lỗi đúng-sai nghiêm trọng trong phạm vi đọc rộng. Ưu tiên sửa: **F1 > E.2 > D.3 > (F2-F7/D.2/D.4 dọn dần)**.
+- **Ghi sổ:** LOG #320 (mở rộng review) · INDEX canonical #319→#320 (Σ218 giữ) · review doc §E · block này.
+- **Bước kế (CHỜ user):** (a) triển khai F1 (spec nhỏ TDD, nền cho F2/F3); (b) fix nhanh E.2/D.3; (c) dừng — review 3 vòng đã đủ nền đánh giá tổng thể.
+---
 **[✅ #319 — REVIEW vòng 2 (phủ IPC/RTSP/observability) → bổ sung `review/2026-07-11-architecture-review.md` §D]**
 - Vòng 1 (#318) ghi chưa phủ ipc/adapter/observability → đọc thêm 5 file THẬT: `shm_frame_ring` (trọn, gồm reader ABA-path) + `ring_control_plane` + `ring_pool` + `rtsp_frame_source` + `observability`.
 - **IPC = SOUND (D.1):** state-ghi-cuối=authority, gen+epoch ABA-check, reader-registry đa-reader, double-snapshot recovery, drain-before-reuse cưỡng chế, single-writer invariant. KHÔNG đề xuất sửa (phần khó nhất làm tốt).
