@@ -6491,3 +6491,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** TDD chứng minh có bằng chứng: test mới FAIL trên code cũ (statuses `[FRAME,REC,REC,FRAME,REC,REC,FRAME,REC,ERROR,...]` — ERROR oan read#9), PASS sau fix. Fix = thêm `self._reconnects = 0` ở nhánh FRAME của `read()`. Baseline 623→624 (+1 test).
 
 **Đã verify (CHẠY THẬT, đọc output):** `pytest test_rtsp_frame_source.py` 8 passed (7 cũ + 1 mới); test mới FAIL-trước-fix (đã chạy thấy), PASS-sau-fix; **full suite 624 passed/2 skipped** (cwd=vision-platform, tránh collect template kit); **lint 5 kept/0 broken**; **drift PASS**. · **Chưa verify:** hành vi với camera RTSP THẬT (test dùng FakeCapture DI — deterministic; logic reconnect đã khớp).
+
+### Entry #322 — 2026-07-11 — DESIGN F1 (hợp nhất 2 đường lắp-ráp pipeline) — design-first + tự-review đối kháng — Kiro-Opus
+
+**Bối cảnh:** F1 (review, Med-High, ưu tiên 1) là refactor cấu trúc composition → theo cadence design→review→code, soạn THIẾT KẾ + tự-review TRƯỚC, chờ user valid rồi mới code. Đọc code thật `main()` + `build_runner`.
+
+**1. Quyết định AI tự ra (D-088, 🔵):** approach = CLI-direct sinh `PipelineConfig` in-memory (`_args_to_pipeline_config` thuần) → gọi `build_runner` (1 đường lắp-ráp). `build_runner` +1 param additive `extra_sinks` (để CLI chèn `_TrackSummarySink` presentation vào composite). Design ở `review/F1-unify-pipeline-assembly-design.md`.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** unify khiến device-log chuyển từ `_resolve_device_logged` (CLI riêng) vào `_det_pt` (dùng chung) — H1. Non-goal: KHÔNG thêm cờ CLI motion-gate (giữ CLI cũ; config là nơi tinh chỉnh sâu).
+
+**3. Trade-off đã cân nhắc:** `extra_sinks` param vs mở rộng RunStats để mang unique_count. Chọn `extra_sinks` (additive, presentation-sink chèn được, đường config không đổi) — nhẹ hơn đổi RunStats/artifacts. Làm F1 TRƯỚC F2/F3 (F2/F3 hệ quả tự nhiên khi main co lại).
+
+**4. Điều bạn nên biết:** tự-review đối kháng đã nêu 6 hố PHẢI xử trước code: H1 device-log-chuyển-chỗ · H2 giữ exit-2 CapabilityError (main bắt quanh build_runner) · H3 `--frames`(source.max_frames) vs `--max-frames`(run) · H4 chạy `_validate` trước map · H5 [cần verify] default MotionGateStage vs `_stage_motion_gate` có LỆCH không (chống đổi hành vi im lặng) · H6 giữ test cũ xanh + thêm test map thuần. CHƯA code — chờ user valid.
+
+**Đã verify:** đọc `main()` + `build_runner` thật để design bám code; tạo design doc + self-review 6 hố. Không đổi code sản phẩm (624/2 giữ). `vp check` sẽ PASS (#322). · **Chưa verify:** H5 (default motion-gate — sẽ đọc `MotionGateStage.__init__` khi code); runtime của refactor (PHA code sau valid).

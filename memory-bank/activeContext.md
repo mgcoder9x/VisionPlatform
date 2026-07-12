@@ -1,8 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-11)
-**Cập nhật lúc:** 2026-07-11T23:45:00+07:00.
-**[🔒 GIT] #321 fix D.3 (RTSP) — sẽ commit + push NHẸ. Code đổi: baseline 623→624/2.**
+**Cập nhật lúc:** 2026-07-12T00:15:00+07:00.
+**[🔒 GIT] #322 design F1 — sẽ commit + push NHẸ (text). Không đổi code (624/2 giữ).**
+**[🔵 #322 — DESIGN F1 (hợp nhất 2 đường lắp-ráp pipeline) — design-first, chờ user VALID → +D-088]**
+- F1 (review ưu tiên 1) = refactor cấu trúc → soạn thiết kế + tự-review đối kháng TRƯỚC, chờ valid rồi code.
+- **Approach (D-088):** CLI-direct sinh `PipelineConfig` in-memory (`_args_to_pipeline_config` thuần) → `build_runner` (1 đường); `build_runner` +param additive `extra_sinks` (chèn `_TrackSummarySink`). Xoá ~90 dòng hand-assembly.
+- **Tự-review 6 hố:** H1 device-log chuyển vào `_det_pt` · H2 giữ exit-2 CapabilityError · H3 `--frames` vs `--max-frames` · H4 `_validate` trước map · H5 [CẦN KIỂM] default `MotionGateStage` vs `_stage_motion_gate` (chống đổi hành vi im lặng) · H6 giữ test cũ + thêm test map thuần.
+- **Design ở** `review/F1-unify-pipeline-assembly-design.md`.
+- **Ghi sổ:** LOG #322 · +D-088 (🔵) · INDEX #322/Σ219/D88 + dòng D-088 · block này. CHƯA code.
+- **Bước kế (CHỜ user VALID design):** nếu OK → PHA code TDD 5 bước (extra_sinks → device-log → _args_to_pipeline_config → rút gọn main + _print_summary → xoá cũ; verify ≥624·5/0). Nếu user thấy refactor rủi ro > lợi → giữ nguyên (D.3 đã đóng phân kỳ nghiêm trọng nhất chưa? KHÔNG — F1 mới đóng phân kỳ lắp-ráp).
+---
 **[✅ #321 — FIX D.3: RTSP `_reconnects` reset khi đọc thành công (TDD) — verify 624/2·5/0]**
 - Đóng phát hiện D.3 (review #319): `_reconnects` cộng dồn TRỌN-ĐỜI → camera chớp-tắt lai rai + `max_reconnect` hữu hạn → ERROR oan. Fix GỐC: thêm `self._reconnects = 0` ở nhánh FRAME của `read()` → `max_reconnect` = "rớt LIÊN TIẾP".
 - **TDD:** test `test_max_reconnect_counts_consecutive_not_lifetime` FAIL-trước-fix (ERROR oan read#9), PASS-sau. `test_max_reconnect_gives_error` (rớt liên tục) VẪN ERROR — backward-compat.
