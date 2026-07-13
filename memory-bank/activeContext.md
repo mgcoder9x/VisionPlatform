@@ -1,7 +1,13 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T20:00:00+07:00.
+**Cập nhật lúc:** 2026-07-13T20:30:00+07:00.
+**[✅ #372 — Cập nhật end.md handoff chuyển máy (frontier #371, batch-mux spec)]**
+- User chuyển máy → viết lại `end.md` (cũ #347 STALE) khớp frontier #371: 8 mục (đầu-phiên · trạng thái 647/2·Σ252·HEAD 26c5bec · cơ chế vận hành · chống-drift 4 lớp · đã-làm #365-371 · TRỌNG TÂM batch-mux spec 3-vòng-review + Task 0 gate · hướng tiếp · chặn · file).
+- **Ghi sổ:** LOG #372 · INDEX canonical #371→#372 (Σ252 giữ, không +D/C/T/K) · block này. KHÔNG code.
+- **VERIFY:** end.md khớp activeContext/INDEX #371; drift chạy kế. 647/2 giữ.
+- **Máy mới:** mở end.md → §0 (git status + vp check) → chọn hướng §6. Bước kế = Task 0 spike (đèn xanh network re-export model dynamic). Bộ spec batch-mux đã validated 3 vòng, sẵn thi công.
+---
 **[🔵 #371 — REVIEW batch-mux ↔ backpressure/transport THẬT → chốt điểm tích hợp cross-process (+D-102, +K-096)]**
 - Đọc-lại-valid tiếp: batch-mux tương tác backpressure 2-tầng + ZMQ transport hiện có ra sao? Đọc CODE THẬT `InferenceServer.serve` (one-at-a-time) + `camera_worker` (2-tầng) + `BoundedQueue` (K-016 thread≠process-safe).
 - **Phát hiện (+K-096):** hình vẽ design ban đầu (in-process queue + camera submit) = MÔ HÌNH TEST, không phải deployment. Thật: camera=process riêng → ZMQ → server. ⇒ gộp cross-camera CHỈ khả thi TẠI `InferenceServer` (điểm ZMQ hội tụ); dùng BoundedQueue gộp cross-process = vi phạm K-016.
