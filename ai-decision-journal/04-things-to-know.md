@@ -956,3 +956,11 @@ onnx.checker.check_model(model); onnx.save(model, "tiny.onnx")
 ```
 Bằng chứng THẬT (chạy): `InferenceSession` báo input shape `['N',3,4,4]` (trục 0 động); `run` batch=1/2/4 OK; output = `x.sum(axis=(2,3))` khớp; **identity**: chạy `x[perm]` → output == `y[perm]` (đảo sample → đảo output, KHÔNG lẫn).
 Bài học: output PHỤ-THUỘC-SAMPLE (ReduceSum theo spatial) là chìa khoá để test **Property 1 (identity/scatter đúng)** + **Property 4 (tương đương single↔batch)** mà KHÔNG cần YOLO/GPU/network. Khi thi công Task 1 → port công thức này thành fixture (như test OnnxDetector hiện có tạo model stub). Đối lập K-093 (yolov8n cố định `[1,...]`): model TỰ TẠO chủ động đặt trục động.
+
+### K-096 — ✅ (2026-07-13) `InferenceServer.serve` xử lý ONE-AT-A-TIME + camera = process riêng → batch-mux PHẢI ở server-side (đọc code thật)
+Nguồn: LOG Entry #371 · đọc `application/inference_server.py` + `profiles/vision_fullstack_profile.py::camera_worker` + `kernel/backpressure.py` (review #371).
+Bằng chứng THẬT (đọc code):
+- `InferenceServer.serve`: `poll → recv_multipart` (1 request `[ident,payload]`) → `_handle` (đọc SHM `read_ref` → `detector.detect(1 frame)`) → `send_multipart([ident, reply])`. **XỬ LÝ TỪNG REQUEST MỘT**; bulkhead per-request K-024.
+- `camera_worker`: mỗi camera = **process RIÊNG**, backpressure 2-tầng (SHM ring `write→None` + client window BoundedQueue DROP_OLDEST), giao tiếp server qua **ZMQ DEALER**.
+- `BoundedQueue` (K-016): **THREAD-safe, KHÔNG process-safe** (docstring cảnh báo: cross-process = khoá vô hiệu → hỏng dữ liệu).
+Bài học (điểm tích hợp batch-mux): (1) gộp cross-camera CHỈ khả thi TẠI `InferenceServer` (1 process nơi ZMQ hội tụ) — KHÔNG dùng BoundedQueue gộp qua nhiều camera-process (vi phạm K-016); (2) đổi serve loop: recv-1→detect-1 thành gather-N→detect_batch→scatter; (3) **scatter key = ZMQ `ident`** (ROUTER route reply đúng client SẴN — mạnh hơn map request_id thủ công, hậu thuẫn Property 1); (4) bulkhead K-024 mở rộng per-sample; (5) backpressure camera-side TRỰC GIAO (không trùng-đếm với shed server-side). Rộng: mọi tối ưu "gom nhiều nguồn" phải xác định ĐIỂM HỘI TỤ PROCESS trước (đọc topology thật), không giả định in-process.

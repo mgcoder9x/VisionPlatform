@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T19:30:00+07:00.
+**Cập nhật lúc:** 2026-07-13T20:00:00+07:00.
+**[🔵 #371 — REVIEW batch-mux ↔ backpressure/transport THẬT → chốt điểm tích hợp cross-process (+D-102, +K-096)]**
+- Đọc-lại-valid tiếp: batch-mux tương tác backpressure 2-tầng + ZMQ transport hiện có ra sao? Đọc CODE THẬT `InferenceServer.serve` (one-at-a-time) + `camera_worker` (2-tầng) + `BoundedQueue` (K-016 thread≠process-safe).
+- **Phát hiện (+K-096):** hình vẽ design ban đầu (in-process queue + camera submit) = MÔ HÌNH TEST, không phải deployment. Thật: camera=process riêng → ZMQ → server. ⇒ gộp cross-camera CHỈ khả thi TẠI `InferenceServer` (điểm ZMQ hội tụ); dùng BoundedQueue gộp cross-process = vi phạm K-016.
+- **Vá (+D-102, 3 file spec getDiagnostics=0):** design +mục "Điểm tích hợp THẬT cross-process" + CHỐT Open Decision (tích hợp server, không đứng riêng) + scatter theo ZMQ `ident` (ROUTER route sẵn, hậu thuẫn Property 1) + bulkhead K-024→per-sample + backpressure camera-side TRỰC GIAO (không trùng-đếm). requirements +R4.4. tasks +Task 4 "WIRE vào InferenceServer.serve" (additive cờ batch, batch=1=cũ) + Task Dependency Graph wave 0-5 (PBT→Task 5).
+- **Ghi sổ:** LOG #371 · +D-102 (🔵) · +K-096 · INDEX canonical #370→#371 · Σ250→Σ252 (D102·K96) · dòng D-102/K-096 · block này. KHÔNG code (647/2 giữ).
+- **VERIFY:** đọc InferenceServer/camera_worker/BoundedQueue thật (có code); 3 file spec getDiagnostics=0; drift chạy kế.
+- **Bước kế (CHỜ user):** spec batch-mux giờ RẤT vững (3 vòng đọc-lại-valid: #369 stateful/order, #370 test-infra, #371 điểm-tích-hợp). (a) Task 0 spike throughput (cần đèn xanh network re-export) = cổng; (b) dừng mốc sạch. Không tự chạy network.
+---
 **[✅ #370 — VERIFY khả thi chiến lược test Task 1 batch-mux (model tí-hon dynamic, R5.2) — KHÔNG network (+K-095)]**
 - Kiểm giả định trong chính spec (R5.2 "test bằng model tí-hon tự tạo") — đúng "không bịa, verify trước khi dựa vào". KHÔNG phạm cổng Task 0 (chỉ kiểm test infra, không build sản phẩm).
 - **Bằng chứng chạy thật:** `onnx` builder sẵn (torch vắng không cần) → model `ReduceSum` input `['N',3,4,4]` (trục 0 ĐỘNG) → onnxruntime batch=1/2/4: shape/val/**identity** (đảo sample→đảo output, không lẫn) đều đúng. Gỡ "unverified assumption" R5.2 → đánh dấu ✅ trong design.md + requirements.md.

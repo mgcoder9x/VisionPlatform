@@ -42,15 +42,21 @@
   - 2.3 Test `test_batch_onnx_detector.py` (no-GPU, spy/fake session): model batch cố định → fail-fast; model dynamic (tí-hon) → `detect_batch` trả đúng B lists. KHÔNG cần GPU.
   - _Requirements: 4.1, 4.2, 5.1_
 
-- [ ] 3. `BatchMuxer` (application) — gather-scatter + batch_timeout + shed + bulkhead
-  - 3.1 `application/batch_muxer.py`: inbound `BoundedQueue` (tái dùng K-016); gather tới `max_batch` HOẶC `batch_timeout_ms` (cái nào trước) → `detect_batch` → scatter kết quả về đúng `request_id`. `max_batch`/`batch_timeout_ms` tham số (R2.3).
-  - 3.2 Shed khi queue đầy + counter (bất biến `submitted==processed+shed+error`, R2.2); bulkhead per-sample: 1 sample postprocess lỗi không giết batch (R2.4).
-  - 3.3 Test `test_batch_muxer.py` (no-GPU, fake detector + fake clock): **Property 2** flush sau timeout khi batch chưa đầy (event-driven, KHÔNG sleep cứng — bài học K-035/D-077); **Property 3** shed đếm đúng; bulkhead 1-sample-lỗi.
+- [ ] 3. `BatchMuxer` (application) — gather-scatter + batch_timeout + shed + bulkhead (LOGIC thuần, in-process test)
+  - 3.1 `application/batch_muxer.py`: gather tới `max_batch` HOẶC `batch_timeout_ms` (cái nào trước) → `detect_batch` → scatter kết quả về đúng key. `max_batch`/`batch_timeout_ms` tham số (R2.3). Tiêm nguồn-request + detector qua DI (test in-process, không cần ZMQ/GPU).
+  - 3.2 Shed khi quá tải + counter (bất biến `submitted==processed+shed+error`, R2.2); bulkhead per-sample: 1 sample postprocess lỗi không giết batch (R2.4).
+  - 3.3 Test `test_batch_muxer.py` (no-GPU, fake detector + fake clock): **Property 2** flush sau timeout khi batch chưa đầy (event-driven, KHÔNG sleep cứng — bài học K-035/D-077); **Property 3** shed đếm đúng; bulkhead 1-sample-lỗi; **Property 6** thứ tự per-camera bảo toàn.
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 4.2_
 
-- [ ] 4. PBT + regression cuối (giữ baseline)
-  - 4.1 `test_batch_pbt.py` (hypothesis): Property 1 (identity route đúng) + Property 4 (tương đương single↔batch) trên B + frame-size ngẫu nhiên (model tí-hon dynamic).
-  - 4.2 Chạy FULL suite: baseline **647/2** + test mới đều xanh (R4.3 — không phá base) · `vp lint` 5/0 · `vp check` drift PASS.
+- [ ] 4. WIRE batch-mux vào `InferenceServer.serve` (điểm tích hợp THẬT cross-process — REVIEW #371)
+  - 4.1 Đổi `serve()` loop: "recv 1 → detect 1 → send 1" → GATHER tới `max_batch` request từ ROUTER (recv-multipart lặp với poll-timeout=`batch_timeout_ms`) → đọc SHM mỗi frame (`ReaderEpochCoordinator` nguyên) → `detect_batch` → send mỗi reply về đúng ZMQ `ident`. Additive (cờ bật/tắt batch; batch=1 = hành vi cũ, backward-compat R4.3).
+  - 4.2 Scatter theo ZMQ `ident` (ROUTER tự route — Property 1 được ZMQ hậu thuẫn); bulkhead K-024 mở rộng per-sample (1 frame lỗi → chỉ reply đó lỗi). Backpressure camera-side (SHM+client window) KHÔNG đụng (trực giao, K-096).
+  - 4.3 Test cross-process (như `test_zmq_inference` hiện có): N client submit đồng thời → server batch → mỗi client nhận đúng reply của mình. GIỮ baseline test cũ (server batch=1 = cũ).
+  - _Requirements: 1.1, 4.1, 4.2, 4.3_
+
+- [ ] 5. PBT + regression cuối (giữ baseline)
+  - 5.1 `test_batch_pbt.py` (hypothesis): Property 1 (identity route đúng) + Property 4 (tương đương single↔batch) trên B + frame-size ngẫu nhiên (model tí-hon dynamic).
+  - 5.2 Chạy FULL suite: baseline **647/2** + test mới đều xanh (R4.3 — không phá base) · `vp lint` 5/0 · `vp check` drift PASS.
   - _Requirements: 1.1, 1.2, 2.1, 4.3_
 
 ## Task Dependency Graph
@@ -61,8 +67,9 @@
     { "wave": 0, "tasks": ["0"], "note": "SPIKE BENCH = cổng quyết định; GATE trước mọi build (cần network+GPU)" },
     { "wave": 1, "tasks": ["1"], "note": "preprocess/postprocess batch thuần + model tí-hon (no-GPU) — chỉ khi Task 0 PASS gate" },
     { "wave": 2, "tasks": ["2"], "note": "IBatchDetector + BatchOnnxDetector (cần task 1)" },
-    { "wave": 3, "tasks": ["3"], "note": "BatchMuxer gather-scatter (cần task 2)" },
-    { "wave": 4, "tasks": ["4"], "note": "PBT + regression (cần task 1+3)" }
+    { "wave": 3, "tasks": ["3"], "note": "BatchMuxer gather-scatter LOGIC (cần task 2)" },
+    { "wave": 4, "tasks": ["4"], "note": "WIRE vào InferenceServer.serve cross-process (cần task 2+3)" },
+    { "wave": 5, "tasks": ["5"], "note": "PBT + regression (cần task 1+3+4)" }
   ]
 }
 ```
@@ -72,9 +79,11 @@ graph TD
   T0["0. SPIKE BENCH (GATE)"] -->|vượt baseline| T1["1. preprocess/postprocess_batch"]
   T0 -.->|KHÔNG vượt| STOP["DỪNG: không đáng (R3.2)"]
   T1 --> T2["2. IBatchDetector + BatchOnnxDetector"]
-  T2 --> T3["3. BatchMuxer gather-scatter"]
-  T1 --> T4["4. PBT + regression"]
+  T2 --> T3["3. BatchMuxer gather-scatter LOGIC"]
+  T2 --> T4["4. WIRE vào InferenceServer.serve (cross-process)"]
   T3 --> T4
+  T1 --> T5["5. PBT + regression"]
+  T4 --> T5
 ```
 
 > **Task 0 là CỔNG:** không tự động sang Task 1 — cần số đo chứng minh batch-mux vượt baseline (chống sunk-cost, R3.2).

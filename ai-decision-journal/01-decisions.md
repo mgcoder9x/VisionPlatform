@@ -1141,3 +1141,13 @@ Links: D-100, K-094, K-042 (tracking affinity), object-tracking-count (#258/#259
 Nội dung: đối kháng thiết kế batch-mux → 3 lỗ: (a) chưa đối chiếu batch-mux (cross-camera) với camera-affinity/stateful → thêm mục ranh-giới-mux-tại-IDetector-stateless + scatter-giữ-affinity; (b) thiếu ràng buộc THỨ TỰ per-camera (IouTracker phụ thuộc thứ tự) → Property 6 + R1.4; (c) Property 2 latency understate → siết đủ chuỗi + đo p95/p99.
 Vì sao (bản chất): batch-mux làm HỎNG tracking/đếm nếu (i) mux xuống dưới stage stateful hoặc (ii) đảo thứ tự frame per-camera — bug ngầm khó tìm. Bắt bằng đọc-lại-valid TRƯỚC code (rẻ hơn debug sau).
 Non-goal: chưa test Property 6 (Task 3/4); chưa quyết nhiều-mux-worker-song-song (để-ngỏ, nếu làm phải re-order).
+
+### D-102 — 2026-07-13 — REVIEW #371: chốt điểm tích hợp batch-mux = `InferenceServer.serve` (cross-process)
+Status: 🔵 design-only (vá design+requirements+tasks batch-mux; CHƯA code)
+Evidence: 3 file spec batch-mux getDiagnostics=0 sau vá. Đọc `InferenceServer.serve` (one-at-a-time), `camera_worker` (2-tầng), `BoundedQueue` (K-016 thread-safe) thật (bằng chứng K-096).
+Scope: `batch-mux/design.md` (+mục "Điểm tích hợp THẬT cross-process" + chốt Open Decision + stamp), `requirements.md` (+R4.4), `tasks.md` (+Task 4 wire InferenceServer + Task Dependency Graph wave 0-5 + PBT→Task 5).
+Nguồn: LOG Entry #371 · nối D-100/D-101 (spec batch-mux) · K-096 · K-016 (BoundedQueue thread≠process) · K-024 (bulkhead server) · D-051/D-055 (backpressure 2-tầng).
+Links: D-100, D-101, K-096, K-016, K-024, zmq-inference-service (D-028).
+Nội dung: batch-mux tích hợp TẠI `InferenceServer.serve` (điểm hội tụ ZMQ ROUTER duy nhất) — gather recv-multipart tới max_batch|batch_timeout → detect_batch → send theo ZMQ ident. KHÔNG BoundedQueue gộp cross-process (K-016). Backpressure camera-side trực giao. Task 3 = LOGIC in-process (test thuần); Task 4 = wire ZMQ (test cross-process).
+Vì sao (bản chất): điểm gom cross-camera DUY NHẤT khả thi là process server (nơi ZMQ hội tụ); gộp in-process qua nhiều camera-process là bất khả (K-016). Chốt sớm tránh thiết kế sai chỗ-lắp.
+Non-goal: chưa code wire; thread/async trong serve để-ngỏ; Triton vs tự-viết để-ngỏ.

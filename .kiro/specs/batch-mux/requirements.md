@@ -53,6 +53,7 @@ yêu cầu nghiệm thu là **ĐO**, và kết quả "không vượt baseline" v
 - 4.1 — Port `IDetector.detect(frame)->list[Detection]` PHẢI GIỮ NGUYÊN; khả năng batch thêm qua port RIÊNG `IBatchDetector.detect_batch(frames)->list[list[Detection]]` (song song, không sửa port cũ).
 - 4.2 — Batch-mux PHẢI tái dùng thành phần đã có (`BoundedQueue`, session GPU của `OnnxDetector`, `yolov8_decode`, metrics) — KHÔNG viết lại lõi (bám nguyên tắc chống-rebuild).
 - 4.3 — WHEN batch-mux được thêm, THE baseline test hiện tại (647/2 · lint 5/0 · drift PASS) SHALL giữ nguyên (chỉ THÊM, không phá).
+- 4.4 — Điểm tích hợp cross-process THẬT PHẢI là `InferenceServer.serve` (điểm hội tụ ZMQ ROUTER duy nhất — REVIEW #371); scatter theo ZMQ `ident`; KHÔNG dùng BoundedQueue gộp cross-process (vi phạm K-016 thread-safe≠process-safe); backpressure camera-side (SHM ring + client window) GIỮ NGUYÊN, trực giao (không trùng-đếm).
 
 ### Requirement 5: Điều-kiện-tiên-quyết model dynamic-batch (fail-fast rõ ràng)
 **User Story:** Là kỹ sư, tôi muốn hệ báo lỗi rõ ngay khi model không hỗ trợ batch, để không gặp lỗi khó hiểu lúc chạy.

@@ -3,7 +3,7 @@
 > **Trạng thái:** PHA 1 (design DESIGN-FIRST) — CHỜ user đọc-lại-valid. KHÔNG code.
 > **Là sub-spec của:** `.kiro/specs/scale-architecture/` (roadmap #3 "Batch-mux + GPU pool", trụ #3, A1/K-040).
 > **Gắn số đo THẬT:** K-089 (60 infer/s @batch=1) · K-090 (e2e 720p 47.77fps) · **K-092 (đa-luồng K-session rời: K=4 → 104.7 infer/s aggregate, per-stream p95 49.5ms)** — baseline batch-mux PHẢI vượt mới đáng.
-> **Cập nhật lúc:** 2026-07-13 (REVIEW #369 đọc-lại-valid: +mục "Batch-mux ↔ analytics stateful" + Property 6 thứ-tự-per-camera + siết Property 2 latency + Lỗ 7 — phát hiện bằng đọc `TrackingStage`/`IouTracker` thật).
+> **Cập nhật lúc:** 2026-07-13 (REVIEW #369 +mục stateful + Property 6 + Lỗ 7; REVIEW #371 +mục "Điểm tích hợp THẬT cross-process" — chốt batch-mux tại `InferenceServer.serve`, scatter theo ZMQ ident, backpressure camera-side trực giao — đọc `InferenceServer.serve`/`camera_worker`/`BoundedQueue` thật).
 
 ## Overview
 
@@ -110,6 +110,26 @@ BẢN CHẤT (không vá ngọn):
   Gather-infer loop TUẦN TỰ (1 session/1 thread) + queue FIFO ⇒ thứ tự bảo toàn tự nhiên. NẾU nhiều mux-worker song song
   → BẮT BUỘC re-order theo `frame_id` per-camera trước khi feed stateful stage (Property 6).
 
+### Điểm tích hợp THẬT trong hệ cross-process (REVIEW #371 — đọc `InferenceServer.serve` + `camera_worker` THẬT)
+**Phát hiện đọc-lại-valid:** hình "N camera-worker → inbound queue → BatchMuxer" ở trên là MÔ HÌNH IN-PROCESS (đúng cho
+TEST logic). Nhưng hệ THẬT (đọc code): camera = **process RIÊNG** → ZMQ DEALER → `InferenceServer` (process riêng)
+`serve()` loop xử lý **one-at-a-time** (`poll → recv_multipart 1 req → _handle: đọc SHM → detector.detect(1 frame) →
+send_multipart`). Hệ quả BẢN CHẤT cho triển khai (chống 2 sai lầm):
+- **KHÔNG gộp cross-camera bằng BoundedQueue in-process:** BoundedQueue THREAD-safe, KHÔNG process-safe (K-016) →
+  cameras ở process khác nhau KHÔNG chia sẻ được nó. Gộp cross-camera phải xảy ra **TẠI `InferenceServer`** (1 process,
+  nơi mọi ZMQ request hội tụ) — đó là điểm gom tự nhiên duy nhất.
+- **Điểm tích hợp = `InferenceServer.serve`:** đổi loop từ "recv 1 → detect 1 → send 1" thành "GATHER tới `max_batch`
+  request từ ROUTER (recv-multipart lặp với poll-timeout = `batch_timeout_ms`) → đọc SHM mỗi frame → `detect_batch` →
+  send mỗi reply". Additive, giữ `ReaderEpochCoordinator`/SHM/switchover nguyên.
+- **Scatter key = ZMQ `ident` (ROUTER envelope), KHÔNG cần map request_id thủ công:** ZMQ ROUTER ĐÃ đảm bảo reply
+  `[ident, payload]` về đúng client → identity routing MIỄN PHÍ + mạnh hơn map tay (Property 1 được ZMQ hậu thuẫn).
+- **Bulkhead K-024 (per-request) → mở rộng per-SAMPLE** (R2.4): 1 frame lỗi trong batch chỉ hỏng reply của nó.
+- **Backpressure 2-tầng camera-side (SHM ring + client window, D-051/D-055) là THƯỢNG NGUỒN & TRỰC GIAO:** batch-mux
+  KHÔNG đụng nó, KHÔNG trùng-đếm (camera đếm submitted/dropped của mình; server gom cái đã tới). Bất biến batch-mux
+  Property 3 là SERVER-side, độc lập bất biến camera-side.
+→ Cập nhật "Open Decisions": câu hỏi "batch-mux đứng riêng vs tích hợp ZMQ server" ĐÃ CHỐT = **tích hợp tại
+`InferenceServer.serve`** (điểm hội tụ cross-process duy nhất; đứng-riêng sẽ phải tái tạo transport = thừa).
+
 ## Data Models
 _(kernel — thuần dữ liệu)_
 - `BatchRequest{ request_id: str, camera_id: str, frame_id: int, frame: np.ndarray }` — 1 frame chờ infer (định danh để scatter).
@@ -202,8 +222,9 @@ _(TDD, phần lớn KHÔNG cần GPU)_
   ngọn): nếu bỏ qua, batch-mux sẽ làm hỏng tracking/đếm khi bật analytics stateful downstream.
 
 **Còn mở có chủ đích (chốt khi tới):** self-viết mux vs nhúng **Triton** (Triton làm dynamic-batching sẵn, ops nặng
-hơn nhưng khỏi tự-viết); thread vs process vs asyncio cho gather loop; batch-mux có nên tích hợp ZMQ inference-server
-hiện có (DEALER/ROUTER) hay đứng riêng.
+hơn nhưng khỏi tự-viết); thread vs process vs asyncio cho gather loop. **ĐÃ CHỐT (REVIEW #371, đọc code):** batch-mux
+tích hợp TẠI `InferenceServer.serve` (điểm hội tụ cross-process duy nhất), scatter theo ZMQ `ident` — KHÔNG đứng riêng,
+KHÔNG dùng BoundedQueue gộp cross-process (vi phạm K-016).
 
 **Phán quyết:** ĐỦ làm **design-first PHA-1** (trung thực về nghi vấn thắng-thua + ràng buộc đã-verify + lỗ). CHƯA đủ
 thi công đầy đủ — nhưng ĐỦ để làm **spike đo bench trước** (task #0 re-export + task bench) nhằm trả lời Force-2/Lỗ-1
