@@ -42,6 +42,13 @@ Các con số C_* là [PHẢI BENCHMARK] — R6.1; tài liệu này giữ chúng
   throughput nhưng **tăng latency** (chờ gom batch) → phải thêm ràng buộc `latency_p99 ≤ SLA` + `batch_timeout`.
 - `min(C_dec, C_inf)` giả định decode/inference ĐỘC LẬP — SAI trên cùng 1 GPU: **NVDEC + CUDA tranh tài nguyên**
   → công suất kết hợp < min. Benchmark PHẢI đo **đồng thời decode+infer**, không đo tách rời.
+- **THIẾU số hạng PREPROCESSING (letterbox/resize/normalize) — [đo thật #353]:** công thức `N_infer ≈ C_inf/(f·g·A)`
+  chỉ đếm decode + inference, BỎ SÓT chi phí biến frame gốc → tensor model (resize về model-size + letterbox +
+  chuẩn-hoá CHW/float). Đo THẬT trên CPU máy dev (no-GPU): `infer` trên frame 640 dựng-sẵn = 11.72/s (85ms) NHƯNG
+  `combined` trên frame 720p (phải letterbox→640) = 7.95/s (121ms) trong khi `decode` = 336/s (~3ms). Chênh ~40ms/frame
+  = **preprocessing**, KHÔNG phải decode/infer. Hệ quả GPU: đây là bẫy kinh điển **"CPU preprocessing bottleneck"**
+  (GPU nhàn, CPU nghẽn ở resize) → phải hoặc **preprocess trên GPU** (NVDEC/CUDA resize, như DeepStream) hoặc **worker
+  preprocess riêng**; capacity model bản-2 phải thêm số hạng `t_pre` per-frame + trần CPU-preproc song song trần GPU.
 → Kết luận: capacity model chỉ để **định cỡ sơ bộ + hướng benchmark**, KHÔNG phải công thức cam kết.
 
 ## Architecture
@@ -184,6 +191,10 @@ Trước khi chốt số node/độ-phủ, có benchmark 1-node (C_inf/C_dec/V) 
 - **Lỗ 3 (analytics có trạng thái — nặng nhất):** Stage stateless không khớp count/track → đã thêm mục "Analytics
   CÓ TRẠNG THÁI" (StatefulStage + **camera-affinity** ràng buộc scheduler).
 - **Lỗ 4 (failover coi nhẹ):** đã nâng re-shard thành **rủi ro cao** (split-brain / fencing / lease phân tán).
+- **Lỗ 5 (capacity model thiếu PREPROCESSING) — phát hiện bằng ĐO THẬT #353 (K-084):** công thức bỏ sót chi phí
+  resize/letterbox/normalize (đo CPU: ~40ms/frame @720p→640, ~30% thời gian mỗi frame — lớn hơn cả decode). Đã thêm
+  bullet vào "GIỚI HẠN CỦA MÔ HÌNH" + yêu cầu capacity-model-bản-2 có số hạng `t_pre` + trần CPU-preproc. Đây là bẫy
+  "CPU preprocessing bottleneck" phải thiết kế trước (GPU-preproc / worker riêng), không để lộ khi scale.
 **Còn mở có chủ đích (chưa vá vì thuộc sub-spec sau, không phải thiếu sót):** chọn transport quy mô · config
 hot-reload (thêm/bớt camera runtime không restart fleet) · metrics backend · self-viết-batch vs Triton.
 **Phán quyết:** ĐỦ TỐT làm **bản định hướng PHA-1** (đã trung thực về giới hạn + lỗ + rủi ro cao). KHÔNG đủ làm

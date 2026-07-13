@@ -837,3 +837,10 @@ CÁCH REPRO weight (KHÔNG commit — gitignore `*.onnx`/`models/`, tài sản+l
 5. Chạy: `vision_demo_app --video <clip> --onnx models/yolov8n.onnx --yolo v8 --labels "<80 COCO>" --model-size 640`.
 Non-goal / còn treo: throughput fps YOLO-CPU dưới tải thật (mới smoke 8 frame — CHƯA đo); weight NGHIỆP VỤ riêng của user (đây COCO generic, chứng minh PIPELINE); GPU e2e (D-043/D-031 phần GPU). torch KHÔNG cài vào .venv chính (baseline no-torch giữ nguyên).
 Đóng: ✅ (tính đúng detector CPU chứng minh được). Mở phần đo hiệu năng + weight nghiệp vụ.
+### K-084 — ✅ (2026-07-13) Capacity model (scale-architecture) BỎ SÓT chi phí PREPROCESSING — phát hiện bằng đo thật
+Scope: `.kiro/specs/scale-architecture/design.md` (Capacity Model + Self-Review Lỗ 5) · benchmark #352/#353
+Nguồn: LOG Entry #354 · số đo thật #352 (infer) + #353 (decode/combined)
+Bằng chứng (đo THẬT CPU no-GPU): `infer` frame-640-dựng-sẵn = 11.72/s (85ms) · `combined` 720p→letterbox→640 = 7.95/s (121ms) · `decode` 720p = 336/s (~3ms). Chênh ~40ms/frame giữa infer-đơn và combined = **preprocessing** (resize/letterbox/normalize), KHÔNG phải decode/infer.
+Vấn đề (bản chất): công thức `N_infer ≈ C_inf/(f·g·A)` chỉ đếm decode+inference → bỏ sót số hạng preprocessing (~30% thời gian/frame). Trên hệ GPU thương mại = bẫy kinh điển **"CPU preprocessing bottleneck"** (GPU nhàn, CPU nghẽn resize; lý do DeepStream resize trên GPU). Nếu không tính → định cỡ N_node SAI (lạc quan) → deploy 100 cam nghẽn CPU bất ngờ.
+Đã xử lý: thêm bullet "THIẾU số hạng PREPROCESSING" vào GIỚI HẠN CỦA MÔ HÌNH + Lỗ 5 self-review trong design.md; capacity-model-bản-2 phải có số hạng `t_pre` + trần CPU-preproc song song trần GPU; thiết kế thi công cần GPU-preproc HOẶC worker preprocess riêng.
+Đóng: ✅ (gap đã ghi vào design + có bằng chứng đo). Mở: số `t_pre` trên GPU thật + cơ chế GPU-preproc cụ thể (sub-spec khi làm batch-mux/decode).

@@ -6888,3 +6888,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Diễn giải: chi phí gần như TOÀN BỘ ở YOLO infer + letterbox (decode ~3ms là nhiễu). 1 luồng 720p trên CPU ≈ 8 fps end-to-end → **KHÔNG đạt real-time 25fps trên CPU** (cần ~120ms/frame vs budget 40ms) ⇒ production cần GPU; CPU đủ test tính-đúng + kịch bản fps-thấp. Số combined(7.95) < infer-đơn(11.72) do letterbox 720p→640 + read overhead (frame 640 dựng-sẵn ở #352 không có phần này).
 
 **Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, CPU):** decode 336.83/s (p50 2.8ms); combined latency 7.95/s (p50 121ms) trên clip 720p 80 frame; harness exit 0. · **Chưa verify:** số GPU (đích production); throughput đa-luồng song song (nhiều process/GPU-budget — scale-architecture); video/độ-phân-giải nghiệp vụ thật của user.
+
+### Entry #354 — 2026-07-13 — ĐỌC-LẠI-VALID scale-architecture bằng SỐ ĐO THẬT → phát hiện gap PREPROCESSING trong capacity model (+K-084) — Kiro-Opus
+
+**Bối cảnh:** sau #352/#353 có số capacity CPU thật. Đọc-lại-valid thiết kế `scale-architecture` (D-040, xương sống thương mại ~100 cam) bằng số đo — chống drift design↔reality. Đọc trọn design.md: rất chắc + đã tự-review 4 lỗ + capacity model ghi rõ "bậc-1", C_* để là biến [PHẢI BENCHMARK].
+
+**1. Quyết định AI tự ra:** cập nhật design.md (spec doc) thêm gap phát hiện bằng đo — KHÔNG phải review chung chung mà feed BẰNG CHỨNG THẬT về valid lại mô hình.
+
+**2. Chỗ phải đổi so với thiết kế ban đầu:** capacity model `N_infer ≈ C_inf/(f·g·A)` bỏ sót số hạng **preprocessing** → thêm bullet "THIẾU số hạng PREPROCESSING" (GIỚI HẠN CỦA MÔ HÌNH) + Lỗ 5 (Self-Review) + yêu cầu bản-2 có `t_pre` + trần CPU-preproc.
+
+**3. Trade-off:** ghi gap vào design ngay (đúng "đọc-lại-valid, chính xác kiểm chứng được") vs để tới sub-spec batch-mux. Chọn ghi NGAY — bằng chứng đo đang có; nếu để trôi = design lạc thực tế (drift). Không code (chưa tới lúc build scale).
+
+**4. Điều bạn nên biết (K-084):** so 2 số ĐO THẬT: `infer` frame-640-dựng-sẵn 11.72/s (85ms) vs `combined` 720p-letterbox-640 7.95/s (121ms), `decode` 336/s (~3ms). Chênh ~40ms/frame = PREPROCESSING (resize/letterbox/normalize), KHÔNG phải decode/infer → chiếm ~30% thời gian/frame. Hệ GPU: bẫy kinh điển **"CPU preprocessing bottleneck"** (GPU nhàn, CPU nghẽn resize — lý do DeepStream resize GPU). Nếu capacity model không tính → định cỡ N_node lạc quan SAI → 100 cam nghẽn CPU bất ngờ. Fix hướng: GPU-preproc hoặc worker preprocess riêng.
+
+**Đã verify (số đo có thật từ #352/#353 đã chạy):** chênh 11.72→7.95 = preprocessing (số đo thật, đọc 2 log); design.md cập nhật (đọc lại khớp); `vp check` drift PASS (bổ sung). KHÔNG đổi code sản phẩm. · **Chưa verify:** `t_pre` trên GPU thật + tỉ lệ preprocessing khi GPU-inference (CPU-preproc có thể thành bottleneck rõ hơn); cơ chế GPU-preproc cụ thể (sub-spec sau).

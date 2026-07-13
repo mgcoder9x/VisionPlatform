@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T02:10:00+07:00.
+**Cập nhật lúc:** 2026-07-13T02:35:00+07:00.
+**[✅ #354 — ĐỌC-LẠI-VALID scale-architecture bằng SỐ ĐO THẬT → gap PREPROCESSING trong capacity model (+K-084)]**
+- Đọc-lại-valid thiết kế `scale-architecture` (D-040, xương sống thương mại) bằng số đo #352/#353 — chống drift design↔reality. Design rất chắc (đã tự-review 4 lỗ) nhưng số đo lộ 1 gap cụ thể.
+- **Gap (bằng chứng thật):** capacity model `N_infer≈C_inf/(f·g·A)` chỉ đếm decode+inference, BỎ SÓT **preprocessing** (resize/letterbox/normalize). Đo: infer-640-dựng-sẵn 11.72/s (85ms) vs combined-720p 7.95/s (121ms), decode chỉ ~3ms → chênh ~40ms/frame (~30%) = preprocessing. Hệ GPU = bẫy kinh điển **"CPU preprocessing bottleneck"** (GPU nhàn, CPU nghẽn resize).
+- **Đã xử lý (fix gốc mô hình):** cập nhật `design.md` — thêm bullet "THIẾU số hạng PREPROCESSING" (GIỚI HẠN CỦA MÔ HÌNH) + Lỗ 5 (Self-Review); yêu cầu capacity-model-bản-2 có số hạng `t_pre` + trần CPU-preproc song song trần GPU; thi công cần GPU-preproc HOẶC worker preprocess riêng.
+- **Ghi sổ:** LOG #354 · +K-084 · INDEX canonical #353→#354 · Σ231→Σ232 (K83→K84) · dòng K-084 · design.md · block này. KHÔNG code (chưa tới lúc build scale).
+- **VERIFY:** số đo có thật (#352/#353 đã chạy); design.md đọc-lại khớp; drift PASS (dưới). Baseline 632/2 không đổi.
+- **Bước kế (CHỜ user):** (a) dữ liệu/weight/video nghiệp vụ THẬT của user; (b) GPU e2e (đo t_pre + số GPU thật); (c) sub-spec batch-mux/decode (thiết kế GPU-preproc); (d) cổng Feynman #11–#14. K-035 residual như cũ.
+---
 **[✅ #353 — ĐO capacity CPU trọn bức tranh: decode + combined(decode+infer) trên video 720p]**
 - Nối #352: số infer đơn (11.72/s trên frame 640) chưa phải capacity 1 luồng camera thật (=decode+infer). Đo nốt bằng clip synthetic 720p 80 frame (không đổi code); cũng validate nhánh `--onnx` #352 chạy đúng ở `--mode latency`.
 - **SỐ ĐO THẬT (CPU no-GPU):** `decode` 720p cv2 = **336.83 frame/s** (p50 2.8ms → KHÔNG nút cổ chai); combined `latency --onnx` = **7.95 frame/s** (p50 121ms, p95 187ms). Chi phí gần hết ở YOLO infer + letterbox 720p→640; decode ~3ms là nhiễu.
