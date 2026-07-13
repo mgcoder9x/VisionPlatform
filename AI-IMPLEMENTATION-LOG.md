@@ -6930,3 +6930,11 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết (K-085):** nguyên nhân xóa end.md KHÔNG xác định chắc [chưa kiểm] (end.md từng là ACTIVE-EDITOR-FILE — có thể IDE/thao tác ngoài; các Remove-Item của tôi chỉ nhắm `_tmp_*`). BÀI HỌC: luôn soi `git diff --stat` TRƯỚC commit (số +/- bất thường = cờ đỏ); cân nhắc stage file cụ thể khi có cleanup; diff-stat review đã CỨU lần này. Cùng họ K-064 (kiểm bằng số, không tin cảm giác).
 
 **Đã verify (CHẠY THẬT):** `git checkout HEAD~1 -- end.md` → Test-Path end.md = True + nội dung nguyên (422 dòng); `git ls-files end.md` = tracked; commit 0c76e1d pushed; HEAD==upstream; tree clean. · **Chưa verify:** nguyên nhân gốc việc xóa (không tái hiện được — theo bài học phòng ngừa).
+
+### Entry #357 — 2026-07-13 — VERIFY thực tế máy phiên mới (GPU+cam+no-docker) → GPU-inference chặn-bởi-thiếu-runtime, không thiếu-GPU (+K-086) — Kiro-Opus
+**Bối cảnh:** user "chuyển máy", nêu máy này CÓ camera + GPU nhưng KHÔNG cài được docker; yêu cầu "xem lại cực kỹ và triển khai". Output drift user dán ghi #347 (STALE) — tự chạy xác lập frontier THẬT = #356 (HEAD 81610b9, tree sạch, đồng bộ upstream). KHÔNG tin số dán (§0 chống lệch-pha đa-máy).
+**1. Quyết định AI tự ra:** verify read-only năng lực máy TRƯỚC khi triển khai (§5 không tin mù) thay vì cài liều. Dò: `vp env` (GPU=co), `--capabilities` (torch false), `pip show onnxruntime` (1.27.0), `get_available_providers()` (chỉ Azure+CPU → onnxruntime CPU-only), `where docker` (không có). Ghi K-086.
+**2. Chỗ phải đổi:** làm rõ blocker GPU: KHÔNG phải "thiếu GPU" (HW có) mà "thiếu RUNTIME GPU" (onnxruntime-gpu/torch chưa cài) — chỉnh hiểu-biết frontier.
+**3. Trade-off:** onnxruntime-gpu (nhẹ, khớp `_det_onnx` sản phẩm, cần CUDA/cuDNN tương thích) vs torch cu124 (~GB, nhánh pt) — chưa chọn, chờ user (cả 2 = network install cần đèn xanh K-078).
+**4. Điều bạn nên biết:** cài runtime GPU = op network medium/heavy + mutate venv no-torch (baseline 640/2 phụ thuộc) → chờ đèn xanh RÕ. Deploy GPU phải NATIVE (docker cấm). Camera user nêu có, chưa mở kiểm.
+**Đã verify:** git HEAD 81610b9=#356 tree sạch đồng bộ; drift PASS #356 Σ234; GPU-HW co; onnxruntime CPU-only (providers thật); docker vắng; torch vắng. · **Chưa verify:** camera thật (chưa mở cv2); nhánh GPU (chờ cài runtime).

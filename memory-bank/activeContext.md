@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T03:20:00+07:00.
+**Cập nhật lúc:** 2026-07-13T09:00:00+07:00.
+**[✅ #357 — VERIFY thực tế máy phiên mới (GPU+cam+KHÔNG-docker): GPU-inference chặn-bởi-thiếu-RUNTIME (+K-086)]**
+- User "chuyển máy", nêu máy CÓ camera + GPU, KHÔNG cài được docker. Output drift user dán #347 = STALE → tự chạy xác lập frontier THẬT **#356** (HEAD 81610b9, tree sạch, đồng bộ upstream). KHÔNG tin số dán.
+- **Dò máy (read-only):** GPU-HW CÓ (nvidia-smi) · torch VẮNG (`--capabilities` has_torch=false) · **onnxruntime 1.27.0 CPU-ONLY** (providers chỉ Azure+CPU) · cv2 CÓ · docker KHÔNG (`where docker` trống).
+- **Kết luận:** GPU-inference CHẶN bởi **thiếu RUNTIME GPU** (không thiếu GPU HW). Cần cài onnxruntime-gpu (nhẹ, khớp `_det_onnx`/`OnnxDetector`) HOẶC torch cu124 (~GB) = network → chờ đèn xanh (K-078). Deploy GPU phải NATIVE (docker cấm).
+- **Ghi sổ:** LOG #357 · +K-086 · INDEX canonical #356→#357 · Σ234→Σ235 (K85→K86) · dòng K-086 · block này.
+- **VERIFY:** git #356 tree sạch; drift PASS; GPU-HW co; onnxruntime CPU-only (providers thật); torch/docker vắng. Baseline 640/2 không đổi (chưa cài gì).
+- **Bước kế (CHỜ user QUYẾT — đèn xanh cài runtime GPU):** (A) `onnxruntime-gpu` [đề nghị — nhẹ, khớp đường sản phẩm, cần CUDA/cuDNN tương thích] → verify `_det_onnx` GPU e2e + đo throughput thật (đóng D-094 GPU) + camera trực tiếp; (B) `torch cu124` (~GB, nhánh pt + E.2); (C) chưa cài → làm việc no-GPU khác. + hướng deploy NATIVE no-docker.
+---
 **[✅ #356 — SỰ CỐ + khôi phục: git add -A xóa nhầm end.md, bắt bằng diff-stat (+K-085)]**
 - Commit #355 `git add -A` → diff-stat "425 deletions" BẤT THƯỜNG → soi `git show --stat` → `end.md | 422 ----` = end.md bị xóa khỏi working tree, stage lẫn vào commit feature. Nguyên nhân xóa [chưa kiểm] (end.md từng ACTIVE-EDITOR-FILE; Remove-Item của tôi chỉ nhắm `_tmp_*`).
 - **Khôi phục:** `git checkout HEAD~1 -- end.md` → commit riêng 0c76e1d. end.md tracked lại (git ls-files xác nhận), nội dung 422 dòng nguyên.

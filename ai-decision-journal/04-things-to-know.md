@@ -851,3 +851,17 @@ Chuyện gì: commit #355 (feat onnx) `git add -A` → diff-stat hiện **"425 d
 Khôi phục: `git checkout HEAD~1 -- end.md` → commit riêng 0c76e1d "khôi phục". end.md tracked lại (git ls-files xác nhận). KHÔNG mất (recoverable từ history vì đã commit trước đó).
 BÀI HỌC (an toàn, bản chất): (1) **LUÔN soi `git diff --stat`/`git status` TRƯỚC khi commit** — con số +/- bất thường = cờ đỏ; (2) cân nhắc stage FILE CỤ THỂ thay `git add -A` khi có thao tác xóa/cleanup trong lượt; (3) diff-stat review đã CỨU — giữ thói quen này. Giống K-064 (tin output dán) — lớp phòng vệ = kiểm bằng máy/số, không tin cảm giác.
 Đóng: ✅ (đã khôi phục + ghi bài học). Không tái diễn nếu theo bài học (review diff-stat mỗi commit).
+
+### K-086 — 🟡 (2026-07-13) Thực tế máy phiên này (user "chuyển máy"): GPU-HW + camera + KHÔNG-docker + onnxruntime CPU-only + torch vắng
+Scope: môi trường thực thi (quyết định hướng GPU/deploy)
+Nguồn: LOG Entry #357 · verify read-only phiên này (`vp env`, `--capabilities`, `pip show`, `onnxruntime.get_available_providers()`, `where docker`)
+Bằng chứng THẬT:
+- GPU phần cứng CÓ: `nvidia-smi.exe` tồn tại (`vp env` GPU=co).
+- torch VẮNG: `--capabilities` = `{has_torch:false, has_cuda:false, cuda_device_count:0, gpu_name:null, has_cv2:true}`.
+- onnxruntime = **1.27.0 bản CPU-ONLY**: `get_available_providers()` = `['AzureExecutionProvider','CPUExecutionProvider']` — KHÔNG có `CUDAExecutionProvider`. (venv extras dev,onnx,cv2,web — không pt.)
+- Docker KHÔNG cài được (user nêu) + `where docker` không thấy.
+- Camera: user nêu CÓ (CHƯA mở kiểm bằng cv2.VideoCapture — [chưa kiểm]).
+Ảnh hưởng (blocker CHÍNH XÁC hoá):
+- GPU-inference hiện **CHẶN bởi thiếu runtime GPU** (không phải thiếu GPU): cần cài **onnxruntime-gpu** (nhẹ, khớp `_det_onnx`/`OnnxDetector`, cần CUDA/cuDNN runtime tương thích) HOẶC **torch cu124** (~GB, nhánh `pt`, K-066/K-078). Cả 2 = op network → chờ đèn xanh RÕ (K-078).
+- Deploy GPU phải **NATIVE** (venv + vp.cmd / dịch vụ Windows), KHÔNG dùng nvidia-docker (docker cấm).
+Đóng khi: user bật đèn xanh cài runtime GPU → verify nhánh GPU e2e (đo throughput thật, đóng D-047/D-094 phần GPU + E.2).
