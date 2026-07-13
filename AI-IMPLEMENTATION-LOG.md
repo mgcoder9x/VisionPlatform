@@ -6994,3 +6994,11 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **3. Trade-off:** ước lượng 1-luồng-tuần-tự (cảnh báo rõ: đa-luồng thực tế thấp hơn) — đủ định cỡ + hướng scale test, KHÔNG cam kết N_node.
 **4. Điều bạn nên biết:** scale design giờ có SỐ THẬT làm neo (không còn thuần ký-hiệu). Bước thi công scale (batch-mux/scheduler/re-shard) vẫn cần sub-spec design-first riêng + đo đa-luồng. KHÔNG code phiên này (đúng "chuẩn bị thiết kế→valid→mới triển khai").
 **Đã verify:** design.md cập nhật (đọc lại khớp số K-089/090); drift chạy kế. KHÔNG đổi code (647/2 giữ). · **Chưa verify:** N_node đa-luồng thật (cần scale test 1→10→N); batch-mux (chưa làm).
+
+### Entry #365 — 2026-07-13 — ĐO đa-luồng GPU: aggregate dưới-tuyến-tính (K=4 ~105/s) + latency tăng → hiệu chỉnh capacity model (+K-092) — Kiro-Opus
+**Bối cảnh:** đóng gap tôi tự nêu ở #364 ("số 1-luồng; đa-luồng chưa đo"). Đo TRƯỚC khi thiết kế batch-mux (grounded, không speculative).
+**1. Quyết định AI tự ra (+K-092):** đo 1-lần K luồng detector CUDA đồng thời (mỗi luồng 1 session = 1cam/worker) trên RTX 2060. K=1/2/4 → aggregate 46.6/78.0/104.7 infer/s, per-stream p50 20.9/24.8/37.5ms. Cập nhật design.md "Capacity Model bản-2".
+**2. Chỗ phải đổi:** capacity model — dùng `aggregate_đo(K)/(f·g·A)` (K=4 ~105/s) thay `60/(f·g·A)` (phép-chia-1-luồng BI QUAN); thêm ràng buộc latency-SLA khi chọn K. Hiệu chỉnh nhận-định #364 (60/s là trần) → aggregate đồng-thời cao hơn nhờ overlap preprocess-CPU/GPU-infer.
+**3. Trade-off:** K luồng session-rời (mô hình hiện tại, đơn giản, tốn VRAM) vs batch-mux (1 session gộp, phức tạp) — số này định cỡ K-session-rời; batch-mux là bước sau (có thể khác). Chọn K theo latency-SLA (aggregate cao nhưng latency tăng).
+**4. Điều bạn nên biết:** aggregate tăng dưới-tuyến-tính (overlap CPU-preproc/GPU-infer) — quan trọng cho N_node. Chưa đo K=8+ (VRAM 6GB), decode đa-luồng, batch-mux thật. Số này neo capacity model bằng thực-đo, không ước-lượng-chia.
+**Đã verify:** đo thật K=1/2/4 (output thật 46.6/78.0/104.7); design.md cập nhật; temp dọn sạch; tree sạch; drift chạy kế. KHÔNG đổi code sản phẩm (647/2 giữ). · **Chưa verify:** K=8+, decode đa-luồng, batch-mux.

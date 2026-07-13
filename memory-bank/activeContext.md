@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T15:25:00+07:00.
+**Cập nhật lúc:** 2026-07-13T16:10:00+07:00.
+**[✅ #365 — ĐO đa-luồng GPU: aggregate dưới-tuyến-tính (K=4 ~105/s) + latency tăng → hiệu chỉnh capacity model (+K-092)]**
+- Đóng gap tự nêu ở #364 (đa-luồng chưa đo). Đo K luồng detector CUDA đồng thời (1cam/worker): K=1/2/4 → aggregate **46.6/78.0/104.7 infer/s**, per-stream p50 21/25/37.5ms p95 27/33/49.5ms.
+- **Bài học:** aggregate TĂNG dưới-tuyến-tính (K=4 ~2.25x, preprocess-CPU chồng-lấp GPU-infer) → `C_inf` hiệu dụng = aggregate-đồng-thời (~105/s @K=4) CAO hơn 1-luồng 60/s (phép-chia bi-quan); NHƯNG latency tăng → chọn K theo latency-SLA. Cập nhật design.md "Capacity Model bản-2" (dùng `aggregate_đo(K)/(f·g·A)`).
+- **Ghi sổ:** LOG #365 · +K-092 · INDEX canonical #364→#365 · Σ244→Σ245 (K92) · dòng K-092 · block này. KHÔNG code (đo+design).
+- **VERIFY:** đo thật K=1/2/4 (output); design.md khớp; temp sạch; tree sạch; drift chạy kế; baseline 647/2 giữ.
+- **Bước kế (CHỜ user):** (a) sub-spec batch-mux design-first (giờ CÓ số K-session-rời làm baseline so sánh — batch-mux phải THẮNG ~105/s@K4 mới đáng); (b) đo K=8+ / decode đa-luồng (VRAM 6GB); (c) e2e video/cam thật (cần asset); (d) dừng. Số đa-luồng đã neo → batch-mux design giờ grounded.
+---
 **[✅ #364 — Refine scale-architecture: Capacity Model bản-2 nạp số GPU thật + hiệu chỉnh K-084 (+K-091, design-first)]**
 - Nút thắt thương mại = đa-camera/node (scale D-040). Có số GPU thật (K-089/090) → refine `design.md`: mục "Capacity Model bản-2" nạp `C_inf≈60/s` → bảng ước lượng N_node theo (f,g,A) = **~8-13 cam/RTX2060 batch=1** (đòn bẩy motion-gate g + fps f; ~100cam ⇒ ~8-12 node HOẶC batch-mux nâng C_inf).
 - **HIỆU CHỈNH K-084 bằng số GPU:** preprocess ~20% trên GPU (4ms/20.9ms), GPU-infer mới là trần per-stream (khác CPU #353 ~30%). Bẫy preprocess chỉ cắn khi batch-mux/frame-lớn/nhiều-luồng-ít-core. Cập nhật Lỗ 5 + stamp design.md.

@@ -77,9 +77,20 @@ chỉ **~20%**, và GPU-infer MỚI là nút per-stream. Tải CPU-preproc ở N
 rất nhỏ (preprocess vượt lên); (b) frame độ-phân-giải-cao (t_pre tăng); (c) rất nhiều luồng chia ít core. ⇒ giữ cảnh báo
 K-084 cho các ca đó, nhưng ở RTX 2060 batch=1 hiện tại **GPU-infer là trần thật**, không phải preprocess.
 
-**CẢNH BÁO TRUNG THỰC (chưa đo):** các số trên là **1-luồng TUẦN TỰ**. Chạy N luồng ĐỒNG THỜI → tranh GPU/CPU/decode
-→ tổng thực tế **THẤP hơn** phép chia ngây thơ; + chưa gồm decode nhiều luồng + VRAM khi nhiều session. Cần đo đa-luồng
-thật (roadmap: scale test 1→10→N) trước khi cam kết N_node.
+**ĐO ĐA-LUỒNG THẬT (#365, K-092) — hiệu chỉnh phép-chia-1-luồng:** chạy K luồng detector ĐỒNG THỜI (mỗi luồng 1
+OnnxDetector CUDA riêng = mô hình 1cam/worker) trên RTX 2060, đo aggregate:
+| K luồng | Aggregate infer/s | per-stream p50 | p95 |
+|---|---|---|---|
+| 1 | 46.6 | 20.9ms | 27.2ms |
+| 2 | 78.0 | 24.8ms | 33.3ms |
+| 4 | **104.7** | 37.5ms | 49.5ms |
+
+→ **BÀI HỌC capacity:** aggregate TĂNG dưới-tuyến-tính (K=4 ~2.25x, không 4x) vì preprocess-CPU luồng-này chồng-lấp
+GPU-infer luồng-khác (che một phần overhead) — nên `C_inf` HIỆU DỤNG cho model = **aggregate đồng-thời (~105/s @K=4)**,
+CAO hơn số 1-luồng 60/s (phép-chia-1-luồng là BI QUAN). NHƯNG per-stream latency TĂNG (21→37ms @K=4) → phải kèm ràng
+buộc **latency_p99 ≤ SLA** khi chọn K (ở f=25fps budget 40ms/frame, K=4 p95=49.5ms đã sát/vượt → K tối ưu tùy SLA).
+Chưa đo: K=8+ (VRAM 6GB), decode nhiều-luồng đồng thời, batch-mux (gộp thật 1 session → khác chạy K session rời).
+⇒ N_node dùng `aggregate_đo_được(K) / (f·g·A)` + chọn K theo latency-SLA, KHÔNG phải 60/(f·g·A).
 
 ## Architecture
 

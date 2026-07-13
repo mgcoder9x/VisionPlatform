@@ -913,3 +913,14 @@ Nội dung (design-first, KHÔNG code):
 - **HIỆU CHỈNH K-084:** trên GPU preprocess chỉ ~20% (4.2ms/20.9ms), GPU-infer mới là nút per-stream (khác CPU #353 preprocess ~30%). Tải CPU-preproc ở N=13 ≈ 0.23 core → KHÔNG phải nút ở quy mô này. K-084 chỉ cắn khi batch-mux (GPU-infer/frame nhỏ) / frame-lớn / nhiều-luồng-ít-core → giữ cảnh báo cho các ca đó.
 CẢNH BÁO TRUNG THỰC: số là 1-luồng TUẦN TỰ; N luồng đồng thời tranh GPU/CPU/decode → thực tế THẤP hơn phép chia; chưa gồm decode đa-luồng + VRAM đa-session. Cần scale test 1→10→N trước khi cam kết N_node.
 Đóng: một phần D-047/D-094 (số 1-node GPU) đã có; N_node đa-luồng thật + batch-mux = roadmap scale.
+
+### K-092 — ✅ (2026-07-13) SỐ ĐA-LUỒNG GPU THẬT: aggregate tăng dưới-tuyến-tính (K=4 ~105/s) + latency tăng
+Scope: capacity model đa-luồng (đóng gap "1-luồng, đa-luồng chưa đo" của K-089/090/091)
+Nguồn: LOG Entry #365 · đo 1-lần (K luồng OnnxDetector CUDA đồng thời, mỗi luồng 1 session = 1cam/worker, frame 640)
+Số đo THẬT (RTX 2060, threads):
+- K=1: aggregate 46.6 infer/s · p50 20.9ms · p95 27.2ms.
+- K=2: aggregate 78.0 · p50 24.8 · p95 33.3.
+- K=4: aggregate **104.7** · p50 37.5 · p95 49.5.
+Bài học: aggregate TĂNG dưới-tuyến-tính (K=4 ~2.25x không phải 4x) — preprocess-CPU luồng-này chồng-lấp GPU-infer luồng-khác. ⇒ `C_inf` HIỆU DỤNG = aggregate-đồng-thời (~105/s @K=4), CAO hơn số 1-luồng 60/s (phép-chia-1-luồng BI QUAN). NHƯNG per-stream latency TĂNG (21→37ms) → chọn K theo latency-SLA (f=25 budget 40ms → K=4 p95 49.5 đã sát/vượt).
+⇒ capacity model dùng `aggregate_đo(K)/(f·g·A)` + ràng buộc latency, KHÔNG `60/(f·g·A)`. Đã cập nhật design.md "Capacity Model bản-2".
+Chưa đo: K=8+ (VRAM 6GB), decode đa-luồng, batch-mux thật (gộp 1 session ≠ K session rời).
