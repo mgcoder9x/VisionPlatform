@@ -1,7 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T12:20:00+07:00.
+**Cập nhật lúc:** 2026-07-13T13:10:00+07:00.
+**[✅ #361 — ĐO GPU e2e THẬT: yolov8n.onnx 60 infer/s trên RTX 2060 (~5x CPU, real-time) — đóng phần GPU D-047/D-094 (+K-089)]**
+- Export lại `yolov8n.onnx` qua venv throwaway (ultralytics 8.4.93+torch2.13-CPU, opset12/640) → `models/` (12.85MB, gitignored) → xóa venv+scratch (đóng K-087). Tree sạch.
+- Đo qua CODE SẢN PHẨM (OnnxDetector providers=CUDA + yolov8_decode, không bypass): **ON_GPU=True** (session_providers[0]==CUDA) · **60.00 infer/s · p50 16.7ms** (N=100, warmup 5). CPU (#352)=11.72 → **~5.1x**, VƯỢT 25fps real-time (CPU ~8-12 không đạt).
+- **Chuỗi GPU HOÀN CHỈNH & VERIFIED:** runtime bật (D-097/K-088) → product wiring (D-098) → model (K-087 đóng) → đo e2e (K-089). Deploy GPU qua TOML `device=cuda` native (no-docker) chạy thật.
+- **Ghi sổ:** LOG #361 · +K-089 · INDEX canonical #360→#361 · Σ240→Σ241 (K89) · dòng K-089 · block này.
+- **VERIFY:** ON_GPU=True + 60 infer/s (đo thật); model gitignored; temp sạch; tree sạch. drift chạy kế.
+- **Giới hạn/CÒN (trung thực):** mới inference-only frame-640 — CHƯA e2e GPU (decode 720p + preprocess/letterbox + NMS, K-084 gap → số camera-cuối THẤP hơn) · đa-luồng song song (scale D-040, VRAM 6GB) · camera trực tiếp (chưa mở).
+- **Bước kế (CHỜ user):** (a) đo e2e GPU throughput qua `--config device=cuda` trên video 720p (số camera-thật) + bench_capacity +device flag; (b) thử camera trực tiếp (webcam/RTSP) trên GPU; (c) config example GPU; (d) sub-spec scale đa-luồng.
+---
 **[✅ #360 — Productionize GPU onnx (D-098): helper preload DLL + wire device=cuda — TDD 647/2]**
 - Biến "GPU chạy ở probe #359" thành product dùng được: (1) `adapters/cuda_dll_path.py::ensure_cuda_dll_path` (prepend PATH nvidia DLL, K-088; idempotent; no-op an toàn CPU/Linux); (2) `OnnxDetector.setup` gọi helper khi providers CUDA/TensorRT; (3) `_det_onnx` +`device` cpu/cuda→providers + allowed_params.
 - **TDD 7 test** (fake nvidia root + spy providers — KHÔNG cần GPU thật): helper prepend/idempotent/no-op + device cpu/cuda/bad/allowed. Verify **647/2 (640→647) · lint 5/0 · 0 diag · drift PASS**.

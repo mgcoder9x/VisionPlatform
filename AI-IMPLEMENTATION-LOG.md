@@ -6962,3 +6962,11 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **3. Trade-off:** helper tách riêng (adapters, tái dùng) + no-op-an-toàn thay vì nhét PATH-hack rải rác. Catch OSError/AttributeError (non-Windows/dir lạ) → không lỗi trên CI/Linux.
 **4. Điều bạn nên biết:** giờ deploy GPU qua TOML `[pipelines.detector] type="onnx" device="cuda"` (native, không docker). CÒN THIẾU để đo GPU e2e: model yolov8n.onnx (K-087, network) → chờ đèn xanh. no-op helper không ảnh hưởng máy CPU/CI (647/2 giữ dù venv máy này đã có nvidia libs).
 **Đã verify:** `vp verify` = **647 passed/2 skipped (640→647 +7) · lint 5 kept/0 broken · 0 diagnostic · drift PASS · VERIFY OK** (EXIT 0); 2 file test mới 7 passed. · **Chưa verify:** throughput GPU e2e YOLO (thiếu model K-087); CUDAExecutionProvider e2e qua OnnxDetector.setup thật (probe #359 đã chứng minh cơ chế PATH; setup-path [chưa kiểm] tới khi có model).
+
+### Entry #361 — 2026-07-13 — ĐO GPU e2e THẬT: yolov8n.onnx 60 infer/s trên RTX 2060 (~5x CPU, real-time) — đóng phần GPU D-047/D-094 (+K-089) — Kiro-Opus
+**Bối cảnh:** nối #360 (product GPU wiring). User đèn xanh export model qua ultralytics venv-throwaway (repro K-083).
+**1. Quyết định AI tự ra:** (a) export `yolov8n.onnx` (opset 12, 640) qua venv throwaway ultralytics 8.4.93+torch 2.13-CPU → copy vào `models/` (12.85MB, gitignored) → xóa venv+scratch (đóng K-087). (b) đo GPU e2e qua CODE SẢN PHẨM (OnnxDetector providers=CUDA + yolov8_decode, không bypass): xác nhận `get_providers()[0]==CUDA` (ON_GPU thật) + throughput.
+**2. Chỗ phải đổi:** không.
+**3. Trade-off:** đo inference-only trước (nhanh, cô lập GPU) — e2e decode+preproc chờ (K-084 gap). Số 60/s là trần-inference, không phải fps-camera-cuối.
+**4. Điều bạn nên biết (+K-089):** GPU **60.00 infer/s p50 16.7ms** vs CPU 11.72 (#352) = ~5.1x, VƯỢT 25fps real-time. Chuỗi GPU HOÀN CHỈNH & VERIFIED: runtime (D-097/K-088) → product wiring (D-098) → model (K-087 đóng) → e2e đo (K-089). Deploy GPU qua TOML `device=cuda` native (no-docker) giờ chạy được thật. Giới hạn: inference-only/batch1/6GB VRAM; e2e+đa-luồng chờ.
+**Đã verify:** ON_GPU=True (session_providers CUDA đầu, output thật) · 60.00 infer/s (đo thật N=100) · model 12.85MB gitignored · temp dọn sạch · tree sạch. · **Chưa verify:** e2e GPU (decode+preproc) + đa-luồng (scale) + camera trực tiếp (chưa mở).

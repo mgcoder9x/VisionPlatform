@@ -884,3 +884,13 @@ Công thức (đã verify trên RTX 2060 / driver 591.86 / CUDA 13.1 / Windows /
 4. Verify: `InferenceSession(model, providers=['CUDAExecutionProvider','CPUExecutionProvider']).get_providers()[0]=='CUDAExecutionProvider'`.
 Ảnh hưởng: mở khoá đo capacity GPU (D-047/D-094 phần GPU) + nhánh onnx-GPU deploy NATIVE (không docker). Product-wiring (OnnxDetector tự prepend PATH + `_det_onnx` device=cuda) = việc kế (D-098). Cần model (K-087) để e2e.
 Giới hạn: [chưa kiểm] onnxruntime-gpu 1.27 + CUDA 13 runtime khớp chính xác cuDNN9 mọi op; mới verify Identity + provider-load. Cần verify e2e YOLO khi có model.
+
+### K-089 — ✅ (2026-07-13) SỐ ĐO GPU THẬT: yolov8n.onnx 60 infer/s trên RTX 2060 (CUDA EP) — ~5x CPU, đạt real-time
+Scope: capacity/throughput GPU (đóng phần GPU của D-047/D-094 "🔴 số chờ GPU")
+Nguồn: LOG Entry #361 · đo 1-lần qua CODE SẢN PHẨM (OnnxDetector CUDA + yolov8_decode) · verify ON_GPU=True
+Số đo THẬT (RTX 2060 6GB, driver 591.86, onnxruntime-gpu 1.27 + nvidia cu13 wheels, D-097/D-098):
+- `session.get_providers()[0]=='CUDAExecutionProvider'` → chạy THẬT trên GPU (không fallback CPU).
+- **inference-only (frame 640 dựng sẵn, warmup 5, N=100): 60.00 infer/s · p50 ~16.7 ms.**
+- So sánh CPU (#352, cùng model/frame): 11.72 infer/s → GPU **~5.1x**. 60 > 25fps ⇒ **đạt real-time** (CPU ~8-12fps KHÔNG đạt — #353).
+Giới hạn (trung thực): mới đo **inference-only** trên frame-640-dựng-sẵn; CHƯA đo **end-to-end** GPU (decode 720p + letterbox/preprocess + NMS + inverse — số thật/luồng-camera sẽ THẤP hơn, xem K-084 gap preprocessing). VRAM 6GB → giới hạn số luồng song song. batch=1.
+Đóng: phần "số capacity 1-luồng GPU inference" của D-047/D-094. CÒN: e2e GPU (decode+preproc) + đa-luồng (scale-architecture D-040).
