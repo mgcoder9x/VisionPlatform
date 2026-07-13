@@ -825,3 +825,15 @@ Nguồn: LOG Entry #350 · ĐỌC code thật 6 file (vein săn bug sau V1/#349,
 - **Supervisor cascade SOUND:** cooperative-FIRST (set event → JOIN coop với grace CHIA SẺ deadline = bounded bởi `shutdown_grace_s`, KHÔNG grace×N → terminate → kill straggler); crash+hang xử lý THỐNG NHẤT (count→cap→backoff); give-up có reap (`p.join()` crash / `_terminate_proc` hang) rồi pop; respawn re-arm heartbeat (hb=0 + spawn_walltime). Không mutate `_procs` khi iterate `self.workers`.
 Ranh giới TRUNG THỰC: khẳng định SOUND chỉ cho 6 file NÀY (đã đọc). Điểm cần-biết còn treo: (a) DarkFilter với `brightness=nan` (frame rỗng) → `nan<threshold`=False → KHÔNG skip (frame rỗng không nên tới đây; source đảm bảo frame — [chưa kiểm] biên này, Low); (b) startup-grace heartbeat dùng chung `heartbeat_timeout_s` = K-035 residual (đã ghi, defer, KHÔNG vá speculative).
 Đóng: ✅ review round (không tìm ra lỗi đúng-sai chứng minh được → KHÔNG đổi code, đúng nguyên tắc "không vá ngọn/ không đoán liều").
+### K-083 — ✅ (2026-07-12) YOLOv8 ONNX nhận diện THẬT trên CPU (no-GPU) đã verify + cách repro weight
+Scope: `adapters/onnx_detector.py` · `adapters/yolo_postprocess.py::yolov8_decode` · `adapters/detector_pipeline.py` · `profiles/vision_demo_app.py --onnx`
+Nguồn: LOG Entry #351 · chạy thật máy `k.nguyen.manh.toan` CPU
+Đã xác minh (chạy thật): onnxruntime 1.27.0 `CPUExecutionProvider` chạy `yolov8n.onnx` qua đường sản phẩm → `bus.jpg` = **4 person + 1 bus** (conf 0.864/0.844) ĐÚNG. Shape INPUT `images[1,3,640,640]` · OUTPUT `output0[1,84,8400]` (nc_first, 4+80). Demo video 8/8 frame có box. Kết luận: **KHÔNG cần GPU để test tính đúng của detector** — CPU chạy được (chậm hơn, đủ verify correctness).
+CÁCH REPRO weight (KHÔNG commit — gitignore `*.onnx`/`models/`, tài sản+license):
+1. venv throwaway: `vision-platform\.venv\Scripts\python.exe -m venv _tmp_install_venv` (giữ .venv chính no-torch).
+2. `_tmp_install_venv\Scripts\python.exe -m pip install ultralytics` (kéo torch CPU ~250MB từ PyPI — mạng chậm K-078).
+3. `from ultralytics import YOLO; YOLO('yolov8n.pt').export(format='onnx', imgsz=640, opset=12)` → `yolov8n.onnx` (12.2MB, official).
+4. Copy vào `vision-platform/models/`; xóa `_tmp_install_venv` + `yolov8n.pt`.
+5. Chạy: `vision_demo_app --video <clip> --onnx models/yolov8n.onnx --yolo v8 --labels "<80 COCO>" --model-size 640`.
+Non-goal / còn treo: throughput fps YOLO-CPU dưới tải thật (mới smoke 8 frame — CHƯA đo); weight NGHIỆP VỤ riêng của user (đây COCO generic, chứng minh PIPELINE); GPU e2e (D-043/D-031 phần GPU). torch KHÔNG cài vào .venv chính (baseline no-torch giữ nguyên).
+Đóng: ✅ (tính đúng detector CPU chứng minh được). Mở phần đo hiệu năng + weight nghiệp vụ.

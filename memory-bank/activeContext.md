@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
-## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-13T00:20:00+07:00.
+## Trạng thái hiện tại (2026-07-13)
+**Cập nhật lúc:** 2026-07-13T01:10:00+07:00.
+**[✅ #351 — VERIFY nhận diện YOLOv8 THẬT trên CPU (no-GPU) qua đường sản phẩm ONNX (+K-083)]**
+- User hỏi "chạy thử được gì / test CPU / tải weight nguồn tốt". Đã chứng minh luồng no-GPU (fake/BrightBlob/video end-to-end) trước đó; còn hở NN thật vì thiếu weight.
+- **User chọn phương án A** (export từ Ultralytics chính chủ trong venv riêng — tin cậy nhất). Thực hiện: venv throwaway `_tmp_install_venv` (giữ NGUYÊN `.venv` chính no-torch) → cài `ultralytics`+torch-CPU → export official `yolov8n.pt`→`yolov8n.onnx` (12.2MB, opset 12, imgsz 640) → copy vào `vision-platform/models/` (gitignored) → xóa venv+scratch.
+- **VERIFY nhận diện thật CPU:** onnxruntime 1.27.0 `CPUExecutionProvider` chạy qua ĐÚNG đường sản phẩm (`OnnxDetector`+`chw_float_normalize`+`yolov8_decode(nc_first)`+`DetectorPipeline` letterbox/NMS/inverse) → `bus.jpg` = **4 person + 1 bus** (conf 0.864/0.844) ĐÚNG. Shape INPUT `[1,3,640,640]` · OUTPUT `[1,84,8400]`. Demo video 8/8 frame có box. **KHÔNG cần GPU để test tính-đúng detector.**
+- **Ghi sổ:** LOG #351 · +K-083 (repro 5 bước + giới hạn) · INDEX canonical #350→#351 · Σ229→Σ230 (K82→K83) · dòng K-083 · block này. 0 dòng code sản phẩm đổi (thuần thao tác + asset).
+- **VERIFY:** `vp verify` = **632 passed/2 skipped · lint 5/0 · drift PASS** (đường sản phẩm không đổi). `models/yolov8n.onnx` gitignored (git check-ignore xác nhận) → cây sạch, không commit binary.
+- **Bước kế (CHỜ user):** (a) đo throughput fps YOLO-CPU dưới tải thật (mới smoke 8 frame); (b) chạy trên video/ảnh thật của user; (c) weight nghiệp vụ riêng; (d) cổng Feynman #11–#14. Chặn: GPU e2e · K-035 residual.
+---
 **[✅ #350 — REVIEW đối kháng vein-sau-V1 (end.md §6 còn lại): stage-pipeline + supervisor-cascade = SOUND, KHÔNG vá speculative (+K-082)]**
 - Săn bug tiếp 2 mục cuối end.md §6: `dark_filter`+`brightness` stages · `supervisor` cascade race. Đọc CODE THẬT 6 file (thuần logic → no-GPU verify được): `dark_filter_stage`, `brightness_stage`, `base_stage`, `kernel/stage_contract`, `sync_linear_executor`, `application/supervisor`.
 - **Kết luận đối kháng = SOUND (không lỗi đúng-sai chứng minh được):**
