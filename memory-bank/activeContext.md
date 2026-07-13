@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T01:45:00+07:00.
+**Cập nhật lúc:** 2026-07-13T02:10:00+07:00.
+**[✅ #353 — ĐO capacity CPU trọn bức tranh: decode + combined(decode+infer) trên video 720p]**
+- Nối #352: số infer đơn (11.72/s trên frame 640) chưa phải capacity 1 luồng camera thật (=decode+infer). Đo nốt bằng clip synthetic 720p 80 frame (không đổi code); cũng validate nhánh `--onnx` #352 chạy đúng ở `--mode latency`.
+- **SỐ ĐO THẬT (CPU no-GPU):** `decode` 720p cv2 = **336.83 frame/s** (p50 2.8ms → KHÔNG nút cổ chai); combined `latency --onnx` = **7.95 frame/s** (p50 121ms, p95 187ms). Chi phí gần hết ở YOLO infer + letterbox 720p→640; decode ~3ms là nhiễu.
+- **Diễn giải commercial:** 1 luồng 720p trên CPU ≈ 8 fps end-to-end → KHÔNG đạt real-time 25fps (cần ~120ms/frame vs budget 40ms) ⇒ production cần GPU; CPU đủ test tính-đúng + kịch bản fps-thấp. Số combined(7.95) < infer-đơn(11.72) do letterbox+read (frame 640 dựng-sẵn #352 không có).
+- **Ghi sổ:** LOG #353 (số đo, KHÔNG +D/C/T/K → Σ231 giữ) · INDEX canonical #352→#353 · block này. 0 code đổi (clip scratch đã xóa).
+- **VERIFY:** đo thật exit 0; drift PASS (bổ sung dưới). Baseline 632/2 không đổi (không đụng code).
+- **Bước kế (CHỜ user):** (a) chạy trên video/độ-phân-giải nghiệp vụ THẬT của user; (b) throughput đa-luồng song song (scale-architecture, cần thiết kế process/GPU-budget); (c) cổng Feynman #11–#14; (d) GPU e2e. K-035 residual như cũ.
+---
 **[✅ #352 — Mở rộng bench_capacity đo detector ONNX THẬT trên CPU → số capacity CPU-baseline (D-094 ✅)]**
 - Bước giá-trị-cao no-GPU sau #351: ĐO năng lực 1-node (capacity) — nền scale-architecture (D-040) + đóng phần CPU của D-047 "🔴 số capacity chờ weight". Đọc-valid harness TRƯỚC: `measure_infer` nhận detector qua DI (dùng được) nhưng `main()` chưa wire ONNX; giả định "cpu⇒fake" lỗi thời.
 - **Fix GỐC (D-094):** thêm nhánh `--onnx [--labels --yolo v8 --layout --conf]` vào `bench_capacity.main()` (mirror `vision_demo_app._build_detector`: `DetectorPipeline(OnnxDetector+decode)`) → `is_real=bool(onnx) or device∉{cpu,fake}` → onnx-CPU = số THẬT (nhãn "CPU-BASELINE", không cảnh báo fake). Additive dev-tool ngoài src.

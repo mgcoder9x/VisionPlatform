@@ -6871,3 +6871,20 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** **SỐ ĐO THẬT (CPU, no-GPU) — yolov8n@640 batch=1 = 11.72 infer/s · latency p50 82ms · p95 154ms · min 41ms** (máy `k.nguyen.manh.toan`). Nghĩa: 1 đường-CPU gánh ~11-12 fps yolov8n → định cỡ tương đối cho quyết định GPU. KHÔNG suy ra số GPU (đích production). Combined decode+infr + số GPU vẫn treo (cần video tải thật / máy GPU).
 
 **Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, py3.11.9, CPU):** `bench_capacity --onnx` = 11.72 infer/s (p50 82ms); `vp verify` = 632 passed/2 skipped · lint 5 kept/0 broken · drift PASS · getDiagnostics bench_capacity.py = 0. · **Chưa verify:** throughput dưới tải song song; số GPU; combined decode+infer.
+
+### Entry #353 — 2026-07-12 — ĐO capacity CPU trọn bức tranh: decode + combined(decode+infer) trên video 720p — Kiro-Opus
+
+**Bối cảnh:** nối #352 (mở rộng `--onnx`). Số `infer` đơn lẻ (11.72/s trên frame 640 dựng-sẵn) chưa phải capacity 1 luồng camera thật (= decode + infer). Dùng harness (không đổi code) đo nốt bằng clip synthetic 720p (độ phân giải camera thật) 80 frame. Cũng VALIDATE nhánh `--onnx` #352 chạy đúng ở `--mode latency` (không chỉ infer).
+
+**1. Quyết định AI tự ra:** không (thuần đo, 0 code đổi, clip là scratch tạm đã xóa).
+
+**2. Chỗ phải đổi:** không.
+
+**3. Trade-off:** clip synthetic 720p vs video thật — chọn synthetic (kiểm-soát-được độ-phân-giải + không phụ thuộc tải mạng; nội dung frame KHÔNG đổi chi phí infer YOLO đáng kể → số hợp lệ để định-cỡ). Ghi rõ: đây CPU-baseline, không suy ra GPU.
+
+**4. Điều bạn nên biết (SỐ ĐO THẬT CPU no-GPU, máy `k.nguyen.manh.toan`):**
+- `--mode decode` (720p, cv2 MJPG): **336.83 frame/s** · latency p50 2.807ms → decode KHÔNG phải nút cổ chai.
+- `--mode latency --onnx yolov8n.onnx` (combined decode→letterbox720p→640→infer→decode+NMS): **7.95 frame/s** · latency p50 121.1ms · p95 187ms · min 73ms.
+- Diễn giải: chi phí gần như TOÀN BỘ ở YOLO infer + letterbox (decode ~3ms là nhiễu). 1 luồng 720p trên CPU ≈ 8 fps end-to-end → **KHÔNG đạt real-time 25fps trên CPU** (cần ~120ms/frame vs budget 40ms) ⇒ production cần GPU; CPU đủ test tính-đúng + kịch bản fps-thấp. Số combined(7.95) < infer-đơn(11.72) do letterbox 720p→640 + read overhead (frame 640 dựng-sẵn ở #352 không có phần này).
+
+**Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, CPU):** decode 336.83/s (p50 2.8ms); combined latency 7.95/s (p50 121ms) trên clip 720p 80 frame; harness exit 0. · **Chưa verify:** số GPU (đích production); throughput đa-luồng song song (nhiều process/GPU-budget — scale-architecture); video/độ-phân-giải nghiệp vụ thật của user.
