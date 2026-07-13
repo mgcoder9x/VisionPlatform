@@ -924,3 +924,12 @@ Số đo THẬT (RTX 2060, threads):
 Bài học: aggregate TĂNG dưới-tuyến-tính (K=4 ~2.25x không phải 4x) — preprocess-CPU luồng-này chồng-lấp GPU-infer luồng-khác. ⇒ `C_inf` HIỆU DỤNG = aggregate-đồng-thời (~105/s @K=4), CAO hơn số 1-luồng 60/s (phép-chia-1-luồng BI QUAN). NHƯNG per-stream latency TĂNG (21→37ms) → chọn K theo latency-SLA (f=25 budget 40ms → K=4 p95 49.5 đã sát/vượt).
 ⇒ capacity model dùng `aggregate_đo(K)/(f·g·A)` + ràng buộc latency, KHÔNG `60/(f·g·A)`. Đã cập nhật design.md "Capacity Model bản-2".
 Chưa đo: K=8+ (VRAM 6GB), decode đa-luồng, batch-mux thật (gộp 1 session ≠ K session rời).
+
+### K-093 — ✅ (2026-07-13) Model `yolov8n.onnx` hiện tại có input batch CỐ ĐỊNH [1,3,640,640] → batch-mux cần re-export dynamic
+Nguồn: LOG Entry #366 · probe 1-lần `_tmp_probe_batch.py` (describe_onnx + `session.run` thật batch 1/2/4) · nối design batch-mux (RB-1).
+Bằng chứng THẬT (chạy, không suy đoán):
+- `describe_onnx("models/yolov8n.onnx")` → INPUT `images` shape `[1,3,640,640]`, OUTPUT `output0` `[1,84,8400]`.
+- `session.run` batch=1 OK; batch=2/4 → `InvalidArgument: Got invalid dimensions for input: images ... Got: 2 Expected: 1`.
+Bài học: model export mặc-định (ultralytics opset12/640, #361) KHÔNG có trục batch động → truyền `[B,...]` B>1 NỔ ngay. Batch-mux (gộp N-cam vào 1 tensor) BẤT KHẢ THI với model này. Muốn batch-mux phải RE-EXPORT với `dynamic=True` (ultralytics `export(dynamic=True)` hoặc `torch.onnx.export(dynamic_axes=...)`) → trục 0 = 'N'. Đây là task #0 (tiên quyết) của pha thi công batch-mux.
+Cách né network để verify LOGIC mux TRƯỚC: tạo model ONNX tí-hon dynamic-batch tự-làm (license sạch, như test OnnxDetector) → verify gather/scatter identity + tương-đương-single-vs-batch KHÔNG cần re-export YOLO/GPU.
+Chưa kiểm: batch>1 có thắng K-session-rời (104.7/s@K4) trên RTX 2060 không (cần re-export + bench thật).

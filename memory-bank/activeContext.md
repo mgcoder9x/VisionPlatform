@@ -1,7 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T16:10:00+07:00.
+**Cập nhật lúc:** 2026-07-13T17:30:00+07:00.
+**[🔵 #366 — Mở sub-spec `batch-mux` design-first: thiết kế gộp N-cam→1 session.run nâng C_inf (+D-100, +K-093)]**
+- User chọn hướng (a) batch-mux design-first (roadmap #3 scale-arch, đòn bẩy C_inf lớn nhất). ĐỌC code thật + CHẠY probe model TRƯỚC khi viết (không bịa).
+- **Tạo `.kiro/specs/batch-mux/design.md`** (+D-100): BatchMuxer gather (max_batch|batch_timeout) → preprocess_batch stack `[B,3,640,640]` → 1 `session.run` → postprocess_batch split → scatter theo request_id. Port RIÊNG `IBatchDetector` (GIỮ `IDetector` single-frame — backward-compat). Tái dùng BoundedQueue/OnnxDetector-session/yolov8_decode/metrics. 5 Correctness Property + self-review 6 lỗ. getDiagnostics=0.
+- **K-093 (VERIFY chạy thật, chỗ phải đổi so yêu cầu):** model `yolov8n.onnx` input CỐ ĐỊNH `[1,3,640,640]` — `session.run` batch=2/4 → `InvalidArgument: Got 2 Expected 1`. ⇒ batch-mux BẤT KHẢ THI nếu không RE-EXPORT dynamic-batch (task #0 tiên quyết).
+- **NGHI VẤN LỚN (Lỗ 1, [chưa kiểm]):** batch-mux có thể KHÔNG thắng K-session-rời (K-092: 104.7/s@K4, GPU đã lấp khá đầy, yolov8n nhỏ) → nghiệm thu = ĐO (Property 5), không giả định thắng. Bước rẻ nhất: spike bench (re-export + đo B=1/2/4/8) TRƯỚC khi build BatchMuxer đầy đủ.
+- **Ghi sổ:** LOG #366 · +D-100 (🔵) · +K-093 · INDEX canonical #365→#366 · Σ245→Σ247 (D100·K93) · dòng D-100/K-093 · block này. KHÔNG code (design-first).
+- **VERIFY:** probe batch cố định (output `InvalidArgument` thật); code IDetector/OnnxDetector single-frame (đọc); design.md getDiagnostics=0; temp dọn; tree sạch trước ghi; drift chạy kế.
+- **Bước kế (CHỜ user đọc-lại-valid design):** (a) valid design → tạo requirements.md (design-first) → tasks.md; (b) spike bench trả lời Lỗ-1 (cần đèn xanh re-export model dynamic — network) TRƯỚC khi build đầy đủ; (c) dừng mốc sạch. Đề nghị: user đọc design trước, tôi chưa tự tạo requirements để bạn valid.
+---
 **[✅ #365 — ĐO đa-luồng GPU: aggregate dưới-tuyến-tính (K=4 ~105/s) + latency tăng → hiệu chỉnh capacity model (+K-092)]**
 - Đóng gap tự nêu ở #364 (đa-luồng chưa đo). Đo K luồng detector CUDA đồng thời (1cam/worker): K=1/2/4 → aggregate **46.6/78.0/104.7 infer/s**, per-stream p50 21/25/37.5ms p95 27/33/49.5ms.
 - **Bài học:** aggregate TĂNG dưới-tuyến-tính (K=4 ~2.25x, preprocess-CPU chồng-lấp GPU-infer) → `C_inf` hiệu dụng = aggregate-đồng-thời (~105/s @K=4) CAO hơn 1-luồng 60/s (phép-chia bi-quan); NHƯNG latency tăng → chọn K theo latency-SLA. Cập nhật design.md "Capacity Model bản-2" (dùng `aggregate_đo(K)/(f·g·A)`).

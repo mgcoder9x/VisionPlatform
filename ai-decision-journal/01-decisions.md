@@ -1121,3 +1121,13 @@ Links: D-094, D-098, K-088/089/090, D-095 (config onnx)
 Nội dung: bench `--onnx` giờ tôn trọng `--device cuda` → đo capacity GPU TÁI LẬP qua công cụ (không cần probe 1-lần). Config GPU = bản CPU (#355) khác đúng 1 field `device="cuda"` — deploy GPU qua TOML NATIVE (không docker). Config tự pass validate (device ∈ _det_onnx.allowed_params, D-098) → test_all_example_configs phủ.
 Vì sao (bản chất): biến số-đo-GPU-1-lần (K-089/090) thành CÔNG CỤ reusable + template deploy sẵn dùng (hướng sản phẩm thương mại). Không thêm test riêng vì bench CLI-wiring không unit-test (measure_* DI vẫn test; config phủ bởi test_all_example_configs).
 Non-goal: chưa chạy config GPU e2e trên video thật (cần clips/sample.mp4 của user); chưa đa-luồng.
+
+### D-100 — 2026-07-13 — Mở sub-spec `batch-mux` design-first: gộp N-cam→1 session.run nâng C_inf
+Status: 🔵 design-only (PHA-1, chờ user đọc-lại-valid; KHÔNG code)
+Evidence: `.kiro/specs/batch-mux/design.md` tạo mới, getDiagnostics = 0 (format spec sạch: Overview/Forces/ràng-buộc-verify/Architecture/Components/Data Models/5 Property/Error/Testing/Self-Review/Open/Glossary). Probe model chạy thật (RB-1).
+Scope: `.kiro/specs/batch-mux/design.md` (MỚI). CHƯA có code, CHƯA requirements.md/tasks.md.
+Nguồn: LOG Entry #366 · sub-spec của scale-architecture (D-040 roadmap #3) · baseline K-092 · ràng buộc code K-093/RB-1.
+Links: D-040 (scale-arch), K-089/090/092 (số GPU), D-097/098 (GPU wiring), K-024 (bulkhead), K-016 (BoundedQueue).
+Nội dung: BatchMuxer @application (gather max_batch|batch_timeout → preprocess_batch stack [B,3,640,640] → 1 `session.run` → postprocess_batch split B → scatter theo request_id). Port RIÊNG `IBatchDetector.detect_batch(frames)->list[list[Detection]]` (GIỮ NGUYÊN `IDetector` single-frame — backward-compat). Tái dùng BoundedQueue/OnnxDetector-session/yolov8_decode/metrics. Thêm mới: preprocess_batch/postprocess_batch (thuần)/BatchOnnxDetector/BatchMuxer.
+Vì sao (bản chất): C_inf là đòn bẩy throughput lớn nhất trong capacity model; batch THẬT khấu hao overhead kernel-launch + lấp đầy SM (cơ chế nvstreammux/Triton). Design-first + nghiệm-thu-bằng-đo vì NGHI VẤN batch-mux có thể không thắng K-session-rời (yolov8n nhỏ, K-092 GPU đã lấp khá đầy) → phải ĐO, không giả định.
+Non-goal: chưa re-export model dynamic-batch (RB-1, cần network/đèn xanh); chưa build BatchMuxer; chưa requirements.md/tasks.md; self-viết-vs-Triton để-ngỏ.
