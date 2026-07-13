@@ -1,0 +1,31 @@
+# Deploy detector NN THẬT qua ONNX trên GPU (onnxruntime CUDAExecutionProvider) — NATIVE, KHÔNG cần Docker.
+# Điều kiện GPU (công thức K-088, tự động qua OnnxDetector.setup/D-098):
+#   - Driver NVIDIA (nvidia-smi OK) + venv có: onnxruntime-gpu + nvidia-{cudnn-cu13,cuda-runtime,cublas,cufft,curand,cusparse}.
+#   - KHÔNG cần cài CUDA toolkit hệ thống; OnnxDetector tự prepend PATH thư mục DLL nvidia trước khi tạo session.
+#   - Nếu GPU không sẵn sàng → onnxruntime tự fallback CPUExecutionProvider (vẫn chạy, chậm hơn).
+# Số đo tham chiếu (RTX 2060, K-089/K-090): inference-only 640 ~60 infer/s; e2e 720p ~48 fps (real-time).
+# SỬA cho đúng: source.params.path (video/RTSP) + detector.params.weights (.onnx) + labels (nếu muốn tên lớp).
+# Lệnh: python -m vision_platform.profiles.vision_slice_app --config configs/example_video_onnx_gpu.toml
+[[pipelines]]
+id = "video-onnx-gpu-01"
+# max_frames vắng = chạy hết video (EOF thì dừng).
+
+[pipelines.source]
+type = "video"
+params = { path = "clips/sample.mp4" }
+
+# Detector ONNX trên GPU: KHÁC bản CPU ở đúng 1 field → device = "cuda".
+# yolo: 'v8' (output [1,4+nc,N], layout nc_first) hoặc 'v5' ([1,N,5+nc], có objectness).
+[pipelines.detector]
+type = "onnx"
+params = { weights = "models/yolov8n.onnx", yolo = "v8", layout = "nc_first", model_size = 640, conf = 0.25, device = "cuda" }
+
+[[pipelines.stages]]
+type = "detect"
+
+[[pipelines.stages]]
+type = "count"
+
+[[pipelines.sinks]]
+type = "jsonl"
+params = { path = "events/video-onnx-gpu-01.jsonl" }

@@ -164,9 +164,15 @@ def main(argv=None) -> int:
         else:
             def _post(raw):
                 return yolov5_decode(raw, conf_threshold=args.conf, labels=labels)
-        inner = OnnxDetector(args.onnx, preprocess_fn=chw_float_normalize, postprocess_fn=_post)
+        # D-099: --device cuda → onnxruntime CUDAExecutionProvider (OnnxDetector.setup tự lo DLL nvidia, D-098/K-088).
+        if args.device in ("cuda", "gpu"):
+            onnx_providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        else:
+            onnx_providers = ["CPUExecutionProvider"]
+        inner = OnnxDetector(args.onnx, preprocess_fn=chw_float_normalize, postprocess_fn=_post,
+                             providers=onnx_providers)
         detector = DetectorPipeline(inner, model_h=args.imgsz, model_w=args.imgsz)
-        # onnxruntime CPU đồng bộ (blocking) → KHÔNG cần sync_fn.
+        # onnxruntime đồng bộ (blocking, cả CPU lẫn CUDA-run trả về sau khi xong) → KHÔNG cần sync_fn.
     elif is_real:
         if not args.weights:
             p.error("--device cuda cần --weights <path.pt>")

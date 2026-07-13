@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T13:55:00+07:00.
+**Cập nhật lúc:** 2026-07-13T14:40:00+07:00.
+**[✅ #363 — Reusable GPU: bench_capacity --onnx --device cuda + config GPU example (D-099)]**
+- Biến số-đo-1-lần thành công cụ tái lập + template deploy: (a) `bench_capacity` nhánh `--onnx` map `--device cuda`→CUDA providers (trước bỏ qua device, luôn CPU); (b) `configs/example_video_onnx_gpu.toml` (khác bản CPU #355 đúng field `device="cuda"`) → deploy GPU qua TOML NATIVE (no-docker).
+- **Ghi sổ:** LOG #363 · +D-099 (✅) · INDEX canonical #362→#363 · Σ242→Σ243 (D99) · dòng D-099 · block này.
+- **VERIFY:** bench `--onnx --device cuda` exit 0 (GPU infer stats); `vp verify` = 647/2 · lint 5/0 · drift PASS · VERIFY OK (config GPU auto-validate qua test_all_example_configs; device∈allowed_params D-098).
+- **GPU giờ TRỌN cho 1-luồng:** runtime(D-097)+wiring(D-098)+số đo(K-089/090)+công cụ&template(D-099). Deploy GPU qua TOML sẵn dùng.
+- **Bước kế (CHỜ user, đều no-network):** (a) chạy config GPU e2e trên video THẬT của user (cần clips/sample.mp4) hoặc (b) camera trực tiếp GPU (cần webcam index/RTSP url) hoặc (c) đa-luồng scale (D-040, VRAM 6GB — design-first) hoặc (d) dừng mốc sạch.
+---
 **[✅ #362 — ĐO e2e GPU 720p: DetectorPipeline 47.77 fps (~6x CPU, real-time) — gap preprocessing nhỏ 1-luồng (+K-090)]**
 - Đo qua CODE SẢN PHẨM `_det_onnx(device=cuda)`→DetectorPipeline.detect(1280×720): letterbox→640 + GPU infer + NMS + inverse = **47.77 fps · p50 20.9ms**.
 - vs inference-only 640 (K-089 60/s): preprocessing+NMS+inverse thêm ~4.2ms → **gap K-084 NHỎ ở 1-luồng** trên GPU (đa-luồng preprocess-CPU vẫn cộng dồn — cảnh báo K-084 giữ cho scale). vs CPU combined 7.95 (#353) → **~6x**, VƯỢT 25fps real-time.

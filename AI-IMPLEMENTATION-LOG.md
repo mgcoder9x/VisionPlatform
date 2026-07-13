@@ -6978,3 +6978,11 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **3. Trade-off:** đo detector-e2e (không gồm video-decode — decode ~3ms/336fps #353 không đáng kể); synthetic frame (chưa video/cam thật). Số 1-luồng.
 **4. Điều bạn nên biết (+K-090):** **e2e GPU 720p = 47.77 fps p50 20.9ms** (~6x CPU 7.95 #353, VƯỢT real-time). Preprocessing+NMS+inverse thêm ~4.2ms so inference-only (K-089 60/s) → gap K-084 NHỎ ở 1-luồng, NHƯNG đa-luồng preprocess-CPU vẫn cộng dồn (cảnh báo K-084 giữ cho scale). VRAM 6GB/batch1 → giới hạn đa-luồng.
 **Đã verify:** 47.77 fps (đo thật N=100 qua DetectorPipeline device=cuda, output thật); temp dọn sạch; tree sạch. · **Chưa verify:** video/camera thật; đa-luồng song song (scale D-040); bench_capacity --device (chưa wire, dùng probe 1-lần).
+
+### Entry #363 — 2026-07-13 — Reusable GPU: bench_capacity --onnx --device cuda + config GPU example (D-099) — Kiro-Opus
+**Bối cảnh:** nối #360-362 (GPU verified). Biến số-đo-1-lần thành công cụ tái lập + template deploy.
+**1. Quyết định AI tự ra (D-099 ✅):** (a) `bench_capacity` nhánh `--onnx` map `--device cuda`→CUDA providers (trước bỏ qua device, luôn CPU) → đo capacity GPU tái lập qua công cụ (OnnxDetector.setup tự lo DLL nvidia, D-098). (b) `configs/example_video_onnx_gpu.toml` = bản CPU #355 khác đúng 1 field `device="cuda"` → deploy GPU qua TOML native (no-docker).
+**2. Chỗ phải đổi:** không (additive: bench CLI + config mới).
+**3. Trade-off:** không thêm unit-test riêng (bench CLI-wiring không unit-test theo thiết kế D-047; config auto-phủ bởi test_all_example_configs #308 — validate device∈allowed_params).
+**4. Điều bạn nên biết:** deploy GPU giờ có template sẵn + đo GPU tái lập bằng `bench_capacity --onnx --device cuda`. Config GPU khác CPU đúng 1 field (dễ đọc/audit). Chưa chạy config GPU e2e trên video thật (cần clips của user) + chưa đa-luồng (scale D-040).
+**Đã verify:** bench `--onnx --device cuda` exit 0 (GPU infer stats); `vp verify` = **647 passed/2 skipped · lint 5/0 · drift PASS · VERIFY OK** (config GPU tự validate); getDiagnostics bench = 0. · **Chưa verify:** config GPU e2e trên video/cam thật; đa-luồng.

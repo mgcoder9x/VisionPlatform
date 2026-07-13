@@ -1111,3 +1111,13 @@ Verify-Symbol: vision-platform/src/vision_platform/adapters/cuda_dll_path.py::en
 Nội dung: `ensure_cuda_dll_path()` = best-effort/idempotent/no-op-an-toàn: dò `site-packages/nvidia/**/*.dll` → `add_dll_directory` + **prepend PATH** (K-088: PATH cần cho dep bắc-cầu của onnxruntime_providers_cuda.dll). `OnnxDetector.setup` gọi nó TRƯỚC session KHI providers có CUDA/TensorRT. `_det_onnx` map `device=cuda`→`['CUDAExecutionProvider','CPUExecutionProvider']`, `cpu`→`['CPUExecutionProvider']`, khác→ConfigError.
 Vì sao (bản chất): tách "làm-DLL-tìm-được" thành helper adapters tái dùng + no-op an toàn (CPU/không-nvidia KHÔNG ảnh hưởng — 647/2 giữ trên máy đã có nvidia libs; logic no-op test bằng fake root). Deploy GPU qua TOML `device=cuda` (native, không docker). Test KHÔNG cần GPU thật (spy providers + fake nvidia root).
 Non-goal: chưa đo throughput GPU e2e (cần model yolov8n.onnx — K-087, network); chưa thêm config GPU example (kèm model).
+
+### D-099 — 2026-07-13 — Reusable GPU: `bench_capacity --onnx --device cuda` + `configs/example_video_onnx_gpu.toml`
+Status: ✅ code (verify 647/2 · lint 5/0 · bench GPU chạy exit 0; config auto-validated by test_all_example_configs)
+Evidence: `python -m benchmarks.bench_capacity --onnx models/yolov8n.onnx --device cuda --mode infer` = exit 0 (sinh infer stats GPU); `vp verify` = 647 passed/2 skipped · lint 5/0 · drift PASS; getDiagnostics bench_capacity.py = 0.
+Scope: `benchmarks/bench_capacity.py` (nhánh `--onnx`: map `device` cuda/gpu→`['CUDAExecutionProvider','CPUExecutionProvider']`; trước chỉ CPU) · `configs/example_video_onnx_gpu.toml` (MỚI).
+Nguồn: LOG Entry #363 · nối D-098 (OnnxDetector.setup tự lo DLL) · D-094 (bench onnx CPU) · K-089/K-090 (số GPU)
+Links: D-094, D-098, K-088/089/090, D-095 (config onnx)
+Nội dung: bench `--onnx` giờ tôn trọng `--device cuda` → đo capacity GPU TÁI LẬP qua công cụ (không cần probe 1-lần). Config GPU = bản CPU (#355) khác đúng 1 field `device="cuda"` — deploy GPU qua TOML NATIVE (không docker). Config tự pass validate (device ∈ _det_onnx.allowed_params, D-098) → test_all_example_configs phủ.
+Vì sao (bản chất): biến số-đo-GPU-1-lần (K-089/090) thành CÔNG CỤ reusable + template deploy sẵn dùng (hướng sản phẩm thương mại). Không thêm test riêng vì bench CLI-wiring không unit-test (measure_* DI vẫn test; config phủ bởi test_all_example_configs).
+Non-goal: chưa chạy config GPU e2e trên video thật (cần clips/sample.mp4 của user); chưa đa-luồng.
