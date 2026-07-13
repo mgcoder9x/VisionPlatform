@@ -1,7 +1,18 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T23:55:00+07:00.
+**Cập nhật lúc:** 2026-07-13T00:20:00+07:00.
+**[✅ #350 — REVIEW đối kháng vein-sau-V1 (end.md §6 còn lại): stage-pipeline + supervisor-cascade = SOUND, KHÔNG vá speculative (+K-082)]**
+- Săn bug tiếp 2 mục cuối end.md §6: `dark_filter`+`brightness` stages · `supervisor` cascade race. Đọc CODE THẬT 6 file (thuần logic → no-GPU verify được): `dark_filter_stage`, `brightness_stage`, `base_stage`, `kernel/stage_contract`, `sync_linear_executor`, `application/supervisor`.
+- **Kết luận đối kháng = SOUND (không lỗi đúng-sai chứng minh được):**
+  - Stages: Brightness thuần `frame.mean()`→artifact; DarkFilter **fail-fast** `ValueError` khi thiếu artifact + `SkipFrameSignal` khi tối. BaseStage bọc `skip/error` (traceback CHUỖI = không rò RAM, E-16) + TypeError khi `_do_process` trả sai kiểu.
+  - Executor: `SyncLinearExecutor.execute` DỪNG ở non-SUCCESS đầu → skip/error short-circuit downstream ĐÚNG; `ExecutionResult` giữ trạng thái (không bóp `None`); setup-rollback nửa-chừng R3 + ctx-manager teardown E-14.
+  - Supervisor cascade: cooperative-FIRST (event→JOIN coop grace CHIA SẺ deadline = bounded, KHÔNG grace×N→terminate→kill) + crash/hang xử lý THỐNG NHẤT + give-up reap + respawn re-arm heartbeat.
+- **KHÔNG đổi code** (đúng nguyên tắc "fix bản chất/không vá ngọn/không đoán liều" — không có bug thì không vá). Ghi con trỏ K-082 (ranh giới đã-verify) + LOG #350.
+- **Ranh giới TRUNG THỰC:** SOUND chỉ cho 6 file NÀY. Treo: (a) DarkFilter `brightness=nan` (frame rỗng) → không skip (Low, [chưa kiểm] biên); (b) K-035 startup-grace heartbeat dùng chung timeout (residual, defer, KHÔNG vá speculative).
+- **VERIFY:** `vp verify` = **632 passed/2 skipped · lint 5/0 · drift PASS** (review không đổi code → baseline giữ); `vp check` C1–C8 + RULES 16 + self-test 11/11 PASS.
+- **Bước kế (CHỜ user):** end.md §6 đã duyệt hết (Z1✅#345 · R1✅#346 · V1✅#349 · stages+cascade SOUND#350). Hướng còn: (a) cổng Feynman #11–#14 (cần user tự giải thích) · (b) F4-F7/E.2/D.2 residual (Low/chặn GPU) · (c) dừng mốc sạch. Chặn: GPU/torch/DB/CI · K-035 residual.
+---
 **[✅ #349 — FIX săn-bug V1: `VideoFileFrameSource(loop=True)` bất-khả-loop → LIVELOCK trong runner (D-093 ✅ +T-033, TDD)]**
 - Săn bug tiếp (end.md §6, vein Z1/R1) vùng `video_file_frame_source`. Đối chiếu `PipelineRunner.run` EOF-handling (`eof++; if is_finite: break; else continue`) → phát hiện **V1**: `VideoFileFrameSource(loop=True)` có `is_finite=False`; video RỖNG/không-seek-được → read fail → `_seek_start` (seek vô tác dụng) → reread fail → EOF → runner `continue` MÃI = **LIVELOCK** (peg CPU + treo `_run_from_config` tuần tự sang camera kế).
 - **Fix tại GỐC (SOURCE, T-033):** cờ `self._loop_failed=False` (`__init__`) → set `True` khi reread-sau-seek fail trong `read()` → `is_finite` trả `(not self._loop) or self._loop_failed` → runner BREAK. Video hợp lệ (reread-sau-seek ra frame → return FRAME) KHÔNG bao giờ chạm nhánh này (backward-compat bit-khớp).

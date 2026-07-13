@@ -6829,3 +6829,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** V1 = finding THẬT (livelock chứng minh bằng RED eof=50). Nghiêm trọng Low-Med (cần loop=True opt-in + video pathological rỗng/không-seek-được — realistic: 1 số codec/container mở-được-nhưng-không-seek). `_default_cv2_capture` không test-bảo-chứng (DI giả) nhưng logic livelock + fix verify được deterministic. Đồng bộ V1 vào ARCHITECTURE §12 (✅ FIXED).
 
 **Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, py3.11.9):** test V1 RED (eof=50 livelock) → GREEN (eof≤2) + regression-loopable pass; `vp verify` = **632 passed/2 skipped (630→632 +2) · lint 5 kept/0 broken · C8 7 Verify-Symbol khớp · DRIFT-CHECK PASS · VERIFY OK** (EXIT 0). · **Chưa verify:** hang-thực trên video-không-seek THẬT (fix + livelock chứng-minh-deterministic bằng fake; runtime cv2 non-seekable = [chưa kiểm field]).
+
+### Entry #350 — 2026-07-12 — REVIEW đối kháng stage-pipeline + supervisor-cascade (vein sau V1) = SOUND, không vá speculative — Kiro-Opus
+
+**Bối cảnh:** máy `k.nguyen.manh.toan` (sau #349 fix V1). Săn bug tiếp theo end.md §6 (2 mục còn lại: `dark_filter`+`brightness` stages · `supervisor` cascade race). Đọc CODE THẬT 6 file để tìm lỗi đúng-sai (no-GPU verify được vì thuần logic).
+
+**1. Quyết định AI tự ra:** review-only, KHÔNG đổi code (không tìm ra lỗi chứng minh được → không vá speculative, đúng nguyên tắc "fix bản chất, không đoán liều"). Đọc: `dark_filter_stage.py`, `brightness_stage.py`, `base_stage.py`, `kernel/stage_contract.py`, `sync_linear_executor.py`, `application/supervisor.py`.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (review, 0 dòng code đổi).
+
+**3. Trade-off đã cân nhắc:** ghi con trỏ review K-082 (điều-nên-biết) vs không-ghi-gì. Chọn GHI — theo kỷ luật #296/#318 (review round có con trỏ K), giúp phiên sau biết ranh-giới-đã-verify + không review lại + ghi 2 điểm treo (nan-brightness Low · K-035 startup-grace). Không thêm D/T (không quyết định code/không đánh đổi thiết kế mới).
+
+**4. Điều bạn nên biết:** Kết luận đối kháng — 6 file SOUND: (a) Brightness thuần + DarkFilter fail-fast ValueError khi thiếu artifact + SkipFrameSignal; BaseStage bọc skip/error (traceback CHUỖI, E-16) + TypeError sai-kiểu; (b) Executor DỪNG non-SUCCESS đầu → short-circuit đúng + ExecutionResult giữ trạng thái (không bóp None) + setup-rollback R3 + ctx-manager teardown E-14; (c) Supervisor cascade cooperative-FIRST + deadline CHIA SẺ (bounded grace, không grace×N) + crash/hang thống nhất + give-up reap + respawn re-arm heartbeat. Ranh giới trung thực: SOUND chỉ cho 6 file này; treo Low = nan-brightness biên frame-rỗng ([chưa kiểm]); K-035 startup-grace = residual đã-defer. Chi tiết K-082.
+
+**Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, py3.11.9):** `vp verify` = **632 passed/2 skipped · lint 5 kept/0 broken · drift PASS** (review không đổi code → baseline giữ); `vp check` C1–C8 + RULES 16 + self-test 11/11 PASS. · **Chưa verify:** biên nan-brightness frame-rỗng (Low, [chưa kiểm]); K-035 residual (contention full-suite máy yếu); GPU/DB/CI (chặn điều kiện).
