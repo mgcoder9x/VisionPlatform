@@ -168,7 +168,9 @@ WHEN nhiều frame của CÙNG một camera đi qua mux, THE detections trả do
 _(TDD, phần lớn KHÔNG cần GPU)_
 - **Model-tí-hon dynamic-batch tự tạo** (license sạch, như test OnnxDetector hiện có): input `[N,3,h,w]` động, output
   phụ-thuộc-sample (vd trả tổng pixel) → verify **Property 1 (identity)** + **Property 4 (tương đương)** + mux/demux
-  KHÔNG cần YOLO/GPU. Đây là cột sống test.
+  KHÔNG cần YOLO/GPU. Đây là cột sống test. **✅ VERIFIED KHẢ THI (#370/K-095):** `onnx` builder có sẵn trên máy →
+  tạo model `ReduceSum` input `['N',3,4,4]` → onnxruntime chạy batch=1/2/4 + identity (đảo sample→đảo output) đúng.
+  Công thức tái lập trong K-095.
 - **`preprocess_batch`/`postprocess_batch` thuần numpy:** property test stack/split đúng shape + thứ tự (B frame kích
   thước khác nhau → letterbox riêng → stack đồng shape model → split trả đúng số detections/sample).
 - **`BatchMuxer` gather loop:** test **Property 2 (timeout flush)** bằng fake clock/detector chậm — submit 1 frame,

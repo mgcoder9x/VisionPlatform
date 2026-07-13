@@ -58,7 +58,7 @@ yêu cầu nghiệm thu là **ĐO**, và kết quả "không vượt baseline" v
 **User Story:** Là kỹ sư, tôi muốn hệ báo lỗi rõ ngay khi model không hỗ trợ batch, để không gặp lỗi khó hiểu lúc chạy.
 #### Acceptance Criteria
 - 5.1 — WHEN `BatchOnnxDetector.setup()` phát hiện trục batch (index 0) của input model là CỐ ĐỊNH (không động, vd `[1,3,640,640]`), THE hệ thống SHALL fail-fast với thông báo rõ: cần re-export model dynamic-batch (`export(dynamic=True)`).
-- 5.2 — Logic gather/scatter (Property 1/2) PHẢI verify được bằng **model ONNX tí-hon dynamic-batch tự tạo** (license sạch), KHÔNG cần re-export YOLO / KHÔNG cần GPU — để test tính-đúng độc lập với network.
+- 5.2 — Logic gather/scatter (Property 1/2) PHẢI verify được bằng **model ONNX tí-hon dynamic-batch tự tạo** (license sạch), KHÔNG cần re-export YOLO / KHÔNG cần GPU — để test tính-đúng độc lập với network. **✅ VERIFIED KHẢ THI (#370/K-095):** `onnx` builder sẵn → model `ReduceSum` input `['N',3,4,4]` chạy batch=1/2/4 + identity đúng qua onnxruntime.
 
 ## Non-Goals (giai đoạn này)
 - KHÔNG chốt self-viết BatchMuxer vs nhúng Triton (để design so sánh; máy no-docker → Triton native khó).

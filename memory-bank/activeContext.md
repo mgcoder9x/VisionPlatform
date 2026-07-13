@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T19:00:00+07:00.
+**Cập nhật lúc:** 2026-07-13T19:30:00+07:00.
+**[✅ #370 — VERIFY khả thi chiến lược test Task 1 batch-mux (model tí-hon dynamic, R5.2) — KHÔNG network (+K-095)]**
+- Kiểm giả định trong chính spec (R5.2 "test bằng model tí-hon tự tạo") — đúng "không bịa, verify trước khi dựa vào". KHÔNG phạm cổng Task 0 (chỉ kiểm test infra, không build sản phẩm).
+- **Bằng chứng chạy thật:** `onnx` builder sẵn (torch vắng không cần) → model `ReduceSum` input `['N',3,4,4]` (trục 0 ĐỘNG) → onnxruntime batch=1/2/4: shape/val/**identity** (đảo sample→đảo output, không lẫn) đều đúng. Gỡ "unverified assumption" R5.2 → đánh dấu ✅ trong design.md + requirements.md.
+- **Ghi sổ:** LOG #370 · +K-095 (công thức tái lập) · INDEX canonical #369→#370 · Σ249→Σ250 (K95) · dòng K-095 · block này. KHÔNG code sản phẩm (647/2 giữ).
+- **VERIFY:** chạy model tí-hon batch 1/2/4 (output True cả 3 tiêu chí); temp `_tmp_probe_tinydyn.py` xóa; tree sạch; drift chạy kế.
+- **Bước kế (CHỜ user):** cột sống test Task 1 đã chắc (không cần network). (a) Task 0 spike throughput (cần đèn xanh network re-export) = cổng quyết định; (b) dừng mốc sạch. Không tự chạy network.
+---
 **[🔵 #369 — REVIEW đối kháng spec batch-mux (đọc-lại-valid) → fix 3 lỗ BẢN CHẤT trước code (+D-101, +K-094)]**
 - Đúng nguyên tắc "chuẩn bị design → ĐỌC LẠI VALID → mới code". Đọc CODE THẬT `TrackingStage`+`IouTracker` (không suy đoán) kiểm mắt xích nghi ngờ: batch-mux gộp nhiều-cam ↔ camera-affinity/stateful.
 - **3 lỗ + vá (design.md + requirements.md, getDiagnostics=0):** (a) mục MỚI "Batch-mux ↔ analytics CÓ TRẠNG THÁI" — mux ở ranh giới `IDetector` STATELESS, thượng-nguồn stage stateful, scatter giữ affinity K-042; (b) **Property 6** thứ-tự-frame-per-camera + **R1.4** (IouTracker.update PHỤ THUỘC THỨ TỰ — age++ + associate frame-trước); (c) siết **Property 2** latency đủ chuỗi (queue+gather+pre+infer+post, p95/p99) + Lỗ 7.

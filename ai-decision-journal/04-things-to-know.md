@@ -941,3 +941,18 @@ Bằng chứng THẬT (đọc code, không suy đoán):
 - `TrackingStage._do_process`: `_source_id` set lần đầu, sau đó `packet.source_id != _source_id` → `raise` "1 instance/1 camera (K-042); trộn state = đếm loạn" → **camera-affinity CỨNG** (stateful).
 Bài học (cho batch-mux + mọi tối ưu gộp/song-song): batch-mux gộp cross-camera CHỈ an toàn ở tầng detector STATELESS. BẮT BUỘC: (1) mux nằm THƯỢNG NGUỒN mọi stage stateful; (2) scatter trả về đúng pipeline từng camera (giữ affinity); (3) bảo toàn THỨ TỰ frame per-camera downstream (gather tuần tự 1-session-1-thread thoả tự nhiên; nhiều-worker-song-song phải re-order theo frame_id). Bỏ qua = bug ngầm hỏng tracking/đếm khó tìm.
 Áp dụng rộng: mọi cơ chế batch/song-song/reorder trong hệ PHẢI kiểm "downstream có stateful/order-dependent không" TRƯỚC (đọc code, không đoán).
+
+### K-095 — ✅ (2026-07-13) Tạo model ONNX tí-hon DYNAMIC-BATCH tự-tạo để test logic mux (KHÔNG network/GPU/torch) — R5.2 khả thi
+Nguồn: LOG Entry #370 · probe 1-lần `_tmp_probe_tinydyn.py` (đã xóa) · de-risk chiến lược test batch-mux Task 1.
+Công thức tái lập (chỉ cần `onnx` + `onnxruntime` + `numpy` — đều CÓ sẵn máy này, torch KHÔNG cần):
+```python
+import onnx; from onnx import TensorProto, helper
+inp = helper.make_tensor_value_info("images", TensorProto.FLOAT, ["N",3,4,4])  # trục 0 = "N" ĐỘNG
+out = helper.make_tensor_value_info("out", TensorProto.FLOAT, ["N",3])
+node = helper.make_node("ReduceSum", ["images"], ["out"], axes=[2,3], keepdims=0)
+model = helper.make_model(helper.make_graph([node],"tinydyn",[inp],[out]),
+                          opset_imports=[helper.make_opsetid("",12)])
+onnx.checker.check_model(model); onnx.save(model, "tiny.onnx")
+```
+Bằng chứng THẬT (chạy): `InferenceSession` báo input shape `['N',3,4,4]` (trục 0 động); `run` batch=1/2/4 OK; output = `x.sum(axis=(2,3))` khớp; **identity**: chạy `x[perm]` → output == `y[perm]` (đảo sample → đảo output, KHÔNG lẫn).
+Bài học: output PHỤ-THUỘC-SAMPLE (ReduceSum theo spatial) là chìa khoá để test **Property 1 (identity/scatter đúng)** + **Property 4 (tương đương single↔batch)** mà KHÔNG cần YOLO/GPU/network. Khi thi công Task 1 → port công thức này thành fixture (như test OnnxDetector hiện có tạo model stub). Đối lập K-093 (yolov8n cố định `[1,...]`): model TỰ TẠO chủ động đặt trục động.
