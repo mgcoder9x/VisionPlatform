@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T17:30:00+07:00.
+**Cập nhật lúc:** 2026-07-13T18:00:00+07:00.
+**[🔵 #367 — Batch-mux: tạo requirements.md (design-first, dẫn xuất design đã valid)]**
+- User valid `batch-mux/design.md` OK → tiếp Design→Requirements→Tasks. Tạo `.kiro/specs/batch-mux/requirements.md`.
+- **5 Requirement EARS:** R1 đúng-đắn batch (1.1 identity không-trộn-cam · 1.2 tương-đương-single-vs-batch · 1.3 coordinate per-sample) · R2 latency-bounded + shed + bulkhead (2.1-2.4) · R3 nghiệm-thu-bằng-ĐO vượt baseline K-092, R3.2 kết-luận-"không-đáng"-hợp-lệ (chống sunk-cost) · R4 backward-compat không phá lõi (4.1-4.3) · R5 tiên-quyết-dynamic-batch fail-fast (5.1-5.2). Số criteria KHỚP `Validates` trong design (1.1/1.2/2.1/2.2/3.1).
+- **Ghi sổ:** LOG #367 · INDEX canonical #366→#367 (Σ247 giữ, không +D/C/T/K) · block này. KHÔNG code.
+- **VERIFY:** requirements.md getDiagnostics=0 (heading chuẩn); khớp Validates design; drift chạy kế. 647/2 giữ.
+- **Bước kế (CHỜ user valid requirements):** (a) tạo tasks.md (chia task TDD; task-0 = re-export model dynamic + spike bench trả lời Nghi-vấn Lỗ-1 TRƯỚC khi build BatchMuxer đầy đủ); (b) sửa requirements nếu bạn góp ý; (c) dừng mốc sạch.
+---
 **[🔵 #366 — Mở sub-spec `batch-mux` design-first: thiết kế gộp N-cam→1 session.run nâng C_inf (+D-100, +K-093)]**
 - User chọn hướng (a) batch-mux design-first (roadmap #3 scale-arch, đòn bẩy C_inf lớn nhất). ĐỌC code thật + CHẠY probe model TRƯỚC khi viết (không bịa).
 - **Tạo `.kiro/specs/batch-mux/design.md`** (+D-100): BatchMuxer gather (max_batch|batch_timeout) → preprocess_batch stack `[B,3,640,640]` → 1 `session.run` → postprocess_batch split → scatter theo request_id. Port RIÊNG `IBatchDetector` (GIỮ `IDetector` single-frame — backward-compat). Tái dùng BoundedQueue/OnnxDetector-session/yolov8_decode/metrics. 5 Correctness Property + self-review 6 lỗ. getDiagnostics=0.
