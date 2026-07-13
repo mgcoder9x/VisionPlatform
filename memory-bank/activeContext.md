@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T01:10:00+07:00.
+**Cập nhật lúc:** 2026-07-13T01:45:00+07:00.
+**[✅ #352 — Mở rộng bench_capacity đo detector ONNX THẬT trên CPU → số capacity CPU-baseline (D-094 ✅)]**
+- Bước giá-trị-cao no-GPU sau #351: ĐO năng lực 1-node (capacity) — nền scale-architecture (D-040) + đóng phần CPU của D-047 "🔴 số capacity chờ weight". Đọc-valid harness TRƯỚC: `measure_infer` nhận detector qua DI (dùng được) nhưng `main()` chưa wire ONNX; giả định "cpu⇒fake" lỗi thời.
+- **Fix GỐC (D-094):** thêm nhánh `--onnx [--labels --yolo v8 --layout --conf]` vào `bench_capacity.main()` (mirror `vision_demo_app._build_detector`: `DetectorPipeline(OnnxDetector+decode)`) → `is_real=bool(onnx) or device∉{cpu,fake}` → onnx-CPU = số THẬT (nhãn "CPU-BASELINE", không cảnh báo fake). Additive dev-tool ngoài src.
+- **SỐ ĐO THẬT (CPU no-GPU):** `yolov8n@640 batch=1 = 11.72 infer/s · latency p50 82ms · p95 154ms · min 41ms`. Định cỡ tương đối; KHÔNG suy ra số GPU.
+- **Ghi sổ:** LOG #352 · +D-094 (✅ code, Verify-Symbol measure_infer → C8 sẽ 9) · INDEX canonical #351→#352 · Σ230→Σ231 (D93→D94) · dòng D-094 · README harness · block này.
+- **VERIFY:** `vp verify` = **632 passed/2 skipped · lint 5/0 · drift PASS** · getDiagnostics bench_capacity.py = 0.
+- **Bước kế (CHỜ user):** (a) đo `--mode decode`/combined trên video thật (throughput toàn chuỗi); (b) chạy weight/ảnh/video nghiệp vụ của user; (c) cổng Feynman #11–#14; (d) GPU e2e (chặn). K-035 residual như cũ.
+---
 **[✅ #351 — VERIFY nhận diện YOLOv8 THẬT trên CPU (no-GPU) qua đường sản phẩm ONNX (+K-083)]**
 - User hỏi "chạy thử được gì / test CPU / tải weight nguồn tốt". Đã chứng minh luồng no-GPU (fake/BrightBlob/video end-to-end) trước đó; còn hở NN thật vì thiếu weight.
 - **User chọn phương án A** (export từ Ultralytics chính chủ trong venv riêng — tin cậy nhất). Thực hiện: venv throwaway `_tmp_install_venv` (giữ NGUYÊN `.venv` chính no-torch) → cài `ultralytics`+torch-CPU → export official `yolov8n.pt`→`yolov8n.onnx` (12.2MB, opset 12, imgsz 640) → copy vào `vision-platform/models/` (gitignored) → xóa venv+scratch.

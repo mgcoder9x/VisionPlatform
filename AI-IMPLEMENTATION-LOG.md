@@ -6857,3 +6857,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết (K-083):** onnxruntime 1.27.0 `CPUExecutionProvider` chạy YOLOv8n ONNX end-to-end qua ĐÚNG đường sản phẩm (`OnnxDetector`+`chw_float_normalize`+`yolov8_decode`+`DetectorPipeline` letterbox/NMS/inverse) → trên `bus.jpg` phát hiện **4 person + 1 bus** (conf 0.864/0.844) = ĐÚNG. Shape verify: INPUT `images[1,3,640,640]` · OUTPUT `output0[1,84,8400]` (nc_first, 4+80 lớp). Weight = export official `yolov8n.pt`→onnx (12.2MB). Đường `vision_demo_app --onnx models/yolov8n.onnx --yolo v8 --labels <80 COCO> --model-size 640` chạy trên video: 8/8 frame có box. GIỚI HẠN: onnx KHÔNG commit (gitignore, tài sản+license) — máy khác cần export lại (repro trong K-083); D-031 "C chờ weight của USER" vẫn riêng (đây là COCO generic chứng minh PIPELINE, không phải weight nghiệp vụ user).
 
 **Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, py3.11.9, CPU no-GPU):** export ONNX success (12.2MB); onnxruntime shape [1,84,8400]; detect `bus.jpg` = person×4+bus×1 (conf 0.86/0.84); demo video 8/8 frame có box; `vp verify` 632/2·lint 5/0·drift PASS (đường sản phẩm không đổi). · **Chưa verify:** throughput fps YOLO trên CPU dưới tải thật (chỉ smoke 8 frame); weight nghiệp vụ riêng của user; GPU e2e.
+
+### Entry #352 — 2026-07-12 — Mở rộng bench_capacity đo detector ONNX THẬT trên CPU + đo số capacity CPU-baseline — Kiro-Opus
+
+**Bối cảnh:** sau #351 (yolov8n.onnx chạy CPU đúng), bước giá-trị-cao no-GPU = ĐO năng lực 1-node (capacity) — nền cho scale-architecture (D-040) + đóng phần CPU của D-047 "🔴 số capacity chờ weight". Đọc-valid harness `benchmarks/bench_capacity.py` TRƯỚC: `measure_infer` nhận detector qua DI (dùng được), nhưng `main()` chỉ wire Fake(cpu)/Yolov5Pt(cuda) — CHƯA wire ONNX; giả định "cpu ⇒ fake" nay lỗi thời.
+
+**1. Quyết định AI tự ra (D-094):** thêm nhánh `--onnx` vào `main()` (mirror `vision_demo_app._build_detector`: DetectorPipeline(OnnxDetector+yolov8_decode)) → đo detector NN THẬT; `is_real = bool(onnx) or device∉{cpu,fake}` → onnx-CPU = số THẬT (không cảnh báo fake) + nhãn "CPU-BASELINE". Fix GỐC (harness đo được detector thật) thay vì script one-off (fix ngọn).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (additive vào dev-tool ngoài src; 0 test cũ gãy; hành vi fake/cuda giữ nguyên).
+
+**3. Trade-off đã cân nhắc:** mở rộng harness (durable, +vài arg) vs script one-off (nhanh, vứt đi). Chọn harness — công cụ đo capacity phải đo được detector máy này chạy thật; đúng "fix bản chất". Cái mất: harness thêm 5 arg + 1 nhánh (chấp nhận, đúng SRP đo-capacity).
+
+**4. Điều bạn nên biết:** **SỐ ĐO THẬT (CPU, no-GPU) — yolov8n@640 batch=1 = 11.72 infer/s · latency p50 82ms · p95 154ms · min 41ms** (máy `k.nguyen.manh.toan`). Nghĩa: 1 đường-CPU gánh ~11-12 fps yolov8n → định cỡ tương đối cho quyết định GPU. KHÔNG suy ra số GPU (đích production). Combined decode+infr + số GPU vẫn treo (cần video tải thật / máy GPU).
+
+**Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, py3.11.9, CPU):** `bench_capacity --onnx` = 11.72 infer/s (p50 82ms); `vp verify` = 632 passed/2 skipped · lint 5 kept/0 broken · drift PASS · getDiagnostics bench_capacity.py = 0. · **Chưa verify:** throughput dưới tải song song; số GPU; combined decode+infer.

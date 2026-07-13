@@ -1060,3 +1060,13 @@ Nội dung: Runner `continue` trên EOF của source `is_finite=False`. `VideoFi
 Vì sao (bản chất): "video KHÔNG loop được thì THỰC CHẤT là finite" — source có tri-thức chính xác (reread-sau-seek fail = bất-khả-loop) để tự sửa ngữ nghĩa is_finite → runner thoát livelock. Fix tại nguồn-tri-thức, không vá triệu-chứng.
 Non-goal: KHÔNG đổi runner EOF-handling (giữ cho RTSP/source khác); độ-lớn-hang runtime video-không-seek THẬT = field-verify.
 Trade-off: xem T-033 (`03-tradeoffs.md`).
+
+### D-094 — 2026-07-12 — Mở rộng bench_capacity đo detector ONNX THẬT → capacity CPU đo được KHÔNG cần GPU/torch
+Status: ✅ code (632/2, đo thật)
+Nguồn: LOG Entry #352
+Evidence: `bench_capacity --mode infer --onnx models/yolov8n.onnx --imgsz 640` = **11.72 infer/s · p50 82ms · p95 154ms** (CPU máy `k.nguyen.manh.toan`); `vp verify` 632/2·lint 5/0·drift PASS (thêm arg additive vào main(), 0 test cũ gãy)
+Links: D-046/D-047 (harness gốc, "🔴 số capacity chờ weight"), K-083 (yolov8n.onnx CPU), K-047 (không-bịa-số-GPU)
+Verify-Symbol: vision-platform/benchmarks/bench_capacity.py::measure_infer
+Nội dung: Thêm nhánh `--onnx <path> [--labels --yolo v8 --layout --conf]` vào `bench_capacity.main()` → dựng `DetectorPipeline(OnnxDetector+decode)` (mirror `vision_demo_app._build_detector`) tiêm vào `measure_infer` (DI sẵn có). `is_real = bool(onnx) or device∉{cpu,fake}` → onnx-CPU KHÔNG in cảnh báo "fake" nhưng in nhãn "CPU-BASELINE" (số THẬT của detector, không phải đích GPU). sync_fn=None (onnxruntime CPU blocking).
+Vì sao (bản chất): harness cũ giả định "cpu ⇒ chỉ Fake ⇒ không phải capacity" — SAI sau khi có ONNX-CPU (inference NN thật). Fix GỐC = cho công cụ đo được detector THẬT máy này chạy được (đóng phần CPU của lỗ "số capacity chờ weight"); không viết script one-off (fix ngọn, vứt đi, harness vẫn mù ONNX). Chỉ đụng dev-tool ngoài src (additive, baseline 632/2 giữ).
+Non-goal: số GPU thật (vẫn cần `--device cuda` máy GPU); throughput combined decode+infer dưới tải song song; đây là CPU-baseline định-cỡ-tương-đối, KHÔNG suy ra số GPU.

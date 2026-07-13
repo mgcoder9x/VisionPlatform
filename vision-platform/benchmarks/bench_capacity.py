@@ -119,6 +119,14 @@ def main(argv=None) -> int:
     p.add_argument("--mode", choices=["infer", "decode", "latency"], default="infer")
     p.add_argument("--device", default="cpu", help="cpu (verify logic, Fake) | cuda (số thật, máy GPU)")
     p.add_argument("--weights", default=None, help="path .pt YOLOv5 (khi --device cuda)")
+    p.add_argument("--onnx", default=None,
+                   help="path .onnx → đo detector NN THẬT qua onnxruntime (CPU/GPU tùy provider). "
+                        "Số này LÀ capacity THẬT của detector (khác Fake), nhãn rõ CPU-baseline nếu chạy CPU.")
+    p.add_argument("--labels", default=None, help="nhãn lớp phân tách phẩy (khi --onnx, tùy chọn)")
+    p.add_argument("--yolo", choices=["v5", "v8"], default="v8", help="phiên bản decode cho --onnx")
+    p.add_argument("--layout", choices=["nc_first", "nc_last"], default="nc_first",
+                   help="layout output cho --onnx --yolo v8")
+    p.add_argument("--conf", type=float, default=0.25, help="ngưỡng conf decode (khi --onnx)")
     p.add_argument("--video", default=None, help="path video (mode decode/latency)")
     p.add_argument("--rtsp", default=None, help="url rtsp (mode decode/latency)")
     p.add_argument("--imgsz", type=int, default=640)
@@ -130,14 +138,36 @@ def main(argv=None) -> int:
     print("=== bench_capacity ===", file=sys.stderr)
     print(format_env(env), file=sys.stderr)
 
-    is_real = args.device not in ("cpu", "fake")
+    # "Số THẬT" khi: (a) detector NN qua ONNX (onnxruntime chạy model thật, kể cả CPU), HOẶC
+    # (b) --device cuda (Yolov5Pt trên GPU). Fake/cpu-không-onnx = chỉ verify logic harness.
+    is_real = bool(args.onnx) or (args.device not in ("cpu", "fake"))
+    onnx_cpu_baseline = bool(args.onnx) and args.device in ("cpu", "fake")
     if not is_real:
         print("⚠️  device=cpu/fake → ĐÂY LÀ VERIFY LOGIC HARNESS, KHÔNG PHẢI SỐ CAPACITY. "
-              "Số capacity thật phải chạy --device cuda trên máy GPU (K-047).", file=sys.stderr)
+              "Số capacity thật phải chạy --device cuda (GPU) hoặc --onnx (detector NN thật) (K-047).",
+              file=sys.stderr)
+    if onnx_cpu_baseline:
+        print("ℹ️  --onnx trên CPU → SỐ THẬT của detector (khác Fake) nhưng là CPU-BASELINE, "
+              "KHÔNG phải đích production GPU. Nhãn số rõ 'CPU'.", file=sys.stderr)
 
     # --- Dựng detector ---
     sync_fn = None
-    if is_real:
+    if args.onnx:
+        # Đo ĐÚNG đường sản phẩm: DetectorPipeline(OnnxDetector) — letterbox + NMS + inverse-transform.
+        from vision_platform.adapters.onnx_detector import OnnxDetector, chw_float_normalize
+        from vision_platform.adapters.yolo_postprocess import yolov5_decode, yolov8_decode
+        from vision_platform.adapters.detector_pipeline import DetectorPipeline
+        labels = args.labels.split(",") if args.labels else None
+        if args.yolo == "v8":
+            def _post(raw):
+                return yolov8_decode(raw, conf_threshold=args.conf, labels=labels, layout=args.layout)
+        else:
+            def _post(raw):
+                return yolov5_decode(raw, conf_threshold=args.conf, labels=labels)
+        inner = OnnxDetector(args.onnx, preprocess_fn=chw_float_normalize, postprocess_fn=_post)
+        detector = DetectorPipeline(inner, model_h=args.imgsz, model_w=args.imgsz)
+        # onnxruntime CPU đồng bộ (blocking) → KHÔNG cần sync_fn.
+    elif is_real:
         if not args.weights:
             p.error("--device cuda cần --weights <path.pt>")
         try:

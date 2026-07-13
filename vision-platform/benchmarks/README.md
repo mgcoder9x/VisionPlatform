@@ -9,14 +9,20 @@ Công cụ DEV (ngoài `src/`, không phải runtime dep). Phương pháp: `.kir
 python -m benchmarks.bench_capacity --mode infer   --device cpu --imgsz 32 --warmup 2 --measure 5
 python -m benchmarks.bench_capacity --mode latency --device cpu --warmup 2 --measure 10
 
-# SỐ CAPACITY THẬT (cần GPU + `pip install -e ".[pt]"` → torch + yolov5):
+# SỐ CAPACITY THẬT — CPU (detector NN thật qua ONNX, KHÔNG cần torch/GPU):
+#   Số THẬT của detector (khác Fake), nhãn CPU-BASELINE (không phải đích GPU). onnxruntime CPUExecutionProvider.
+python -m benchmarks.bench_capacity --mode infer --onnx models/yolov8n.onnx --yolo v8 --imgsz 640 --warmup 5 --measure 40
+#   → ví dụ đo được (máy k.nguyen.manh.toan, CPU): ~11.72 infer/s · latency p50 82ms · p95 154ms (yolov8n@640).
+
+# SỐ CAPACITY THẬT — GPU (cần GPU + `pip install -e ".[pt]"` → torch + yolov5):
 python -m benchmarks.bench_capacity --mode infer   --device cuda --weights models/yolov5s.pt --imgsz 640 --warmup 20 --measure 200
 python -m benchmarks.bench_capacity --mode decode  --video clips/sample.mp4 --warmup 20 --measure 200
 python -m benchmarks.bench_capacity --mode latency --device cuda --weights models/yolov5s.pt --video clips/sample.mp4
 ```
 
 ## Nguyên tắc TRUNG THỰC (bắt buộc)
-- `--device cpu`/fake = **kiểm harness chạy đúng**, KHÔNG phải số capacity. Harness in cảnh báo rõ.
+- `--device cpu`/fake (KHÔNG `--onnx`) = **kiểm harness chạy đúng**, KHÔNG phải số capacity. Harness in cảnh báo rõ.
+- `--onnx` = detector NN THẬT (onnxruntime) → **số THẬT của detector**, kể cả trên CPU. Nếu chạy CPU, nhãn rõ **CPU-BASELINE** (không phải đích production GPU) — dùng để định cỡ tương đối + verify tính đúng, KHÔNG suy ra số GPU.
 - `--device cuda` khi thiếu torch/GPU → **dừng (exit 3), KHÔNG tạo số giả**.
 - Điền số vào `.kiro/specs/node-capacity-benchmark/design.md` (bảng template) CHỈ sau khi chạy `--device cuda` thật;
   ô chưa đo giữ `[chưa đo]`.
