@@ -6938,3 +6938,11 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **3. Trade-off:** onnxruntime-gpu (nhẹ, khớp `_det_onnx` sản phẩm, cần CUDA/cuDNN tương thích) vs torch cu124 (~GB, nhánh pt) — chưa chọn, chờ user (cả 2 = network install cần đèn xanh K-078).
 **4. Điều bạn nên biết:** cài runtime GPU = op network medium/heavy + mutate venv no-torch (baseline 640/2 phụ thuộc) → chờ đèn xanh RÕ. Deploy GPU phải NATIVE (docker cấm). Camera user nêu có, chưa mở kiểm.
 **Đã verify:** git HEAD 81610b9=#356 tree sạch đồng bộ; drift PASS #356 Σ234; GPU-HW co; onnxruntime CPU-only (providers thật); docker vắng; torch vắng. · **Chưa verify:** camera thật (chưa mở cv2); nhánh GPU (chờ cài runtime).
+
+### Entry #358 — 2026-07-13 — Cài onnxruntime-gpu (đèn xanh) → CUDA EP chưa load (thiếu CUDA13/cuDNN9 runtime) + model mất khi chuyển máy (+D-096/K-087) — Kiro-Opus
+**Bối cảnh:** user chọn "đèn xanh onnxruntime-gpu" (verify K-086). Kiểm CUDA trước: RTX 2060 driver 591.86 (CUDA 13.1). Phát hiện `models/yolov8n.onnx` MẤT (gitignored, không sang máy mới — K-087).
+**1. Quyết định AI tự ra (D-096):** gỡ onnxruntime CPU → cài onnxruntime-gpu==1.27.0 (khớp version, reversible). Probe session CUDA THẬT (script 1-lần rồi xoá) thay vì tin `get_available_providers()`.
+**2. Chỗ phải đổi:** phát hiện onnxruntime-gpu 1-mình KHÔNG đủ chạy GPU trên Windows — cần CUDA13 runtime + cuDNN9 (máy chỉ có driver). Blocker GPU chuyển từ "chưa cài EP" → "thiếu CUDA/cuDNN runtime". Điều chỉnh hiểu-biết + hướng.
+**3. Trade-off:** onnxruntime-gpu (nhẹ, cần runtime hệ thống — FAIL ở đây) vs torch cu124 (nặng, tự-chứa CUDA — dễ OOTB). Bằng chứng thực nghiệm giờ nghiêng về torch cho máy KHÔNG có CUDA toolkit; hoặc bổ sung nvidia-*-cu13 pip wheels cho onnxruntime.
+**4. Điều bạn nên biết:** venv giờ dùng **onnxruntime-gpu** (CPU-fallback → 640/2 giữ). GPU-inference VẪN chặn (thiếu CUDA13/cuDNN9). Model yolov8n.onnx MẤT (K-087) → e2e cần lấy lại. Đường lùi venv: `pip install onnxruntime==1.27.0`.
+**Đã verify:** pip install OK (213.6MB); probe: `session_providers=['CPUExecutionProvider']` CUDA_LOADED=False (lỗi cublasLt64_13.dll missing — đọc output thật); `vp verify` 640/2·5/0·drift PASS (CPU-fallback không phá baseline); `Test-Path yolov8n.onnx`=False. · **Chưa verify:** GPU thật (chặn CUDA runtime); nvidia cu13 pip wheels có tồn tại/đủ không.

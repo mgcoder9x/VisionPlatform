@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T09:00:00+07:00.
+**Cập nhật lúc:** 2026-07-13T10:15:00+07:00.
+**[🟡 #358 — Cài onnxruntime-gpu (đèn xanh) → CUDA EP chưa load (thiếu CUDA13/cuDNN9 runtime) + model mất (D-096/K-087)]**
+- User đèn xanh onnxruntime-gpu. Gỡ onnxruntime CPU → cài onnxruntime-gpu==1.27.0 (213MB). Kiểm CUDA driver: RTX 2060 / 591.86 / CUDA 13.1.
+- **Probe session CUDA THẬT (không tin get_available_providers):** `session_providers=['CPUExecutionProvider']`, CUDA_LOADED=False — lỗi `onnxruntime_providers_cuda.dll` thiếu `cublasLt64_13.dll` + `Require cuDNN 9.* CUDA 13.*`. → onnxruntime-gpu KHÔNG bundle CUDA (khác torch); máy chỉ có DRIVER, thiếu runtime toolkit+cuDNN → **GPU vẫn CHẶN**.
+- **Model MẤT (K-087):** `models/yolov8n.onnx` gitignored → không sang máy mới → e2e cần lấy lại.
+- **Venv vẫn lành:** onnxruntime-gpu CPU-fallback → **vp verify 640/2·5/0·drift PASS**. Đường lùi: `pip install onnxruntime==1.27.0`.
+- **Ghi sổ:** LOG #358 · +D-096 (🟡) · +K-087 · INDEX canonical #357→#358 · Σ235→Σ237 (D96·K87) · dòng D-096/K-087 · block này.
+- **Bước kế (CHỜ user QUYẾT):** để CHẠY GPU thật cần thêm — (A) `pip install nvidia-*-cu13` wheels (cuda-runtime+cublas+cudnn cu13) cho onnxruntime-gpu [chưa kiểm wheel cu13 tồn tại/đủ]; HOẶC (B) chuyển **torch cu124** (tự-chứa CUDA, dễ OOTB, nhánh pt + E.2) = ~GB; + LẤY LẠI model (export/tải). Hoặc (C) revert onnxruntime CPU, làm việc no-GPU.
+---
 **[✅ #357 — VERIFY thực tế máy phiên mới (GPU+cam+KHÔNG-docker): GPU-inference chặn-bởi-thiếu-RUNTIME (+K-086)]**
 - User "chuyển máy", nêu máy CÓ camera + GPU, KHÔNG cài được docker. Output drift user dán #347 = STALE → tự chạy xác lập frontier THẬT **#356** (HEAD 81610b9, tree sạch, đồng bộ upstream). KHÔNG tin số dán.
 - **Dò máy (read-only):** GPU-HW CÓ (nvidia-smi) · torch VẮNG (`--capabilities` has_torch=false) · **onnxruntime 1.27.0 CPU-ONLY** (providers chỉ Azure+CPU) · cv2 CÓ · docker KHÔNG (`where docker` trống).

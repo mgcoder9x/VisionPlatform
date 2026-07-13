@@ -865,3 +865,11 @@ Bằng chứng THẬT:
 - GPU-inference hiện **CHẶN bởi thiếu runtime GPU** (không phải thiếu GPU): cần cài **onnxruntime-gpu** (nhẹ, khớp `_det_onnx`/`OnnxDetector`, cần CUDA/cuDNN runtime tương thích) HOẶC **torch cu124** (~GB, nhánh `pt`, K-066/K-078). Cả 2 = op network → chờ đèn xanh RÕ (K-078).
 - Deploy GPU phải **NATIVE** (venv + vp.cmd / dịch vụ Windows), KHÔNG dùng nvidia-docker (docker cấm).
 Đóng khi: user bật đèn xanh cài runtime GPU → verify nhánh GPU e2e (đo throughput thật, đóng D-047/D-094 phần GPU + E.2).
+
+### K-087 — 🟡 (2026-07-13) `models/yolov8n.onnx` MẤT khi chuyển máy (gitignored → không theo git)
+Scope: verify detector NN thật (e2e onnx CPU/GPU)
+Nguồn: LOG Entry #358 · `Test-Path models/yolov8n.onnx` = False trên máy mới · #351/K-083 (export ở máy cũ, gitignored)
+Ảnh hưởng: yolov8n.onnx (12.2MB) export ở máy `k.nguyen.manh.toan` (#351) + gitignored (không commit binary) → chuyển máy KHÔNG có → không verify được detector NN thật e2e trên máy này tới khi lấy lại.
+Lấy lại (2 cách): (a) export lại từ ultralytics trong venv throwaway (repro K-083, ~heavy: ultralytics+torch-CPU); (b) tải yolov8n.onnx từ nguồn tin cậy (network + kiểm nguồn). Cả 2 = network → chờ đèn xanh.
+Bài học thiết kế: asset weight gitignored = KHÔNG portable qua máy. Cân nhắc: (i) script `tools/fetch_model` tái tạo xác định; (ii) hoặc doc rõ "mỗi máy tự export/tải weight vào models/". Hiện K-083 đã có repro 5 bước.
+Đóng khi: yolov8n.onnx (hoặc weight nghiệp vụ) có mặt lại + verify e2e.
