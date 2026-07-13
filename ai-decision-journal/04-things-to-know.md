@@ -904,3 +904,12 @@ Số đo THẬT (RTX 2060, input 1280×720, warmup 5, N=100):
 - So CPU combined-720p #353 = 7.95 fps → GPU **~6x**. **VƯỢT 25fps real-time** kể cả có preprocessing.
 Diễn giải commercial: 1 luồng 720p trên GPU ~48fps end-to-end (decode ~3ms #353 không đáng kể) ⇒ real-time dư. K-084 (preprocessing bottleneck) chỉ ~4ms ở 1-luồng — NHƯNG ở ĐA-LUỒNG, preprocess chạy CPU sẽ cộng dồn → vẫn cần GPU-preproc/worker riêng khi scale (cảnh báo K-084 giữ nguyên cho đa-luồng).
 Giới hạn: batch=1, VRAM 6GB, synthetic frame (chưa video/cam thật), 1 luồng. Đa-luồng song song = scale (D-040) chưa đo.
+
+### K-091 — ✅ (2026-07-13) Capacity Model bản-2 nạp số GPU thật → ước lượng ~8-13 cam/RTX2060 + HIỆU CHỈNH K-084
+Scope: scale-architecture (D-040) design refine bằng số đo #361/#362; hiệu chỉnh nhận-định K-084
+Nguồn: LOG Entry #364 · design.md scale-architecture ("Capacity Model bản-2") · số K-089 (60/s) + K-090 (47.77fps e2e)
+Nội dung (design-first, KHÔNG code):
+- Nạp `C_inf≈60/s` (batch=1, RTX 2060) vào `N_infer≈C_inf/(f·g·A)` → ước lượng cụ thể: f25/g1.0=~2cam · f25/g0.3=~8cam · f15/g0.3=~13cam · f10/g0.2=~30cam · f25/g0.3/A2=~4cam. **Đòn bẩy mạnh = motion-gate `g` + fps `f`.** ~100 cam ⇒ ~8-12 node HOẶC batch-mux (roadmap #3) nâng C_inf.
+- **HIỆU CHỈNH K-084:** trên GPU preprocess chỉ ~20% (4.2ms/20.9ms), GPU-infer mới là nút per-stream (khác CPU #353 preprocess ~30%). Tải CPU-preproc ở N=13 ≈ 0.23 core → KHÔNG phải nút ở quy mô này. K-084 chỉ cắn khi batch-mux (GPU-infer/frame nhỏ) / frame-lớn / nhiều-luồng-ít-core → giữ cảnh báo cho các ca đó.
+CẢNH BÁO TRUNG THỰC: số là 1-luồng TUẦN TỰ; N luồng đồng thời tranh GPU/CPU/decode → thực tế THẤP hơn phép chia; chưa gồm decode đa-luồng + VRAM đa-session. Cần scale test 1→10→N trước khi cam kết N_node.
+Đóng: một phần D-047/D-094 (số 1-node GPU) đã có; N_node đa-luồng thật + batch-mux = roadmap scale.

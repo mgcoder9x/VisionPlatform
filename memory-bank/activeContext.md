@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T14:40:00+07:00.
+**Cập nhật lúc:** 2026-07-13T15:25:00+07:00.
+**[✅ #364 — Refine scale-architecture: Capacity Model bản-2 nạp số GPU thật + hiệu chỉnh K-084 (+K-091, design-first)]**
+- Nút thắt thương mại = đa-camera/node (scale D-040). Có số GPU thật (K-089/090) → refine `design.md`: mục "Capacity Model bản-2" nạp `C_inf≈60/s` → bảng ước lượng N_node theo (f,g,A) = **~8-13 cam/RTX2060 batch=1** (đòn bẩy motion-gate g + fps f; ~100cam ⇒ ~8-12 node HOẶC batch-mux nâng C_inf).
+- **HIỆU CHỈNH K-084 bằng số GPU:** preprocess ~20% trên GPU (4ms/20.9ms), GPU-infer mới là trần per-stream (khác CPU #353 ~30%). Bẫy preprocess chỉ cắn khi batch-mux/frame-lớn/nhiều-luồng-ít-core. Cập nhật Lỗ 5 + stamp design.md.
+- **Ghi sổ:** LOG #364 · +K-091 · INDEX canonical #363→#364 · Σ243→Σ244 (K91) · dòng K-091 · block này. KHÔNG code (design-first).
+- **VERIFY:** design.md đọc-lại khớp số K-089/090; drift chạy kế; baseline 647/2 không đổi.
+- **Bước kế (CHỜ user):** (a) chạy e2e trên video/cam THẬT của bạn (cần asset); (b) sub-spec THI CÔNG scale (batch-mux nâng C_inf — roadmap #3, design-first + đo đa-luồng); (c) dừng mốc sạch. Số 1-luồng đã neo; đa-luồng thật là bước đo kế.
+---
 **[✅ #363 — Reusable GPU: bench_capacity --onnx --device cuda + config GPU example (D-099)]**
 - Biến số-đo-1-lần thành công cụ tái lập + template deploy: (a) `bench_capacity` nhánh `--onnx` map `--device cuda`→CUDA providers (trước bỏ qua device, luôn CPU); (b) `configs/example_video_onnx_gpu.toml` (khác bản CPU #355 đúng field `device="cuda"`) → deploy GPU qua TOML NATIVE (no-docker).
 - **Ghi sổ:** LOG #363 · +D-099 (✅) · INDEX canonical #362→#363 · Σ242→Σ243 (D99) · dòng D-099 · block này.

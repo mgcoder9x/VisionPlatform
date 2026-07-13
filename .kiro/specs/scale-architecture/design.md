@@ -2,7 +2,7 @@
 
 > **Trạng thái:** PHA 1 (design ĐỊNH HƯỚNG) — CHỜ user đọc-lại-valid. KHÔNG code.
 > **Gắn với:** `requirements.md` cùng thư mục · K-040 (lỗ hổng) · K-041 (công suất) · C-014/C-015.
-> **Cập nhật lúc:** 2026-07-06.
+> **Cập nhật lúc:** 2026-07-13 — thêm "Capacity Model bản-2" nạp SỐ GPU THẬT (#361/#362, K-089/090): C_inf≈60/s, e2e 720p≈47.77fps, ước lượng N_node ~8-13 cam/RTX2060 (batch=1), hiệu chỉnh K-084 (preprocess ~20% trên GPU, không phải nút). Vẫn PHA 1 design — CHỜ valid, KHÔNG code.
 
 ## Overview
 
@@ -50,6 +50,36 @@ Các con số C_* là [PHẢI BENCHMARK] — R6.1; tài liệu này giữ chúng
   (GPU nhàn, CPU nghẽn ở resize) → phải hoặc **preprocess trên GPU** (NVDEC/CUDA resize, như DeepStream) hoặc **worker
   preprocess riêng**; capacity model bản-2 phải thêm số hạng `t_pre` per-frame + trần CPU-preproc song song trần GPU.
 → Kết luận: capacity model chỉ để **định cỡ sơ bộ + hướng benchmark**, KHÔNG phải công thức cam kết.
+
+### Capacity Model bản-2 — NẠP SỐ GPU THẬT (RTX 2060, đo #361/#362 · K-089/K-090)
+
+Đã đo THẬT trên GPU (onnxruntime CUDA, yolov8n@640, batch=1, qua CODE SẢN PHẨM — D-097/098/099):
+- **`C_inf` ≈ 60 infer/s** (p50 16.7ms) — inference-only frame-640 (K-089).
+- **e2e detector 720p ≈ 47.77 fps** (p50 20.9ms) = letterbox→640 (~4ms CPU) + GPU-infer (16.7ms) + NMS/inverse (K-090).
+- So CPU (no-GPU): infer 11.72/s (#352), combined 7.95/s (#353) → GPU **~5-6x**.
+
+**Ước lượng cụ thể `N_node` (GPU-bound, C_inf=60, batch=1 CHƯA batch-mux):** `N_infer ≈ 60 / (f · g · A)`
+| f (fps/cam) | g (gate lọt) | A (model/frame) | N_node ≈ | Ghi chú |
+|---|---|---|---|---|
+| 25 | 1.0 | 1 | **~2 cam** | full-fps, KHÔNG motion-gate → tệ nhất |
+| 25 | 0.3 | 1 | **~8 cam** | motion-gate lọt 30% |
+| 15 | 0.3 | 1 | **~13 cam** | hạ fps + gate |
+| 10 | 0.2 | 1 | **~30 cam** | fps thấp + gate mạnh |
+| 25 | 0.3 | 2 | **~4 cam** | +1 tầng classify (fan-out A=2) |
+
+→ **Đòn bẩy mạnh nhất = `g` (motion-gate) và `f`**, không phải "GPU nhanh hơn". 1 RTX 2060 (batch=1) gánh ~8-13 cam
+ở cấu hình thực tế; ~100 cam ⇒ ~8-12 node HOẶC **batch-mux** (roadmap #3) nâng `C_inf` nhiều lần (GPU thích batch).
+
+**HIỆU CHỈNH nhận-định K-084 (preprocessing) bằng số GPU thật — QUAN TRỌNG:** trên CPU (#353) preprocessing
+chiếm ~30% (đáng sợ). Nhưng trên GPU, e2e 20.9ms = 16.7ms GPU-infer + **~4.2ms** (preprocess+NMS+inverse) → preprocess
+chỉ **~20%**, và GPU-infer MỚI là nút per-stream. Tải CPU-preproc ở N=13/f=15/g=0.3 ≈ 13·4.5·4ms = ~234ms/s ≈ **0.23 core**
+→ KHÔNG phải nút cổ chai ở quy mô này. K-084 "CPU preprocessing bottleneck" CHỈ cắn khi: (a) batch-mux làm GPU-infer/frame
+rất nhỏ (preprocess vượt lên); (b) frame độ-phân-giải-cao (t_pre tăng); (c) rất nhiều luồng chia ít core. ⇒ giữ cảnh báo
+K-084 cho các ca đó, nhưng ở RTX 2060 batch=1 hiện tại **GPU-infer là trần thật**, không phải preprocess.
+
+**CẢNH BÁO TRUNG THỰC (chưa đo):** các số trên là **1-luồng TUẦN TỰ**. Chạy N luồng ĐỒNG THỜI → tranh GPU/CPU/decode
+→ tổng thực tế **THẤP hơn** phép chia ngây thơ; + chưa gồm decode nhiều luồng + VRAM khi nhiều session. Cần đo đa-luồng
+thật (roadmap: scale test 1→10→N) trước khi cam kết N_node.
 
 ## Architecture
 
@@ -195,6 +225,9 @@ Trước khi chốt số node/độ-phủ, có benchmark 1-node (C_inf/C_dec/V) 
   resize/letterbox/normalize (đo CPU: ~40ms/frame @720p→640, ~30% thời gian mỗi frame — lớn hơn cả decode). Đã thêm
   bullet vào "GIỚI HẠN CỦA MÔ HÌNH" + yêu cầu capacity-model-bản-2 có số hạng `t_pre` + trần CPU-preproc. Đây là bẫy
   "CPU preprocessing bottleneck" phải thiết kế trước (GPU-preproc / worker riêng), không để lộ khi scale.
+  **CẬP NHẬT #362 (số GPU thật K-090):** trên GPU, preprocess chỉ ~20% (4ms/20.9ms) — GPU-infer mới là nút per-stream
+  (batch=1). Bẫy preprocess CHỈ cắn khi batch-mux/frame-lớn/nhiều-luồng-ít-core (xem "Capacity Model bản-2"). Nhận-định
+  bậc-1 (từ CPU #353) ĐÃ được hiệu chỉnh bằng đo GPU — không còn coi preprocess là nút mặc-định ở quy mô 1 GPU hiện tại.
 **Còn mở có chủ đích (chưa vá vì thuộc sub-spec sau, không phải thiếu sót):** chọn transport quy mô · config
 hot-reload (thêm/bớt camera runtime không restart fleet) · metrics backend · self-viết-batch vs Triton.
 **Phán quyết:** ĐỦ TỐT làm **bản định hướng PHA-1** (đã trung thực về giới hạn + lỗ + rủi ro cao). KHÔNG đủ làm

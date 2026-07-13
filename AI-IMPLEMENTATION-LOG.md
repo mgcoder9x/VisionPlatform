@@ -6986,3 +6986,11 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **3. Trade-off:** không thêm unit-test riêng (bench CLI-wiring không unit-test theo thiết kế D-047; config auto-phủ bởi test_all_example_configs #308 — validate device∈allowed_params).
 **4. Điều bạn nên biết:** deploy GPU giờ có template sẵn + đo GPU tái lập bằng `bench_capacity --onnx --device cuda`. Config GPU khác CPU đúng 1 field (dễ đọc/audit). Chưa chạy config GPU e2e trên video thật (cần clips của user) + chưa đa-luồng (scale D-040).
 **Đã verify:** bench `--onnx --device cuda` exit 0 (GPU infer stats); `vp verify` = **647 passed/2 skipped · lint 5/0 · drift PASS · VERIFY OK** (config GPU tự validate); getDiagnostics bench = 0. · **Chưa verify:** config GPU e2e trên video/cam thật; đa-luồng.
+
+### Entry #364 — 2026-07-13 — Refine scale-architecture: Capacity Model bản-2 nạp số GPU thật + hiệu chỉnh K-084 (+K-091) — Kiro-Opus
+**Bối cảnh:** nối #363 (GPU 1-luồng trọn). Nút thắt thương mại thật = đa-camera/node (scale D-040). Có số GPU thật (K-089/090) → refine capacity model (design-first, đọc-lại-valid design bằng số đo).
+**1. Quyết định AI tự ra (+K-091):** thêm mục "Capacity Model bản-2" vào `design.md`: nạp C_inf≈60/s → bảng ước lượng N_node cụ thể theo (f,g,A) = ~8-13 cam/RTX2060 batch=1; chỉ ra đòn bẩy g/f; ~100cam⇒~8-12 node hoặc batch-mux. HIỆU CHỈNH Lỗ 5/K-084: preprocess ~20% trên GPU (không phải nút như lo từ CPU #353) — GPU-infer là trần per-stream.
+**2. Chỗ phải đổi:** nhận-định K-084 (từ #354, dựa CPU) được số GPU hiệu chỉnh — preprocess KHÔNG phải nút mặc-định ở 1 GPU batch=1; chỉ cắn ở batch-mux/frame-lớn/nhiều-luồng. Ghi rõ trong design + Lỗ 5.
+**3. Trade-off:** ước lượng 1-luồng-tuần-tự (cảnh báo rõ: đa-luồng thực tế thấp hơn) — đủ định cỡ + hướng scale test, KHÔNG cam kết N_node.
+**4. Điều bạn nên biết:** scale design giờ có SỐ THẬT làm neo (không còn thuần ký-hiệu). Bước thi công scale (batch-mux/scheduler/re-shard) vẫn cần sub-spec design-first riêng + đo đa-luồng. KHÔNG code phiên này (đúng "chuẩn bị thiết kế→valid→mới triển khai").
+**Đã verify:** design.md cập nhật (đọc lại khớp số K-089/090); drift chạy kế. KHÔNG đổi code (647/2 giữ). · **Chưa verify:** N_node đa-luồng thật (cần scale test 1→10→N); batch-mux (chưa làm).
