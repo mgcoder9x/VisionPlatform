@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T18:00:00+07:00.
+**Cập nhật lúc:** 2026-07-13T18:30:00+07:00.
+**[🔵 #368 — Batch-mux: tạo tasks.md → BỘ SPEC HOÀN CHỈNH (Design+Requirements+Tasks), CHƯA code]**
+- Khép design-first: tạo `.kiro/specs/batch-mux/tasks.md` (5 task, đều `- [ ]` chưa bắt đầu).
+- **Task 0 = SPIKE BENCH làm CỔNG QUYẾT ĐỊNH** (theo yêu cầu user + R3.2): re-export model dynamic + đo B=1/2/4/8 vs baseline K-092 (104.7/s@K4) → GATE: KHÔNG vượt thì DỪNG + ghi "không đáng" (chống sunk-cost), không build Task 1-4.
+- Task 1 preprocess_batch/postprocess_batch thuần + verify model tí-hon dynamic (no-GPU/no-network) · Task 2 IBatchDetector port + BatchOnnxDetector fail-fast dynamic-check · Task 3 BatchMuxer gather-scatter+timeout+shed+bulkhead (event-driven) · Task 4 PBT+regression giữ 647/2. Task Dependency Graph wave 0→4 (Task 0 nhánh DỪNG).
+- **Ghi sổ:** LOG #368 · INDEX canonical #367→#368 (Σ247 giữ) · block này. KHÔNG code.
+- **VERIFY:** tasks.md getDiagnostics=0; mỗi task ref requirement; drift chạy kế. 647/2 giữ.
+- **Bước kế (CHỜ user):** (a) BẮT ĐẦU thi công = chạy Task 0 spike (cần đèn xanh network re-export model dynamic + GPU sẵn) → GATE quyết định batch-mux có đáng; (b) dừng mốc sạch (bộ spec đủ, thi công sau). BỘ SPEC batch-mux HOÀN CHỈNH design-first.
+---
 **[🔵 #367 — Batch-mux: tạo requirements.md (design-first, dẫn xuất design đã valid)]**
 - User valid `batch-mux/design.md` OK → tiếp Design→Requirements→Tasks. Tạo `.kiro/specs/batch-mux/requirements.md`.
 - **5 Requirement EARS:** R1 đúng-đắn batch (1.1 identity không-trộn-cam · 1.2 tương-đương-single-vs-batch · 1.3 coordinate per-sample) · R2 latency-bounded + shed + bulkhead (2.1-2.4) · R3 nghiệm-thu-bằng-ĐO vượt baseline K-092, R3.2 kết-luận-"không-đáng"-hợp-lệ (chống sunk-cost) · R4 backward-compat không phá lõi (4.1-4.3) · R5 tiên-quyết-dynamic-batch fail-fast (5.1-5.2). Số criteria KHỚP `Validates` trong design (1.1/1.2/2.1/2.2/3.1).
