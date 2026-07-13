@@ -3,7 +3,7 @@
 > **Trạng thái:** PHA 1 (design DESIGN-FIRST) — CHỜ user đọc-lại-valid. KHÔNG code.
 > **Là sub-spec của:** `.kiro/specs/scale-architecture/` (roadmap #3 "Batch-mux + GPU pool", trụ #3, A1/K-040).
 > **Gắn số đo THẬT:** K-089 (60 infer/s @batch=1) · K-090 (e2e 720p 47.77fps) · **K-092 (đa-luồng K-session rời: K=4 → 104.7 infer/s aggregate, per-stream p95 49.5ms)** — baseline batch-mux PHẢI vượt mới đáng.
-> **Cập nhật lúc:** 2026-07-13.
+> **Cập nhật lúc:** 2026-07-13 (REVIEW #369 đọc-lại-valid: +mục "Batch-mux ↔ analytics stateful" + Property 6 thứ-tự-per-camera + siết Property 2 latency + Lỗ 7 — phát hiện bằng đọc `TrackingStage`/`IouTracker` thật).
 
 ## Overview
 
@@ -97,6 +97,19 @@ song song / trên GPU, không tuần tự 1 lõi.
   không biết onnx cụ thể (giữ hexagonal: application phụ thuộc kernel+runtime, không adapter).
 - **`preprocess_batch`/`postprocess_batch` thuần** (domain/adapters, numpy-only) → test tính-đúng KHÔNG cần GPU/model thật.
 
+### Batch-mux ↔ analytics CÓ TRẠNG THÁI (REVIEW #369 — đọc `TrackingStage`/`IouTracker` THẬT)
+**Phát hiện khi đọc-lại-valid:** batch-mux gộp frame NHIỀU camera → mâu thuẫn BỀ MẶT với camera-affinity (scale-arch
+Lỗ 3: `TrackingStage._source_id` guard K-042 — 1 instance/1 camera, nhận 2 source_id → raise "đếm loạn"). Giải quyết
+BẢN CHẤT (không vá ngọn):
+- **Ranh giới mux = tại `IDetector`/`IBatchDetector` (STATELESS per-frame)** → gộp cross-camera AN TOÀN cho inference
+  (mỗi frame độc lập, không state). Mux nằm **THƯỢNG NGUỒN** mọi stage stateful.
+- **Scatter trả detections về ĐÚNG pipeline từng camera** (theo `request_id`) → `TrackingStage` per-camera giữ nguyên
+  affinity K-042 (không bao giờ thấy 2 source_id). Batch-mux KHÔNG đụng stage stateful.
+- **INVARIANT THỨ TỰ (sống-còn, đã VERIFY bằng đọc code):** `IouTracker.update()` PHỤ THUỘC THỨ TỰ (mỗi lần `age += 1`
+  toàn bộ track + associate frame-trước) → detections của cùng camera PHẢI trả downstream theo ĐÚNG thứ tự `frame_id`.
+  Gather-infer loop TUẦN TỰ (1 session/1 thread) + queue FIFO ⇒ thứ tự bảo toàn tự nhiên. NẾU nhiều mux-worker song song
+  → BẮT BUỘC re-order theo `frame_id` per-camera trước khi feed stateful stage (Property 6).
+
 ## Data Models
 _(kernel — thuần dữ liệu)_
 - `BatchRequest{ request_id: str, camera_id: str, frame_id: int, frame: np.ndarray }` — 1 frame chờ infer (định danh để scatter).
@@ -113,8 +126,10 @@ Với batch gồm frame từ các request `[r0..r_{B-1}]`, kết quả trả v�
 **Validates: Requirements 1.1** (không trộn dữ liệu camera).
 
 ### Property 2: Latency bị chặn (không frame nào chờ vô hạn)
-Mọi frame submit được xử lý trong ≤ `batch_timeout_ms` + `t_infer` (gather loop PHẢI flush khi hết timeout dù batch
-chưa đầy). Không có deadlock "chờ batch đầy mãi".
+Gather loop PHẢI flush khi hết `batch_timeout_ms` dù batch chưa đầy → không deadlock "chờ batch đầy mãi". Latency
+end-to-end 1 frame = `queue_wait + gather_wait(≤batch_timeout_ms) + t_preprocess_batch + t_infer + t_postprocess`
+(KHÔNG chỉ `timeout + t_infer` — phải kể queue-wait khi tải cao + pre/postprocess); tổng có TRẦN hữu hạn theo tải,
+đo per-camera (Lỗ 6). SLA kiểm bằng p95/p99 dưới tải mục tiêu, không trung bình.
 **Validates: Requirements 2.1** (SLA latency bị chặn).
 
 ### Property 3: Bất biến bảo toàn frame (shed quan-sát-được)
@@ -130,6 +145,13 @@ do thứ tự float, trong dung sai). Batching KHÔNG được đổi KẾT QU�
 Batch-mux chỉ được coi "đáng dùng" khi ĐO được batched-throughput > baseline K-092 (104.7/s @K4) ở latency-SLA. Số đo
 phải ghi lại (bench). Nếu không vượt → ghi nhận trung thực "không đáng cho model+GPU này".
 **Validates: Requirements 3.1** (nghiệm thu = benchmark vượt baseline; kế thừa R6.1 scale-arch).
+
+### Property 6: Thứ tự frame per-camera được bảo toàn qua mux
+WHEN nhiều frame của CÙNG một camera đi qua mux, THE detections trả downstream PHẢI theo ĐÚNG thứ tự `frame_id` gốc
+(không đảo). Lý do đã VERIFY: `IouTracker.update()` phụ thuộc thứ tự (age++ + associate frame-trước mỗi lần gọi) →
+đảo thứ tự = hỏng tracking/đếm. (Cross-camera KHÔNG cần thứ tự; chỉ intra-camera.) Kiểm bằng submit xen kẽ nhiều camera
++ nhiều frame/camera → assert thứ tự trả về mỗi camera đơn điệu theo `frame_id`.
+**Validates: Requirements 1.4** (thứ tự frame per-camera cho analytics stateful).
 
 ## Error Handling
 - **Model batch cố định (RB-1):** `BatchOnnxDetector.setup()` PHẢI dò input shape; nếu trục 0 cố định >1 hoặc ==1
@@ -171,6 +193,11 @@ _(TDD, phần lớn KHÔNG cần GPU)_
 - **Lỗ 5 (chi phí copy stack):** gộp B frame vào mảng liền kề = B lần copy bộ nhớ. Nhỏ so infer nhưng phải đo, không bỏ qua.
 - **Lỗ 6 (interleave latency không đều):** camera fps khác nhau → frame đến lệch pha; gather có thể gom lệch → 1 số cam
   latency cao hơn. Cần đo per-camera latency, không chỉ aggregate.
+- **Lỗ 7 (batch-mux vs stateful analytics + THỨ TỰ — phát hiện REVIEW #369, đọc code thật):** gộp cross-camera mâu thuẫn
+  BỀ MẶT với camera-affinity K-042 (`TrackingStage._source_id`) + `IouTracker.update` phụ thuộc thứ tự frame. Đã vá:
+  mục "Batch-mux ↔ analytics CÓ TRẠNG THÁI" (mux ở ranh giới stateless IDetector, thượng nguồn stage stateful; scatter
+  giữ affinity) + Property 6 (thứ tự per-camera) + siết Property 2 (latency đủ chuỗi). Đây là lỗ BẢN CHẤT (không phải
+  ngọn): nếu bỏ qua, batch-mux sẽ làm hỏng tracking/đếm khi bật analytics stateful downstream.
 
 **Còn mở có chủ đích (chốt khi tới):** self-viết mux vs nhúng **Triton** (Triton làm dynamic-batching sẵn, ops nặng
 hơn nhưng khỏi tự-viết); thread vs process vs asyncio cho gather loop; batch-mux có nên tích hợp ZMQ inference-server

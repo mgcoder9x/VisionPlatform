@@ -1131,3 +1131,13 @@ Links: D-040 (scale-arch), K-089/090/092 (số GPU), D-097/098 (GPU wiring), K-0
 Nội dung: BatchMuxer @application (gather max_batch|batch_timeout → preprocess_batch stack [B,3,640,640] → 1 `session.run` → postprocess_batch split B → scatter theo request_id). Port RIÊNG `IBatchDetector.detect_batch(frames)->list[list[Detection]]` (GIỮ NGUYÊN `IDetector` single-frame — backward-compat). Tái dùng BoundedQueue/OnnxDetector-session/yolov8_decode/metrics. Thêm mới: preprocess_batch/postprocess_batch (thuần)/BatchOnnxDetector/BatchMuxer.
 Vì sao (bản chất): C_inf là đòn bẩy throughput lớn nhất trong capacity model; batch THẬT khấu hao overhead kernel-launch + lấp đầy SM (cơ chế nvstreammux/Triton). Design-first + nghiệm-thu-bằng-đo vì NGHI VẤN batch-mux có thể không thắng K-session-rời (yolov8n nhỏ, K-092 GPU đã lấp khá đầy) → phải ĐO, không giả định.
 Non-goal: chưa re-export model dynamic-batch (RB-1, cần network/đèn xanh); chưa build BatchMuxer; chưa requirements.md/tasks.md; self-viết-vs-Triton để-ngỏ.
+
+### D-101 — 2026-07-13 — REVIEW đối kháng spec batch-mux → fix 3 lỗ (stateful-reconcile + ordering + latency)
+Status: 🔵 design-only (vá design+requirements batch-mux; CHƯA code)
+Evidence: `.kiro/specs/batch-mux/design.md` + `requirements.md` getDiagnostics=0 sau vá. Đọc `TrackingStage`/`IouTracker` thật (bằng chứng K-094).
+Scope: `batch-mux/design.md` (+mục "Batch-mux ↔ analytics CÓ TRẠNG THÁI" + Property 6 + siết Property 2 + Lỗ 7 + stamp) · `batch-mux/requirements.md` (+R1.4).
+Nguồn: LOG Entry #369 · nối D-100 (spec batch-mux) · K-094 (finding order-dependent) · scale-arch Lỗ 3 (camera-affinity) · K-042 (affinity guard).
+Links: D-100, K-094, K-042 (tracking affinity), object-tracking-count (#258/#259).
+Nội dung: đối kháng thiết kế batch-mux → 3 lỗ: (a) chưa đối chiếu batch-mux (cross-camera) với camera-affinity/stateful → thêm mục ranh-giới-mux-tại-IDetector-stateless + scatter-giữ-affinity; (b) thiếu ràng buộc THỨ TỰ per-camera (IouTracker phụ thuộc thứ tự) → Property 6 + R1.4; (c) Property 2 latency understate → siết đủ chuỗi + đo p95/p99.
+Vì sao (bản chất): batch-mux làm HỎNG tracking/đếm nếu (i) mux xuống dưới stage stateful hoặc (ii) đảo thứ tự frame per-camera — bug ngầm khó tìm. Bắt bằng đọc-lại-valid TRƯỚC code (rẻ hơn debug sau).
+Non-goal: chưa test Property 6 (Task 3/4); chưa quyết nhiều-mux-worker-song-song (để-ngỏ, nếu làm phải re-order).

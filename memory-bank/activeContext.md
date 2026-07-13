@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T18:30:00+07:00.
+**Cập nhật lúc:** 2026-07-13T19:00:00+07:00.
+**[🔵 #369 — REVIEW đối kháng spec batch-mux (đọc-lại-valid) → fix 3 lỗ BẢN CHẤT trước code (+D-101, +K-094)]**
+- Đúng nguyên tắc "chuẩn bị design → ĐỌC LẠI VALID → mới code". Đọc CODE THẬT `TrackingStage`+`IouTracker` (không suy đoán) kiểm mắt xích nghi ngờ: batch-mux gộp nhiều-cam ↔ camera-affinity/stateful.
+- **3 lỗ + vá (design.md + requirements.md, getDiagnostics=0):** (a) mục MỚI "Batch-mux ↔ analytics CÓ TRẠNG THÁI" — mux ở ranh giới `IDetector` STATELESS, thượng-nguồn stage stateful, scatter giữ affinity K-042; (b) **Property 6** thứ-tự-frame-per-camera + **R1.4** (IouTracker.update PHỤ THUỘC THỨ TỰ — age++ + associate frame-trước); (c) siết **Property 2** latency đủ chuỗi (queue+gather+pre+infer+post, p95/p99) + Lỗ 7.
+- **+K-094 (VERIFY đọc code):** `IouTracker` order-dependent + `TrackingStage._source_id` affinity cứng → batch-mux gộp cross-camera chỉ an toàn ở tầng stateless + phải bảo-toàn-thứ-tự. Bài học rộng: mọi batch/song-song phải kiểm downstream-stateful/order TRƯỚC.
+- **Ghi sổ:** LOG #369 · +D-101 (🔵) · +K-094 · INDEX canonical #368→#369 · Σ247→Σ249 (D101·K94) · dòng D-101/K-094 · block này. KHÔNG code (647/2 giữ).
+- **VERIFY:** đọc TrackingStage/IouTracker thật (stateful + order-dependent, có code); design+requirements getDiagnostics=0; drift chạy kế.
+- **Bước kế (CHỜ user):** bộ spec batch-mux giờ VỮNG hơn (đã đọc-lại-valid). (a) BẮT ĐẦU Task 0 spike (đèn xanh network re-export dynamic + GPU) → GATE quyết định; (b) dừng mốc sạch. KHÔNG tự chạy network khi chưa có đèn xanh.
+---
 **[🔵 #368 — Batch-mux: tạo tasks.md → BỘ SPEC HOÀN CHỈNH (Design+Requirements+Tasks), CHƯA code]**
 - Khép design-first: tạo `.kiro/specs/batch-mux/tasks.md` (5 task, đều `- [ ]` chưa bắt đầu).
 - **Task 0 = SPIKE BENCH làm CỔNG QUYẾT ĐỊNH** (theo yêu cầu user + R3.2): re-export model dynamic + đo B=1/2/4/8 vs baseline K-092 (104.7/s@K4) → GATE: KHÔNG vượt thì DỪNG + ghi "không đáng" (chống sunk-cost), không build Task 1-4.

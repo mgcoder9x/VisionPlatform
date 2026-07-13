@@ -933,3 +933,11 @@ Bằng chứng THẬT (chạy, không suy đoán):
 Bài học: model export mặc-định (ultralytics opset12/640, #361) KHÔNG có trục batch động → truyền `[B,...]` B>1 NỔ ngay. Batch-mux (gộp N-cam vào 1 tensor) BẤT KHẢ THI với model này. Muốn batch-mux phải RE-EXPORT với `dynamic=True` (ultralytics `export(dynamic=True)` hoặc `torch.onnx.export(dynamic_axes=...)`) → trục 0 = 'N'. Đây là task #0 (tiên quyết) của pha thi công batch-mux.
 Cách né network để verify LOGIC mux TRƯỚC: tạo model ONNX tí-hon dynamic-batch tự-làm (license sạch, như test OnnxDetector) → verify gather/scatter identity + tương-đương-single-vs-batch KHÔNG cần re-export YOLO/GPU.
 Chưa kiểm: batch>1 có thắng K-session-rời (104.7/s@K4) trên RTX 2060 không (cần re-export + bench thật).
+
+### K-094 — ✅ (2026-07-13) `IouTracker` phụ thuộc THỨ TỰ frame + `TrackingStage` camera-affinity cứng → batch-mux phải thượng-nguồn-stateless + bảo-toàn-thứ-tự
+Nguồn: LOG Entry #369 · đọc code THẬT `runtime/iou_tracker.py` + `runtime/stages/tracking_stage.py` (review đối kháng batch-mux).
+Bằng chứng THẬT (đọc code, không suy đoán):
+- `IouTracker.update(dets)`: mỗi lần gọi `for st in self._tracks.values(): st.age += 1` rồi associate với track frame-TRƯỚC → **PHỤ THUỘC THỨ TỰ**: gọi sai thứ tự (frame 12 trước 11) làm age/association sai → hỏng track/đếm.
+- `TrackingStage._do_process`: `_source_id` set lần đầu, sau đó `packet.source_id != _source_id` → `raise` "1 instance/1 camera (K-042); trộn state = đếm loạn" → **camera-affinity CỨNG** (stateful).
+Bài học (cho batch-mux + mọi tối ưu gộp/song-song): batch-mux gộp cross-camera CHỈ an toàn ở tầng detector STATELESS. BẮT BUỘC: (1) mux nằm THƯỢNG NGUỒN mọi stage stateful; (2) scatter trả về đúng pipeline từng camera (giữ affinity); (3) bảo toàn THỨ TỰ frame per-camera downstream (gather tuần tự 1-session-1-thread thoả tự nhiên; nhiều-worker-song-song phải re-order theo frame_id). Bỏ qua = bug ngầm hỏng tracking/đếm khó tìm.
+Áp dụng rộng: mọi cơ chế batch/song-song/reorder trong hệ PHẢI kiểm "downstream có stateful/order-dependent không" TRƯỚC (đọc code, không đoán).

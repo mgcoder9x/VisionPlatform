@@ -30,6 +30,7 @@ yêu cầu nghiệm thu là **ĐO**, và kết quả "không vượt baseline" v
 - 1.1 — WHEN một batch gồm frame từ nhiều request `[r0..r_{B-1}]` được chạy, THE hệ thống SHALL trả về cho request `r_i` ĐÚNG detections của frame `r_i` (route theo `request_id`, KHÔNG lẫn sang `r_j` với j≠i).
 - 1.2 — WHEN chạy `detect_batch([f0..f_{B-1}])` với model dynamic-batch, THE kết quả sample `i` SHALL tương đương (trong dung sai float) với `detect(f_i)` chạy đơn lẻ — batching KHÔNG được đổi KẾT QUẢ phát hiện, chỉ đổi throughput.
 - 1.3 — WHEN các frame trong batch có kích thước gốc KHÁC nhau (camera khác độ phân giải), THE hệ thống SHALL letterbox + inverse-transform per-sample đúng theo `orig_h/orig_w` của từng frame (giữ hợp đồng coordinate-transform hiện có).
+- 1.4 — WHEN nhiều frame của CÙNG một camera đi qua mux, THE hệ thống SHALL trả detections về downstream theo ĐÚNG thứ tự `frame_id` gốc (không đảo) — vì analytics stateful downstream (`IouTracker.update`, đã VERIFY) phụ thuộc thứ tự frame; đảo = hỏng tracking/đếm. Ranh giới mux PHẢI ở tầng detector STATELESS (thượng nguồn stage stateful), scatter giữ camera-affinity K-042.
 
 ### Requirement 2: Latency bị chặn + backpressure quan-sát-được
 **User Story:** Là kỹ sư vận hành, tôi muốn frame không chờ vô hạn để gom batch và frame bị bỏ khi quá tải được đếm, để hệ real-time không treo/không mất frame im lặng.
