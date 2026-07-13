@@ -894,3 +894,13 @@ Số đo THẬT (RTX 2060 6GB, driver 591.86, onnxruntime-gpu 1.27 + nvidia cu13
 - So sánh CPU (#352, cùng model/frame): 11.72 infer/s → GPU **~5.1x**. 60 > 25fps ⇒ **đạt real-time** (CPU ~8-12fps KHÔNG đạt — #353).
 Giới hạn (trung thực): mới đo **inference-only** trên frame-640-dựng-sẵn; CHƯA đo **end-to-end** GPU (decode 720p + letterbox/preprocess + NMS + inverse — số thật/luồng-camera sẽ THẤP hơn, xem K-084 gap preprocessing). VRAM 6GB → giới hạn số luồng song song. batch=1.
 Đóng: phần "số capacity 1-luồng GPU inference" của D-047/D-094. CÒN: e2e GPU (decode+preproc) + đa-luồng (scale-architecture D-040).
+
+### K-090 — ✅ (2026-07-13) SỐ ĐO e2e GPU 720p: DetectorPipeline 47.77 fps (~6x CPU) — preprocessing gap (K-084) NHỎ trên GPU 1-luồng
+Scope: throughput e2e detector GPU (nối K-089 inference-only; đóng K-084 gap phần GPU 1-luồng)
+Nguồn: LOG Entry #362 · đo 1-lần qua CODE SẢN PHẨM (`_det_onnx device=cuda` → DetectorPipeline: letterbox 720p→640 + GPU infer + NMS + inverse)
+Số đo THẬT (RTX 2060, input 1280×720, warmup 5, N=100):
+- **e2e detector = 47.77 fps · p50 ~20.9 ms** (letterbox+infer+NMS+inverse).
+- So K-089 inference-only-640 = 60/s (16.7ms) → preprocessing+NMS+inverse thêm **~4.2ms** (letterbox 720p→640 chạy CPU nhưng nhỏ ở 1-luồng).
+- So CPU combined-720p #353 = 7.95 fps → GPU **~6x**. **VƯỢT 25fps real-time** kể cả có preprocessing.
+Diễn giải commercial: 1 luồng 720p trên GPU ~48fps end-to-end (decode ~3ms #353 không đáng kể) ⇒ real-time dư. K-084 (preprocessing bottleneck) chỉ ~4ms ở 1-luồng — NHƯNG ở ĐA-LUỒNG, preprocess chạy CPU sẽ cộng dồn → vẫn cần GPU-preproc/worker riêng khi scale (cảnh báo K-084 giữ nguyên cho đa-luồng).
+Giới hạn: batch=1, VRAM 6GB, synthetic frame (chưa video/cam thật), 1 luồng. Đa-luồng song song = scale (D-040) chưa đo.

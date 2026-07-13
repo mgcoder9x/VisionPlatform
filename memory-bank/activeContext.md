@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T13:10:00+07:00.
+**Cập nhật lúc:** 2026-07-13T13:55:00+07:00.
+**[✅ #362 — ĐO e2e GPU 720p: DetectorPipeline 47.77 fps (~6x CPU, real-time) — gap preprocessing nhỏ 1-luồng (+K-090)]**
+- Đo qua CODE SẢN PHẨM `_det_onnx(device=cuda)`→DetectorPipeline.detect(1280×720): letterbox→640 + GPU infer + NMS + inverse = **47.77 fps · p50 20.9ms**.
+- vs inference-only 640 (K-089 60/s): preprocessing+NMS+inverse thêm ~4.2ms → **gap K-084 NHỎ ở 1-luồng** trên GPU (đa-luồng preprocess-CPU vẫn cộng dồn — cảnh báo K-084 giữ cho scale). vs CPU combined 7.95 (#353) → **~6x**, VƯỢT 25fps real-time.
+- **Ghi sổ:** LOG #362 · +K-090 · INDEX canonical #361→#362 · Σ241→Σ242 (K90) · dòng K-090 · block này.
+- **VERIFY:** 47.77 fps đo thật; temp sạch; tree sạch; drift chạy kế.
+- **Bức tranh GPU giờ ĐỦ số 1-luồng:** runtime (D-097) · wiring (D-098) · inference-only 60/s (K-089) · e2e-720p 47.77fps (K-090). Deploy TOML device=cuda native chạy real-time 1 luồng.
+- **Bước kế (CHỜ user — đều no-network):** (a) camera trực tiếp GPU (cho webcam index/RTSP url); (b) đa-luồng song song (scale D-040 — VRAM 6GB giới hạn, thiết kế GPU-preproc/worker); (c) bench_capacity `--device` reusable + config example GPU; (d) dừng mốc sạch.
+---
 **[✅ #361 — ĐO GPU e2e THẬT: yolov8n.onnx 60 infer/s trên RTX 2060 (~5x CPU, real-time) — đóng phần GPU D-047/D-094 (+K-089)]**
 - Export lại `yolov8n.onnx` qua venv throwaway (ultralytics 8.4.93+torch2.13-CPU, opset12/640) → `models/` (12.85MB, gitignored) → xóa venv+scratch (đóng K-087). Tree sạch.
 - Đo qua CODE SẢN PHẨM (OnnxDetector providers=CUDA + yolov8_decode, không bypass): **ON_GPU=True** (session_providers[0]==CUDA) · **60.00 infer/s · p50 16.7ms** (N=100, warmup 5). CPU (#352)=11.72 → **~5.1x**, VƯỢT 25fps real-time (CPU ~8-12 không đạt).

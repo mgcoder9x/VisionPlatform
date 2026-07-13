@@ -6970,3 +6970,11 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **3. Trade-off:** đo inference-only trước (nhanh, cô lập GPU) — e2e decode+preproc chờ (K-084 gap). Số 60/s là trần-inference, không phải fps-camera-cuối.
 **4. Điều bạn nên biết (+K-089):** GPU **60.00 infer/s p50 16.7ms** vs CPU 11.72 (#352) = ~5.1x, VƯỢT 25fps real-time. Chuỗi GPU HOÀN CHỈNH & VERIFIED: runtime (D-097/K-088) → product wiring (D-098) → model (K-087 đóng) → e2e đo (K-089). Deploy GPU qua TOML `device=cuda` native (no-docker) giờ chạy được thật. Giới hạn: inference-only/batch1/6GB VRAM; e2e+đa-luồng chờ.
 **Đã verify:** ON_GPU=True (session_providers CUDA đầu, output thật) · 60.00 infer/s (đo thật N=100) · model 12.85MB gitignored · temp dọn sạch · tree sạch. · **Chưa verify:** e2e GPU (decode+preproc) + đa-luồng (scale) + camera trực tiếp (chưa mở).
+
+### Entry #362 — 2026-07-13 — ĐO e2e GPU 720p: DetectorPipeline 47.77 fps (~6x CPU, real-time) — preprocessing gap nhỏ 1-luồng (+K-090) — Kiro-Opus
+**Bối cảnh:** nối #361 (inference-only 60/s). Đo e2e có preprocessing (đóng gap K-084 trên GPU) qua code sản phẩm, input 720p.
+**1. Quyết định AI tự ra:** đo `_det_onnx(device=cuda)`→DetectorPipeline.detect(frame 1280×720) — bao letterbox 720p→640 + GPU infer + NMS + inverse (đúng đường sản phẩm, không bypass). Script 1-lần rồi xóa.
+**2. Chỗ phải đổi:** không.
+**3. Trade-off:** đo detector-e2e (không gồm video-decode — decode ~3ms/336fps #353 không đáng kể); synthetic frame (chưa video/cam thật). Số 1-luồng.
+**4. Điều bạn nên biết (+K-090):** **e2e GPU 720p = 47.77 fps p50 20.9ms** (~6x CPU 7.95 #353, VƯỢT real-time). Preprocessing+NMS+inverse thêm ~4.2ms so inference-only (K-089 60/s) → gap K-084 NHỎ ở 1-luồng, NHƯNG đa-luồng preprocess-CPU vẫn cộng dồn (cảnh báo K-084 giữ cho scale). VRAM 6GB/batch1 → giới hạn đa-luồng.
+**Đã verify:** 47.77 fps (đo thật N=100 qua DetectorPipeline device=cuda, output thật); temp dọn sạch; tree sạch. · **Chưa verify:** video/camera thật; đa-luồng song song (scale D-040); bench_capacity --device (chưa wire, dùng probe 1-lần).
