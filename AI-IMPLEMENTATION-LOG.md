@@ -6801,3 +6801,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **3. Trade-off:** không.
 **4. Điều bạn nên biết:** `end.md` là ảnh-chụp bàn-giao; nguồn SỐNG vẫn = activeContext + journal + `vp verify`. Bám số đã verify #346 (không bịa).
 **Đã verify:** tạo `end.md`; `vp check` PASS (chạy dưới); push tất cả (xác nhận HEAD==upstream). Không đổi code (630/2 giữ). · **Chưa verify:** không.
+
+### Entry #348 — 2026-07-12 — CHUYỂN MÁY về `k.nguyen.manh.toan`: reconcile + re-verify frontier #347 (không mất việc) — Kiro-Opus
+
+**Bối cảnh:** user chuyển về máy `k.nguyen.manh.toan` (từng ở #294 phiên trước) + dán end.md máy `toann` (frontier #347). Nghi drift/mất-việc vì entry-number vênh (#294 vs #347). Protocol §0/§2 chuyển-máy: git fetch + đối chiếu TRƯỚC khi tiếp.
+
+**1. Quyết định AI tự ra (không phải code — reconcile):** `git fetch` → LOCAL==UPSTREAM==`11d6c85` (repo đã được pull lên frontier toann). Kiểm CHẶT chống-mất-việc: `git merge-base --is-ancestor db1cbbb(#294) HEAD` = **YES (đã gom)** + 5 file #278-294 của máy này (metrics_http_server/capability_probe/capabilities/metric_sample/test_metrics_http_endpoint) **đều CÓ trong HEAD**. → Frontier #347 = HỢP NHẤT (gồm cả #294 của tôi + #339-347 của toann: Z1/R1 bug-fix, C8 doc-code, C7 index-cites, RULES 16). KHÔNG mất việc, KHÔNG orphan.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không. (Drift-check output #294 ở đầu phiên là STALE — chụp trước khi máy pull lên 11d6c85; con trỏ thật = #347.)
+
+**3. Trade-off đã cân nhắc:** tin end.md (số 630/2 của toann) vs tự re-verify trên máy này (K-052) → **tự re-verify** (không tin số máy khác mù).
+
+**4. Điều bạn nên biết:** anti-drift đã TIẾN HOÁ trên nhánh toann: thêm C7 (INDEX-CITES ∈ LOG) + C8 (DOC-CODE living-citation, 7 Verify-Symbol) + self-test 11 case (guard regex-rot) + RULES 15→16. Frontier: 630/2·5/0·drift PASS. Hướng mở (end.md §6): săn bug tiếp `video_file_frame_source`/`dark_filter+brightness`/supervisor cascade; hoặc dừng mốc sạch. Chặn: GPU/torch/DB/CI như cũ.
+
+**Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, py3.11.9):** `git merge-base` #294 là ancestor + 5 file tồn tại (không mất việc); `vp check` DRIFT-CHECK PASS (#347, Σ226 D92·C21·T32·K81, RULES 16 khớp 5 mirror, C7/C8 PASS, self-test 11/11); `pytest -q` = **630 passed/2 skipped**; `vp lint` = **5 kept/0 broken**. · **Chưa verify:** K-035 residual full-suite-contention (như #294); GPU/DB (chặn điều kiện).

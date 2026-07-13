@@ -1,9 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T16:35:00+07:00.
-**[🔒 GIT] #347 tạo end.md handoff — push TẤT CẢ (user chuyển máy). Không đổi code (630/2 giữ).**
-**[✅ #347 — Tạo `end.md` handoff chuyển máy + push tất cả]**
+**Cập nhật lúc:** 2026-07-12T23:30:00+07:00.
+**[✅ #348 — CHUYỂN MÁY về `k.nguyen.manh.toan`: reconcile + re-verify frontier #347 (KHÔNG mất việc)]**
+- User chuyển về máy `k.nguyen.manh.toan` (phiên trước ở #294) + dán end.md máy `toann` (#347). Nghi drift vì entry-number vênh (#294 vs #347). §0/§2: git fetch + đối chiếu TRƯỚC khi tiếp.
+- **Reconcile (chống mất việc):** `git fetch` → LOCAL==UPSTREAM==`11d6c85` (đã pull lên frontier toann). `git merge-base --is-ancestor db1cbbb(#294) HEAD` = **YES** + 5 file #278-294 (metrics_http/capability_probe/capabilities/metric_sample/test_metrics_http_endpoint) **đều CÓ** → frontier #347 HỢP NHẤT (#294 của tôi + #339-347 toann). Drift-check #294 ở đầu-phiên = STALE (trước pull).
+- **RE-VERIFY THẬT máy này (K-052, py3.11.9):** `vp check` DRIFT PASS (#347, Σ226 D92·C21·T32·K81, RULES 16 khớp 5 mirror, C7/C8 PASS, self-test 11/11); `pytest -q` **630 passed/2 skipped**; `vp lint` **5 kept/0 broken**.
+- **Anti-drift đã tiến hoá (nhánh toann):** +C7 (INDEX-cites∈LOG) +C8 (doc-code living-citation, 7 Verify-Symbol) +self-test 11 case + RULES 15→16.
+- **Ghi sổ:** LOG #348 (chuyển-máy, không +D/C/T/K → Σ226 giữ) · INDEX canonical #347→#348 · block này.
+- **Bước kế (chờ user — frontier 630/2 sạch):** săn bug tiếp (end.md §6: `video_file_frame_source` EOF/loop · `dark_filter+brightness` stages · supervisor cascade race) HOẶC dừng mốc sạch. Chặn: GPU/torch/DB/CI như cũ · K-035 residual (contention máy yếu, cần máy mạnh — #294).
+---
+**[✅ #347 — Tạo `end.md` handoff chuyển máy + push tất cả — máy `toann`]**
 - User chuyển máy → tạo `end.md` (gốc repo) 8 mục: đầu-phiên · trạng thái #346 (630/2·5/0·drift PASS) · cơ chế vận hành · chống-drift 4 lớp · đã-làm #339→#346 · bug-hunting (Z1✅/R1✅/Z2🟡/D.2🟡 + SOUND) · hướng tiếp · chặn/ràng-buộc.
 - **Ghi sổ:** LOG #347 (handoff, không +D/C/T/K → Σ226 giữ) · INDEX canonical #346→#347 · block này.
 - **Bước kế (máy mới):** đọc `end.md` §0 → `vp check` → chọn hướng §6 (săn bug tiếp / Feynman / F4 / dừng).
