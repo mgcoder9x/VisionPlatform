@@ -1070,3 +1070,13 @@ Verify-Symbol: vision-platform/benchmarks/bench_capacity.py::measure_infer
 Nội dung: Thêm nhánh `--onnx <path> [--labels --yolo v8 --layout --conf]` vào `bench_capacity.main()` → dựng `DetectorPipeline(OnnxDetector+decode)` (mirror `vision_demo_app._build_detector`) tiêm vào `measure_infer` (DI sẵn có). `is_real = bool(onnx) or device∉{cpu,fake}` → onnx-CPU KHÔNG in cảnh báo "fake" nhưng in nhãn "CPU-BASELINE" (số THẬT của detector, không phải đích GPU). sync_fn=None (onnxruntime CPU blocking).
 Vì sao (bản chất): harness cũ giả định "cpu ⇒ chỉ Fake ⇒ không phải capacity" — SAI sau khi có ONNX-CPU (inference NN thật). Fix GỐC = cho công cụ đo được detector THẬT máy này chạy được (đóng phần CPU của lỗ "số capacity chờ weight"); không viết script one-off (fix ngọn, vứt đi, harness vẫn mù ONNX). Chỉ đụng dev-tool ngoài src (additive, baseline 632/2 giữ).
 Non-goal: số GPU thật (vẫn cần `--device cuda` máy GPU); throughput combined decode+infer dưới tải song song; đây là CPU-baseline định-cỡ-tương-đối, KHÔNG suy ra số GPU.
+
+### D-095 — 2026-07-13 — Thêm detector `onnx` vào registry config-declarative → deploy-by-TOML detector NN THẬT (no torch/GPU)
+Status: ✅ code (640/2, TDD 8 test + manual e2e)
+Nguồn: LOG Entry #355
+Evidence: 8 test `test_config_onnx_detector.py` pass; manual `--config _tmp_onnx.toml` (detector onnx, models/yolov8n.onnx) = validate OK + run frames_read=10 processed=10 stage_errors=0 (CPU); `vp verify` 640/2·lint 5/0·drift PASS
+Links: K-083 (yolov8n.onnx CPU), D-094 (bench onnx), D-042/D-045 (registry+strict-key), D-031 (real-detector), K-029 (license model)
+Verify-Symbol: vision-platform/src/vision_platform/profiles/pipeline_factory.py::_det_onnx
+Nội dung: `DEFAULT_REGISTRY["detectors"]` trước chỉ `{fake, pt}` (pt=torch/GPU) → KHÔNG deploy được detector chạy-được-thật-trên-CPU qua TOML. Thêm `_det_onnx(params)` mirror `vision_demo_app._build_detector` nhánh onnx: `DetectorPipeline(OnnxDetector(weights, chw_float_normalize, decode), model_size)`; params {weights bắt-buộc · yolo v5/v8 · layout · conf · model_size · labels (list HOẶC chuỗi phẩy)} + `allowed_params` (K-046 strict-key) + đăng ký `"onnx"`. OnnxDetector load ở setup() → build construct KHÔNG cần file (test CI-safe). +`configs/example_video_onnx_cpu.toml` (template committed).
+Vì sao (bản chất): đường production = config-declarative; nếu registry chỉ có detector cần-GPU thì sản phẩm KHÔNG deploy được trên CPU/máy không-GPU qua config = gap thật (chỉ demo app dùng được onnx). Fix tại registry (extension point D-042, KHÔNG sửa lõi factory) = đúng chỗ mở rộng. Additive: fake/pt giữ nguyên.
+Non-goal: batch (A1 lỗ port); tự-tune conf/nms; chọn model+license (K-029 — quyết định vận hành/pháp lý, YOLOv8 AGPL).

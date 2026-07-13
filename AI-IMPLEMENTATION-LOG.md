@@ -6902,3 +6902,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết (K-084):** so 2 số ĐO THẬT: `infer` frame-640-dựng-sẵn 11.72/s (85ms) vs `combined` 720p-letterbox-640 7.95/s (121ms), `decode` 336/s (~3ms). Chênh ~40ms/frame = PREPROCESSING (resize/letterbox/normalize), KHÔNG phải decode/infer → chiếm ~30% thời gian/frame. Hệ GPU: bẫy kinh điển **"CPU preprocessing bottleneck"** (GPU nhàn, CPU nghẽn resize — lý do DeepStream resize GPU). Nếu capacity model không tính → định cỡ N_node lạc quan SAI → 100 cam nghẽn CPU bất ngờ. Fix hướng: GPU-preproc hoặc worker preprocess riêng.
 
 **Đã verify (số đo có thật từ #352/#353 đã chạy):** chênh 11.72→7.95 = preprocessing (số đo thật, đọc 2 log); design.md cập nhật (đọc lại khớp); `vp check` drift PASS (bổ sung). KHÔNG đổi code sản phẩm. · **Chưa verify:** `t_pre` trên GPU thật + tỉ lệ preprocessing khi GPU-inference (CPU-preproc có thể thành bottleneck rõ hơn); cơ chế GPU-preproc cụ thể (sub-spec sau).
+
+### Entry #355 — 2026-07-13 — Config-declarative hỗ trợ detector ONNX (deploy-by-TOML detector NN thật trên CPU) — Kiro-Opus
+
+**Bối cảnh:** sau #351-354 (ONNX chạy CPU + đo capacity). Soi gap production: đường deploy thật = config-declarative (`--config file.toml`→`pipeline_factory`). Grep registry → `detectors: {fake, pt}` — KHÔNG có onnx → CHỈ `vision_demo_app` (demo) dùng được onnx, CÒN đường production KHÔNG khai báo được detector chạy-được-thật-trên-CPU qua TOML. Gap thật cho sản phẩm thương mại.
+
+**1. Quyết định AI tự ra (D-095):** thêm builder `_det_onnx` vào `pipeline_factory` registry (mirror `vision_demo_app._build_detector` nhánh onnx: DetectorPipeline(OnnxDetector+v5/v8 decode)) + allowed_params (K-046) + đăng ký "onnx". Dùng extension point D-042 (KHÔNG sửa lõi factory). +config mẫu `example_video_onnx_cpu.toml` (committed template).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (additive; fake/pt giữ nguyên; schema không đổi — params là Mapping generic).
+
+**3. Trade-off đã cân nhắc:** thêm vào registry (durable, deploy-by-config) vs chỉ để demo app dùng onnx. Chọn registry — production PHẢI deploy được detector CPU qua config, không thể bắt user dùng CLI demo. Cái mất: +1 builder + 6 allowed_params (chấp nhận). labels nhận cả list (TOML tự nhiên) lẫn chuỗi-phẩy (tương thích CLI).
+
+**4. Điều bạn nên biết:** OnnxDetector load model ở setup() (không __init__) → build_runner CONSTRUCT được KHÔNG cần file .onnx → test CI-safe (8 test không phụ thuộc weight gitignored). Manual e2e với models/yolov8n.onnx THẬT: `--config` validate OK + run 10/10 frame, 0 lỗi trên CPU. Baseline test 632→640 (+8). License: YOLOv8 AGPL (K-029) — chọn model thương mại là quyết định vận hành, KHÔNG hard-code.
+
+**Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, py3.11.9, CPU):** 8 test test_config_onnx_detector pass; manual `--config` onnx run frames_read=10 processed=10 stage_errors=0; `vp verify` = **640 passed/2 skipped · lint 5 kept/0 broken · drift PASS**. · **Chưa verify:** chạy config onnx trên GPU (CUDAExecutionProvider — cần onnxruntime-gpu + GPU); throughput; weight nghiệp vụ user.

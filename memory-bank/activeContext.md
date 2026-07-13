@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T02:35:00+07:00.
+**Cập nhật lúc:** 2026-07-13T03:00:00+07:00.
+**[✅ #355 — Config-declarative hỗ trợ detector ONNX → deploy-by-TOML detector NN THẬT trên CPU (D-095 ✅)]**
+- Soi gap production: đường deploy thật = config-declarative (`--config`→`pipeline_factory`). Registry `detectors` chỉ có `{fake, pt}` (pt=torch/GPU) → KHÔNG deploy được detector chạy-được-thật-CPU qua TOML (chỉ demo app dùng onnx). Gap thật.
+- **Fix gốc (D-095):** thêm `_det_onnx` vào registry (mirror `vision_demo_app._build_detector`: DetectorPipeline(OnnxDetector+v5/v8 decode)) + params {weights·yolo·layout·conf·model_size·labels}+allowed_params (K-046 strict-key) + đăng ký "onnx". Extension point D-042 (KHÔNG sửa lõi factory). +`configs/example_video_onnx_cpu.toml` (template committed).
+- **TDD:** `test_config_onnx_detector.py` 8 test (build CI-safe vì OnnxDetector load ở setup(), không cần weight) — registered/wrap-DetectorPipeline/labels-list-vs-str/missing-weights/bad-yolo/bad-layout/strict-key. Manual e2e: `--config` (onnx, models/yolov8n.onnx THẬT) → validate OK + run 10/10 frame, 0 lỗi CPU.
+- **Ghi sổ:** LOG #355 · +D-095 (✅, Verify-Symbol `_det_onnx` → C8 sẽ 10) · INDEX canonical #354→#355 · Σ232→Σ233 (D94→D95) · dòng D-095 · block này. Baseline **632→640/2**.
+- **VERIFY:** `vp verify` = **640 passed/2 skipped · lint 5/0 · drift PASS**.
+- **Bước kế (CHỜ user):** (a) chạy config onnx trên video/weight NGHIỆP VỤ thật của user; (b) onnx trên GPU (CUDAExecutionProvider — cần onnxruntime-gpu); (c) sub-spec batch-mux/scale; (d) Feynman #11–#14. K-035 residual như cũ.
+---
 **[✅ #354 — ĐỌC-LẠI-VALID scale-architecture bằng SỐ ĐO THẬT → gap PREPROCESSING trong capacity model (+K-084)]**
 - Đọc-lại-valid thiết kế `scale-architecture` (D-040, xương sống thương mại) bằng số đo #352/#353 — chống drift design↔reality. Design rất chắc (đã tự-review 4 lỗ) nhưng số đo lộ 1 gap cụ thể.
 - **Gap (bằng chứng thật):** capacity model `N_infer≈C_inf/(f·g·A)` chỉ đếm decode+inference, BỎ SÓT **preprocessing** (resize/letterbox/normalize). Đo: infer-640-dựng-sẵn 11.72/s (85ms) vs combined-720p 7.95/s (121ms), decode chỉ ~3ms → chênh ~40ms/frame (~30%) = preprocessing. Hệ GPU = bẫy kinh điển **"CPU preprocessing bottleneck"** (GPU nhàn, CPU nghẽn resize).

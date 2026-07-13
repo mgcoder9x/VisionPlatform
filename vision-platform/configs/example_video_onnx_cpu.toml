@@ -1,0 +1,28 @@
+# Deploy detector NN THẬT qua ONNX trên CPU (KHÔNG cần torch/GPU) — chạy được ngay trên máy dev.
+# Cần 1 file .onnx trong models/ (vd export official: `yolo export model=yolov8n.pt format=onnx imgsz=640`).
+# SỬA cho đúng: source.params.path (video của bạn) + detector.params.weights (.onnx) + labels (nếu muốn tên lớp).
+# Lệnh: python -m vision_platform.profiles.vision_slice_app --config configs/example_video_onnx_cpu.toml
+[[pipelines]]
+id = "video-onnx-cpu-01"
+# max_frames vắng = chạy hết video (EOF thì dừng).
+
+[pipelines.source]
+type = "video"
+params = { path = "clips/sample.mp4" }
+
+# Detector ONNX chạy onnxruntime (CPUExecutionProvider mặc định) — no torch, no GPU.
+# yolo: 'v8' (output [1,4+nc,N], layout nc_first) hoặc 'v5' ([1,N,5+nc], có objectness).
+# labels: tùy chọn — list tên lớp COCO (bỏ trống → nhãn là id số).
+[pipelines.detector]
+type = "onnx"
+params = { weights = "models/yolov8n.onnx", yolo = "v8", layout = "nc_first", model_size = 640, conf = 0.25 }
+
+[[pipelines.stages]]
+type = "detect"
+
+[[pipelines.stages]]
+type = "count"
+
+[[pipelines.sinks]]
+type = "jsonl"
+params = { path = "events/video-onnx-cpu-01.jsonl" }

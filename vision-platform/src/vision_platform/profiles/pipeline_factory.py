@@ -67,6 +67,47 @@ def _det_pt(params: Mapping):
     return Yolov5PtDetector(params["weights"], device=dev)
 
 
+def _det_onnx(params: Mapping):
+    """Detector NN THẬT qua ONNX (onnxruntime) — deploy-by-config detector chạy được trên CPU (no torch/GPU).
+
+    Params: weights (path .onnx, bắt buộc) · yolo ('v5'|'v8', default v8) · layout ('nc_first'|'nc_last' cho v8) ·
+    conf (default 0.25) · model_size (default 640, letterbox) · labels (list HOẶC chuỗi phân-phẩy, tùy chọn).
+    Mirror `vision_demo_app._build_detector` nhánh onnx → DetectorPipeline(OnnxDetector+decode) tự lo letterbox/NMS/inverse.
+    OnnxDetector nạp model ở setup() (không phải construct) → build_runner construct KHÔNG cần file; setup lúc run.
+    """
+    from vision_platform.adapters.onnx_detector import OnnxDetector, chw_float_normalize
+    from vision_platform.adapters.yolo_postprocess import yolov5_decode, yolov8_decode
+    from vision_platform.adapters.detector_pipeline import DetectorPipeline
+    _need(params, "weights", "detector onnx")
+
+    raw_labels = params.get("labels")
+    if raw_labels is None:
+        labels = None
+    elif isinstance(raw_labels, str):
+        labels = [s.strip() for s in raw_labels.split(",") if s.strip()]
+    else:
+        labels = [str(x) for x in raw_labels]
+
+    ver = params.get("yolo", "v8")
+    conf = float(params.get("conf", 0.25))
+    if ver == "v8":
+        layout = params.get("layout", "nc_first")
+        if layout not in ("nc_first", "nc_last"):
+            raise ConfigError(f"detector onnx 'layout' phải 'nc_first'|'nc_last', got {layout!r}")
+
+        def _post(raw):
+            return yolov8_decode(raw, conf_threshold=conf, labels=labels, layout=layout)
+    elif ver == "v5":
+        def _post(raw):
+            return yolov5_decode(raw, conf_threshold=conf, labels=labels)
+    else:
+        raise ConfigError(f"detector onnx 'yolo' phải 'v5'|'v8', got {ver!r}")
+
+    size = int(params.get("model_size", 640))
+    inner = OnnxDetector(params["weights"], preprocess_fn=chw_float_normalize, postprocess_fn=_post)
+    return DetectorPipeline(inner, size, size)
+
+
 def _stage_detect(params: Mapping, detector: Any):
     from vision_platform.runtime.stages.detect_stage import DetectStage
     if detector is None:
@@ -161,6 +202,7 @@ _src_video.allowed_params = frozenset({"path"})
 _src_rtsp.allowed_params = frozenset({"url", "max_reconnect"})
 _det_fake.allowed_params = frozenset({"model_size"})
 _det_pt.allowed_params = frozenset({"weights", "device"})
+_det_onnx.allowed_params = frozenset({"weights", "labels", "yolo", "layout", "conf", "model_size"})
 _stage_detect.allowed_params = frozenset()
 _stage_count.allowed_params = frozenset()
 _stage_motion_gate.allowed_params = frozenset(
@@ -190,7 +232,7 @@ def _check_params(builder: Callable, where: str, params: Mapping) -> None:
 
 DEFAULT_REGISTRY: dict[str, dict[str, Callable]] = {
     "sources": {"fake": _src_fake, "noise": _src_noise, "video": _src_video, "rtsp": _src_rtsp},
-    "detectors": {"fake": _det_fake, "pt": _det_pt},
+    "detectors": {"fake": _det_fake, "pt": _det_pt, "onnx": _det_onnx},
     "stages": {"detect": _stage_detect, "count": _stage_count, "motion_gate": _stage_motion_gate,
                "track": _stage_track, "line_crossing": _stage_line_crossing},
     "sinks": {"jsonl": _sink_jsonl, "crossing_events": _sink_crossing_events,
