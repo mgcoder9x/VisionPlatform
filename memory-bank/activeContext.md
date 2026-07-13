@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T11:30:00+07:00.
+**Cập nhật lúc:** 2026-07-13T12:20:00+07:00.
+**[✅ #360 — Productionize GPU onnx (D-098): helper preload DLL + wire device=cuda — TDD 647/2]**
+- Biến "GPU chạy ở probe #359" thành product dùng được: (1) `adapters/cuda_dll_path.py::ensure_cuda_dll_path` (prepend PATH nvidia DLL, K-088; idempotent; no-op an toàn CPU/Linux); (2) `OnnxDetector.setup` gọi helper khi providers CUDA/TensorRT; (3) `_det_onnx` +`device` cpu/cuda→providers + allowed_params.
+- **TDD 7 test** (fake nvidia root + spy providers — KHÔNG cần GPU thật): helper prepend/idempotent/no-op + device cpu/cuda/bad/allowed. Verify **647/2 (640→647) · lint 5/0 · 0 diag · drift PASS**.
+- Deploy GPU qua TOML `detector type=onnx device=cuda` — NATIVE (không docker).
+- **Ghi sổ:** LOG #360 · +D-098 (✅, Verify-Symbol ensure_cuda_dll_path → C8 sẽ 11) · INDEX canonical #359→#360 · Σ239→Σ240 (D98) · dòng D-098 · block này.
+- **Bước kế (CHỜ user đèn xanh — phần 3):** LẤY LẠI `yolov8n.onnx` (K-087, network: export ultralytics venv-throwaway repro K-083 HOẶC tải nguồn tin cậy) → verify e2e YOLO GPU qua `--config device=cuda` + ĐO throughput GPU thật (đóng D-047/D-094 phần GPU; CPU ~8fps → GPU kỳ vọng real-time) + thử camera trực tiếp. Sau đó +config example GPU.
+---
 **[✅ #359 — BẬT ĐƯỢC GPU onnxruntime CUDA EP (VERIFIED CUDA_LOADED=True) — D-097/K-088]**
 - Nối #358 (đèn xanh A). Cài nvidia real wheels: cudnn-cu13 9.24 + cuda-runtime 13.3 + cufft/curand/cusparse (+cublas 13.6/nvrtc/nvjitlink kéo theo). Bỏ stub `*-cu13`==0.0.1 (hỏng build).
 - **Probe session CUDA THẬT:** trước prepend-PATH = fail (thiếu cublasLt64_13.dll); SAU prepend `nvidia/cu13/bin/x86_64`+`nvidia/cudnn/bin` vào PATH = **`session_providers=['CUDAExecutionProvider','CPUExecutionProvider']`, CUDA_LOADED=True**. (add_dll_directory KHÔNG đủ cho dep-bắc-cầu; ort.preload_dlls 1.27 không biết layout cu13.)

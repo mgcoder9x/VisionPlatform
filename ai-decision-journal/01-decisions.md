@@ -1100,3 +1100,14 @@ Links: D-096, K-086/K-088, D-047/D-094 (số capacity GPU — nay mở khoá đo
 Nội dung: chuỗi cài THẬT: `onnxruntime-gpu==1.27.0` + `nvidia-cudnn-cu13`(9.24, kéo cublas 13.6+nvrtc) + `nvidia-cuda-runtime`(13.3.29)+`nvidia-cufft`(12.3)+`nvidia-curand`(10.4)+`nvidia-cusparse`(12.8) (+nvjitlink). Gói `*-cu13` version 0.0.1 là STUB hỏng-build → BỎ, dùng tên real (nvidia-cublas/nvidia-cuda-runtime...). DLL nằm `nvidia/cu13/bin/x86_64` (sâu hơn `bin`, layout cu13 mới) + `nvidia/cudnn/bin`.
 Vì sao (bản chất) — KHÓA HỌC: (1) onnxruntime-gpu KHÔNG bundle CUDA (khác torch) → cần nvidia runtime wheels. (2) `os.add_dll_directory` KHÔNG đủ cho dep-bắc-cầu của `onnxruntime_providers_cuda.dll` (load-by-fullpath không dùng SEARCH_USER_DIRS) → phải prepend **PATH**. (3) `ort.preload_dlls()` 1.27 KHÔNG biết layout `cu13/bin/x86_64` nên tự-nó fail → tự add PATH.
 Đường lùi: `pip install onnxruntime==1.27.0` (khôi phục CPU) — nếu cần venv sạch.
+
+### D-098 — 2026-07-13 — Productionize GPU onnx: helper preload DLL nvidia + wire `device=cuda` vào `_det_onnx` (TDD)
+Status: ✅ code (verify 647/2 · lint 5/0 · 0 diag). Product nay DÙNG được GPU onnx qua config; e2e đo GPU chờ model (K-087).
+Evidence: `vp test test_cuda_dll_path.py test_onnx_device_gpu.py` = 7 passed; `vp verify` = 647 passed/2 skipped (640→647 +7) · lint 5 kept/0 broken · getDiagnostics 3 file = 0.
+Scope: `adapters/cuda_dll_path.py` (MỚI, `ensure_cuda_dll_path`) · `adapters/onnx_detector.py` (setup gọi helper khi provider CUDA/TensorRT) · `profiles/pipeline_factory.py` (`_det_onnx` +param `device` cpu/cuda→providers, +allowed_params 'device') · tests mới (7).
+Nguồn: LOG Entry #360 · nối D-097/K-088 (GPU runtime verified) · D-095 (_det_onnx)
+Links: D-097, K-088, D-095, D-042 (extension point)
+Verify-Symbol: vision-platform/src/vision_platform/adapters/cuda_dll_path.py::ensure_cuda_dll_path
+Nội dung: `ensure_cuda_dll_path()` = best-effort/idempotent/no-op-an-toàn: dò `site-packages/nvidia/**/*.dll` → `add_dll_directory` + **prepend PATH** (K-088: PATH cần cho dep bắc-cầu của onnxruntime_providers_cuda.dll). `OnnxDetector.setup` gọi nó TRƯỚC session KHI providers có CUDA/TensorRT. `_det_onnx` map `device=cuda`→`['CUDAExecutionProvider','CPUExecutionProvider']`, `cpu`→`['CPUExecutionProvider']`, khác→ConfigError.
+Vì sao (bản chất): tách "làm-DLL-tìm-được" thành helper adapters tái dùng + no-op an toàn (CPU/không-nvidia KHÔNG ảnh hưởng — 647/2 giữ trên máy đã có nvidia libs; logic no-op test bằng fake root). Deploy GPU qua TOML `device=cuda` (native, không docker). Test KHÔNG cần GPU thật (spy providers + fake nvidia root).
+Non-goal: chưa đo throughput GPU e2e (cần model yolov8n.onnx — K-087, network); chưa thêm config GPU example (kèm model).

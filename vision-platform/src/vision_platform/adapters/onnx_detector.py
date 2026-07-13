@@ -88,6 +88,11 @@ class OnnxDetector:
             raise RuntimeError(
                 "OnnxDetector cần onnxruntime — cài `pip install .[onnx]`"
             ) from e
+        # D-098/K-088: nếu yêu cầu GPU (CUDA/TensorRT), làm DLL nvidia pip-wheels tìm-được TRƯỚC khi tạo session
+        # (onnxruntime-gpu KHÔNG bundle CUDA; cần prepend PATH — add_dll_directory không đủ cho dep bắc-cầu).
+        if any(("CUDA" in p) or ("Tensorrt" in p) for p in self._providers):
+            from vision_platform.adapters.cuda_dll_path import ensure_cuda_dll_path
+            ensure_cuda_dll_path()
         self._session = ort.InferenceSession(self._model_path, providers=self._providers)
         if self._input_name is None:
             self._input_name = self._session.get_inputs()[0].name

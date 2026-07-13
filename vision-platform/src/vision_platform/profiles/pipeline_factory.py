@@ -104,7 +104,16 @@ def _det_onnx(params: Mapping):
         raise ConfigError(f"detector onnx 'yolo' phải 'v5'|'v8', got {ver!r}")
 
     size = int(params.get("model_size", 640))
-    inner = OnnxDetector(params["weights"], preprocess_fn=chw_float_normalize, postprocess_fn=_post)
+    # D-098: device=cuda → onnxruntime CUDAExecutionProvider (fallback CPU). OnnxDetector.setup tự lo DLL nvidia (K-088).
+    device = str(params.get("device", "cpu")).lower()
+    if device in ("cuda", "gpu"):
+        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+    elif device == "cpu":
+        providers = ["CPUExecutionProvider"]
+    else:
+        raise ConfigError(f"detector onnx 'device' phải 'cpu'|'cuda', got {device!r}")
+    inner = OnnxDetector(params["weights"], preprocess_fn=chw_float_normalize,
+                         postprocess_fn=_post, providers=providers)
     return DetectorPipeline(inner, size, size)
 
 
@@ -202,7 +211,7 @@ _src_video.allowed_params = frozenset({"path"})
 _src_rtsp.allowed_params = frozenset({"url", "max_reconnect"})
 _det_fake.allowed_params = frozenset({"model_size"})
 _det_pt.allowed_params = frozenset({"weights", "device"})
-_det_onnx.allowed_params = frozenset({"weights", "labels", "yolo", "layout", "conf", "model_size"})
+_det_onnx.allowed_params = frozenset({"weights", "labels", "yolo", "layout", "conf", "model_size", "device"})
 _stage_detect.allowed_params = frozenset()
 _stage_count.allowed_params = frozenset()
 _stage_motion_gate.allowed_params = frozenset(
