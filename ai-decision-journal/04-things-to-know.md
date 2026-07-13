@@ -844,3 +844,10 @@ Bằng chứng (đo THẬT CPU no-GPU): `infer` frame-640-dựng-sẵn = 11.72/s
 Vấn đề (bản chất): công thức `N_infer ≈ C_inf/(f·g·A)` chỉ đếm decode+inference → bỏ sót số hạng preprocessing (~30% thời gian/frame). Trên hệ GPU thương mại = bẫy kinh điển **"CPU preprocessing bottleneck"** (GPU nhàn, CPU nghẽn resize; lý do DeepStream resize trên GPU). Nếu không tính → định cỡ N_node SAI (lạc quan) → deploy 100 cam nghẽn CPU bất ngờ.
 Đã xử lý: thêm bullet "THIẾU số hạng PREPROCESSING" vào GIỚI HẠN CỦA MÔ HÌNH + Lỗ 5 self-review trong design.md; capacity-model-bản-2 phải có số hạng `t_pre` + trần CPU-preproc song song trần GPU; thiết kế thi công cần GPU-preproc HOẶC worker preprocess riêng.
 Đóng: ✅ (gap đã ghi vào design + có bằng chứng đo). Mở: số `t_pre` trên GPU thật + cơ chế GPU-preproc cụ thể (sub-spec khi làm batch-mux/decode).
+### K-085 — ✅ (2026-07-13) SỰ CỐ: `git add -A` quét việc xóa `end.md` ngoài chủ đích → bắt bằng soi diff-stat + khôi phục
+Scope: quy trình git (staging) · `end.md` (handoff doc gốc repo)
+Nguồn: LOG Entry #356 · commit 40fd53f (lẫn xóa) → 0c76e1d (khôi phục)
+Chuyện gì: commit #355 (feat onnx) `git add -A` → diff-stat hiện **"425 deletions"** bất thường (chỉ append/replace nhỏ). Soi `git show --stat` → `end.md | 422 --------` = end.md bị xóa khỏi working tree (nguyên nhân xóa KHÔNG xác định chắc — [chưa kiểm]; end.md từng là ACTIVE-EDITOR-FILE, có thể IDE/thao tác ngoài). `git add -A` stage luôn việc xóa đó → lọt vào commit feature.
+Khôi phục: `git checkout HEAD~1 -- end.md` → commit riêng 0c76e1d "khôi phục". end.md tracked lại (git ls-files xác nhận). KHÔNG mất (recoverable từ history vì đã commit trước đó).
+BÀI HỌC (an toàn, bản chất): (1) **LUÔN soi `git diff --stat`/`git status` TRƯỚC khi commit** — con số +/- bất thường = cờ đỏ; (2) cân nhắc stage FILE CỤ THỂ thay `git add -A` khi có thao tác xóa/cleanup trong lượt; (3) diff-stat review đã CỨU — giữ thói quen này. Giống K-064 (tin output dán) — lớp phòng vệ = kiểm bằng máy/số, không tin cảm giác.
+Đóng: ✅ (đã khôi phục + ghi bài học). Không tái diễn nếu theo bài học (review diff-stat mỗi commit).

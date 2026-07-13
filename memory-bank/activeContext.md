@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T03:00:00+07:00.
+**Cập nhật lúc:** 2026-07-13T03:20:00+07:00.
+**[✅ #356 — SỰ CỐ + khôi phục: git add -A xóa nhầm end.md, bắt bằng diff-stat (+K-085)]**
+- Commit #355 `git add -A` → diff-stat "425 deletions" BẤT THƯỜNG → soi `git show --stat` → `end.md | 422 ----` = end.md bị xóa khỏi working tree, stage lẫn vào commit feature. Nguyên nhân xóa [chưa kiểm] (end.md từng ACTIVE-EDITOR-FILE; Remove-Item của tôi chỉ nhắm `_tmp_*`).
+- **Khôi phục:** `git checkout HEAD~1 -- end.md` → commit riêng 0c76e1d. end.md tracked lại (git ls-files xác nhận), nội dung 422 dòng nguyên.
+- **Bài học (K-085, an toàn):** LUÔN soi `git diff --stat`/`git status` TRƯỚC commit (số +/- bất thường = cờ đỏ); cân nhắc stage file cụ thể khi lượt có cleanup; diff-stat review ĐÃ CỨU (họ K-064 — kiểm bằng số, không tin cảm giác).
+- **Ghi sổ:** LOG #356 · +K-085 · INDEX canonical #355→#356 · Σ233→Σ234 (K84→K85) · dòng K-085 · block này.
+- **VERIFY:** end.md Test-Path True + tracked; commit 0c76e1d pushed; HEAD==upstream; tree sạch; drift PASS (dưới).
+- **Bước kế (CHỜ user):** như #355 — (a) video/weight nghiệp vụ thật; (b) onnx GPU; (c) sub-spec scale; (d) Feynman. Áp bài học K-085 mọi commit sau.
+---
 **[✅ #355 — Config-declarative hỗ trợ detector ONNX → deploy-by-TOML detector NN THẬT trên CPU (D-095 ✅)]**
 - Soi gap production: đường deploy thật = config-declarative (`--config`→`pipeline_factory`). Registry `detectors` chỉ có `{fake, pt}` (pt=torch/GPU) → KHÔNG deploy được detector chạy-được-thật-CPU qua TOML (chỉ demo app dùng onnx). Gap thật.
 - **Fix gốc (D-095):** thêm `_det_onnx` vào registry (mirror `vision_demo_app._build_detector`: DetectorPipeline(OnnxDetector+v5/v8 decode)) + params {weights·yolo·layout·conf·model_size·labels}+allowed_params (K-046 strict-key) + đăng ký "onnx". Extension point D-042 (KHÔNG sửa lõi factory). +`configs/example_video_onnx_cpu.toml` (template committed).

@@ -6916,3 +6916,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** OnnxDetector load model ở setup() (không __init__) → build_runner CONSTRUCT được KHÔNG cần file .onnx → test CI-safe (8 test không phụ thuộc weight gitignored). Manual e2e với models/yolov8n.onnx THẬT: `--config` validate OK + run 10/10 frame, 0 lỗi trên CPU. Baseline test 632→640 (+8). License: YOLOv8 AGPL (K-029) — chọn model thương mại là quyết định vận hành, KHÔNG hard-code.
 
 **Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, py3.11.9, CPU):** 8 test test_config_onnx_detector pass; manual `--config` onnx run frames_read=10 processed=10 stage_errors=0; `vp verify` = **640 passed/2 skipped · lint 5 kept/0 broken · drift PASS**. · **Chưa verify:** chạy config onnx trên GPU (CUDAExecutionProvider — cần onnxruntime-gpu + GPU); throughput; weight nghiệp vụ user.
+
+### Entry #356 — 2026-07-13 — SỰ CỐ + khôi phục: git add -A xóa nhầm end.md (bắt bằng diff-stat) (+K-085) — Kiro-Opus
+
+**Bối cảnh:** commit #355 (feat onnx) dùng `git add -A` → output "8 files changed, 181 insertions(+), **425 deletions(-)**". 425 deletions BẤT THƯỜNG (lượt này chỉ append/replace nhỏ) → soi `git show --stat HEAD` → `end.md | 422 --------` = end.md bị xóa khỏi working tree, `git add -A` stage luôn.
+
+**1. Quyết định AI tự ra:** khôi phục end.md NGAY (không xóa file ngoài chủ đích — nguyên tắc an toàn). `git checkout HEAD~1 -- end.md` → commit riêng 0c76e1d.
+
+**2. Chỗ phải đổi:** không (khôi phục về trạng thái đúng).
+
+**3. Trade-off:** để mất end.md (nội dung đã phần nào trong journal #347/#348) vs khôi phục. Khôi phục — không được im lặng bỏ file người dùng có; user quyết nếu muốn xóa.
+
+**4. Điều bạn nên biết (K-085):** nguyên nhân xóa end.md KHÔNG xác định chắc [chưa kiểm] (end.md từng là ACTIVE-EDITOR-FILE — có thể IDE/thao tác ngoài; các Remove-Item của tôi chỉ nhắm `_tmp_*`). BÀI HỌC: luôn soi `git diff --stat` TRƯỚC commit (số +/- bất thường = cờ đỏ); cân nhắc stage file cụ thể khi có cleanup; diff-stat review đã CỨU lần này. Cùng họ K-064 (kiểm bằng số, không tin cảm giác).
+
+**Đã verify (CHẠY THẬT):** `git checkout HEAD~1 -- end.md` → Test-Path end.md = True + nội dung nguyên (422 dòng); `git ls-files end.md` = tracked; commit 0c76e1d pushed; HEAD==upstream; tree clean. · **Chưa verify:** nguyên nhân gốc việc xóa (không tái hiện được — theo bài học phòng ngừa).
