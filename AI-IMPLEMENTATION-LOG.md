@@ -6815,3 +6815,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** anti-drift đã TIẾN HOÁ trên nhánh toann: thêm C7 (INDEX-CITES ∈ LOG) + C8 (DOC-CODE living-citation, 7 Verify-Symbol) + self-test 11 case (guard regex-rot) + RULES 15→16. Frontier: 630/2·5/0·drift PASS. Hướng mở (end.md §6): săn bug tiếp `video_file_frame_source`/`dark_filter+brightness`/supervisor cascade; hoặc dừng mốc sạch. Chặn: GPU/torch/DB/CI như cũ.
 
 **Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, py3.11.9):** `git merge-base` #294 là ancestor + 5 file tồn tại (không mất việc); `vp check` DRIFT-CHECK PASS (#347, Σ226 D92·C21·T32·K81, RULES 16 khớp 5 mirror, C7/C8 PASS, self-test 11/11); `pytest -q` = **630 passed/2 skipped**; `vp lint` = **5 kept/0 broken**. · **Chưa verify:** K-035 residual full-suite-contention (như #294); GPU/DB (chặn điều kiện).
+
+### Entry #349 — 2026-07-12 — FIX săn-bug V1 (TDD): VideoFileFrameSource(loop=True) bất-khả-loop → LIVELOCK trong runner — Kiro-Opus
+
+**Bối cảnh:** máy `k.nguyen.manh.toan` (đã reconcile #348). Săn bug tiếp (end.md §6, vein Z1/R1) vùng `video_file_frame_source`. Đọc kỹ + đối chiếu `PipelineRunner.run`: phát hiện V1.
+
+**1. Quyết định AI tự ra (D-093, ✅ code):** Runner xử lý EOF = `eof++; if is_finite: break; else continue`. `VideoFileFrameSource(loop=True)` có `is_finite=False`; khi video RỖNG/không-seek-được, read fail → `_seek_start` (seek không tác dụng) → reread fail → trả EOF → runner `continue` → read lại → EOF lại = **LIVELOCK vô hạn** (peg CPU + treo `_run_from_config` tuần tự sang camera kế). TDD: test fake `_UnloopableCapture` (isOpened=True, read→(False,None), set→no-op) + safety-stop → RED chứng minh eof=50 (chạm lưới). Fix GỐC (bản chất "video không-loop-được = finite"): 1 chu kỳ loop (seek→read) không ra frame → set `_loop_failed=True` → `is_finite` trả `(not loop) or _loop_failed` → runner BREAK trên EOF. GREEN eof≤2. + regression test: video HỢP LỆ + loop=True vẫn loop (không flip finite oan).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (additive: 1 cờ `_loop_failed` + nhánh set khi reread-sau-seek fail + is_finite phản ánh; video hợp lệ KHÔNG bao giờ chạm nhánh này → hành vi cũ giữ).
+
+**3. Trade-off đã cân nhắc (+T-033):** fix tại SOURCE (video biết loop-thất-bại → finite) vs tại RUNNER (guard chung: non-finite EOF không tiến-triển K vòng → break). Chọn **SOURCE** — source có TRI THỨC chính xác (reread-sau-seek fail = bất-khả-loop); runner-guard cần ngưỡng K + threshold mơ hồ + đụng hành vi RTSP. Source-fix chính xác + tối thiểu + không đụng nguồn khác. (Runner-guard defensive = ghi chú tương lai nếu có source non-finite khác livelock.)
+
+**4. Điều bạn nên biết:** V1 = finding THẬT (livelock chứng minh bằng RED eof=50). Nghiêm trọng Low-Med (cần loop=True opt-in + video pathological rỗng/không-seek-được — realistic: 1 số codec/container mở-được-nhưng-không-seek). `_default_cv2_capture` không test-bảo-chứng (DI giả) nhưng logic livelock + fix verify được deterministic. Đồng bộ V1 vào ARCHITECTURE §12 (✅ FIXED).
+
+**Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, py3.11.9):** test V1 RED (eof=50 livelock) → GREEN (eof≤2) + regression-loopable pass; `vp verify` = **632 passed/2 skipped (630→632 +2) · lint 5 kept/0 broken · C8 7 Verify-Symbol khớp · DRIFT-CHECK PASS · VERIFY OK** (EXIT 0). · **Chưa verify:** hang-thực trên video-không-seek THẬT (fix + livelock chứng-minh-deterministic bằng fake; runtime cv2 non-seekable = [chưa kiểm field]).

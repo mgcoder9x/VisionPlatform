@@ -310,6 +310,7 @@ wire-codec kernel-pure · config frozen + registry + typo-guard.
 | D.2 | lock-poison LẦN-2 (slot kẹt WRITING/READING) | Low-Med | 🟡 **THU HẸP (#344)** — recovery lock-poison lần-1 đã WIRE (quarantine+lease+reap); residual chỉ còn lần-2+owner-sống (degraded an toàn, không mất data) → defer cần stress production (K-081); docstring stale đã sửa |
 | Z1 | client io-thread ZMQ không bulkhead (1 response rác giết thread → hố đen) | Low-Med | ✅ **ĐÃ FIX (#345)** — `_io_loop` bọc try/except (đối xứng server K-024); TDD 629/2 · D-091 |
 | R1 | rtsp `CAP_PROP_OPEN_TIMEOUT_MSEC` set SAU constructor-open → vô hiệu (host chết treo) | Med | ✅ **ĐÃ FIX (#346)** — construct rỗng→set→`cap.open`; TDD fake-cv2 630/2 · D-092 (hang-thực chờ field-verify RTSP host) |
+| V1 | `VideoFileFrameSource(loop=True)` trên video rỗng/không-seek-được → EOF lặp + runner `continue` (is_finite=False) = **LIVELOCK** (peg CPU + treo `_run_from_config` tuần tự) | Low-Med | ✅ **ĐÃ FIX (#349)** — loop thất bại 1 chu kỳ → `_loop_failed`→`is_finite=True`→runner break; TDD fake-cv2 (RED eof=50→GREEN eof≤2) 632/2 · D-093 |
 | D.4 | observability trải 4 kênh | Low | ⬜ điều hướng (đã liệt kê §8 + review) |
 
 **Phạm vi CHƯA review sâu (trung thực):** `onnx_detector`, sink JSONL, vài stage phụ (dark_filter/brightness),

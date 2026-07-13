@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-12)
-**Cập nhật lúc:** 2026-07-12T23:30:00+07:00.
+**Cập nhật lúc:** 2026-07-12T23:55:00+07:00.
+**[✅ #349 — FIX săn-bug V1: `VideoFileFrameSource(loop=True)` bất-khả-loop → LIVELOCK trong runner (D-093 ✅ +T-033, TDD)]**
+- Săn bug tiếp (end.md §6, vein Z1/R1) vùng `video_file_frame_source`. Đối chiếu `PipelineRunner.run` EOF-handling (`eof++; if is_finite: break; else continue`) → phát hiện **V1**: `VideoFileFrameSource(loop=True)` có `is_finite=False`; video RỖNG/không-seek-được → read fail → `_seek_start` (seek vô tác dụng) → reread fail → EOF → runner `continue` MÃI = **LIVELOCK** (peg CPU + treo `_run_from_config` tuần tự sang camera kế).
+- **Fix tại GỐC (SOURCE, T-033):** cờ `self._loop_failed=False` (`__init__`) → set `True` khi reread-sau-seek fail trong `read()` → `is_finite` trả `(not self._loop) or self._loop_failed` → runner BREAK. Video hợp lệ (reread-sau-seek ra frame → return FRAME) KHÔNG bao giờ chạm nhánh này (backward-compat bit-khớp).
+- **TDD:** `tests/test_video_loop_livelock.py` — RED chứng minh `eof=50` (livelock chạm lưới an-toàn) → GREEN `eof≤2`; regression: video-hợp-lệ VẪN loop. Fix tại SOURCE (source có tri-thức "loop bất khả") KHÔNG đụng runner EOF-handling (giữ cho RTSP/source khác).
+- **Ghi sổ:** LOG #349 · +D-093 (✅ code) · +T-033 · ARCHITECTURE §12 (V1 ✅ FIXED) · INDEX canonical #348→#349 · Σ226→Σ228 (D93·T33) · dòng D-093/T-033 · Verify-Symbol (C8→7) · block này.
+- **VERIFY:** `vp verify` = **632 passed/2 skipped** (+2) · lint 5/0 · C8 7 khớp · drift PASS · VERIFY OK.
+- **Bước kế (CHỜ user):** săn bug tiếp (end.md §6 còn: `dark_filter`+`brightness` stages · `supervisor` cascade race) — hoặc dừng mốc sạch. Bug đã fix phiên săn: Z1(#345)·R1(#346)·V1(#349). Chặn: GPU/torch/DB/CI · K-035 residual (contention máy yếu).
+---
 **[✅ #348 — CHUYỂN MÁY về `k.nguyen.manh.toan`: reconcile + re-verify frontier #347 (KHÔNG mất việc)]**
 - User chuyển về máy `k.nguyen.manh.toan` (phiên trước ở #294) + dán end.md máy `toann` (#347). Nghi drift vì entry-number vênh (#294 vs #347). §0/§2: git fetch + đối chiếu TRƯỚC khi tiếp.
 - **Reconcile (chống mất việc):** `git fetch` → LOCAL==UPSTREAM==`11d6c85` (đã pull lên frontier toann). `git merge-base --is-ancestor db1cbbb(#294) HEAD` = **YES** + 5 file #278-294 (metrics_http/capability_probe/capabilities/metric_sample/test_metrics_http_endpoint) **đều CÓ** → frontier #347 HỢP NHẤT (#294 của tôi + #339-347 toann). Drift-check #294 ở đầu-phiên = STALE (trước pull).

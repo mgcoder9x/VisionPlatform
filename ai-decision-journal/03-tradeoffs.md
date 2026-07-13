@@ -328,3 +328,12 @@ Chọn: **catch `Exception` rộng + log + continue** (đối xứng `InferenceS
 - Cái mất: catch rộng có thể che 1 lỗi lập-trình-thật (bug nội bộ) thành "bỏ vòng lặng" thay vì crash lộ. Giảm thiểu: `_io_errors` counter + log stderr mỗi lỗi (không nuốt im lặng) → quan sát được; test đếm được.
 - Vì sao (bản chất): threat model là "1 message/1 vòng lỗi KHÔNG được giết thread giữ-socket-duy-nhất". Liệt kê hẹp từng exception = mong manh (bỏ sót loại mới = tái diễn hố đen). Server đã chọn cùng chiến lược (K-024) → đối xứng, nhất quán. `BaseException` (Ctrl-C/SystemExit) KHÔNG bị bắt (dùng `except Exception`) → dừng thread được khi cần.
 - Chống busy-spin: `sleep(5ms)` trong nhánh lỗi (nếu lỗi lặp liên tục, vd socket hỏng vĩnh viễn tới khi teardown).
+### T-033 — 2026-07-12 — Fix livelock V1: tại SOURCE (video biết loop-thất-bại→finite) vs tại RUNNER (guard chung non-finite-EOF)
+Status: ✅ (code #349 — verify 632/2 · lint 5/0 · drift PASS)
+Scope: `adapters/video_file_frame_source.py` (SOURCE) vs `runtime/pipeline_runner.py::PipelineRunner.run` (RUNNER)
+Nguồn: LOG Entry #349 · D-093
+Links: D-093, Z1/R1 (vein săn bug), PipelineRunner EOF-handling (`is_finite: break else continue`)
+Chọn: **Phương án A — SOURCE**.
+- **Phương án A (CHỌN) — SOURCE:** `VideoFileFrameSource` set `_loop_failed` khi reread-sau-seek fail → `is_finite→True` → runner break. Chính xác (source có tri-thức "loop bất khả"), tối thiểu (1 cờ), không đụng source khác.
+- **Phương án B (bác) — RUNNER guard chung:** "non-finite source trả EOF không-tiến-triển K vòng liên tiếp → break". Defensive/tổng quát HƠN nhưng cần NGƯỠNG K + threshold mơ hồ + rủi ro đụng hành vi RTSP (EOF transient hợp lệ?). Over-general cho 1 nguồn cụ thể.
+- Vì sao A (bản chất): đặt fix ở nơi CÓ TRI-THỨC (source biết chắc loop thất bại) > guard mù ở runner (đoán bằng đếm). Cái mất: nếu SAU có source non-finite khác cũng livelock trên EOF → cần lặp lại pattern (hoặc thêm runner-guard B khi đó). Chấp nhận (YAGNI: hiện chỉ video-loop có kịch bản này).

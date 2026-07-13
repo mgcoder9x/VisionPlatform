@@ -1049,3 +1049,14 @@ Verify-Symbol: vision-platform/src/vision_platform/adapters/rtsp_frame_source.py
 Nội dung: `cv2.VideoCapture(url, CAP_FFMPEG)` MỞ NGAY trong constructor → `cap.set(CAP_PROP_OPEN_TIMEOUT_MSEC,...)` set SAU → vô hiệu cho open đã xong (mọi lần reconnect construct lại với url → OPEN_TIMEOUT không bao giờ áp dụng). Fix: `cv2.VideoCapture()` rỗng → set timeout/buffer → `cap.open(url, CAP_FFMPEG)`.
 Vì sao (bản chất): pre-open property PHẢI set trước open — logic chắc chắn (không thể cấu hình cái đã xảy ra). Docstring hứa "chống treo host không phản hồi" nhưng bảo vệ không hoạt động → fix để lời-hứa thành thật. Test bằng fake cv2 (call-order) → kiểm được contract KHÔNG cần camera.
 Non-goal: KHÔNG đổi logic reconnect/read (chỉ đường tạo capture); độ-lớn-hang thực tế = field-verify khi có RTSP host.
+
+### D-093 — 2026-07-12 — FIX săn-bug V1: VideoFileFrameSource(loop=True) bất-khả-loop → LIVELOCK; source thành finite
+Status: ✅ code (632/2, TDD)
+Nguồn: LOG Entry #349
+Evidence: RED `eof=50` (livelock chạm lưới an toàn) → GREEN `eof≤2` + regression video-hợp-lệ vẫn loop; `vp verify` 632/2·lint 5/0·C8 7 khớp·drift PASS
+Links: Z1/R1 (vein săn bug), T-033, PipelineRunner EOF-handling (`is_finite: break else continue`)
+Verify-Symbol: vision-platform/src/vision_platform/adapters/video_file_frame_source.py::VideoFileFrameSource
+Nội dung: Runner `continue` trên EOF của source `is_finite=False`. `VideoFileFrameSource(loop=True)`→is_finite=False; video RỖNG/không-seek-được → read fail → `_seek_start` (seek vô tác dụng) → reread fail → EOF → runner continue → LIVELOCK (peg CPU + treo `_run_from_config` tuần tự). Fix: 1 chu kỳ loop (seek→read) không ra frame → `_loop_failed=True` → `is_finite` trả `(not loop) or _loop_failed` → runner BREAK. Video hợp lệ (reread-sau-seek ra frame) KHÔNG chạm nhánh này.
+Vì sao (bản chất): "video KHÔNG loop được thì THỰC CHẤT là finite" — source có tri-thức chính xác (reread-sau-seek fail = bất-khả-loop) để tự sửa ngữ nghĩa is_finite → runner thoát livelock. Fix tại nguồn-tri-thức, không vá triệu-chứng.
+Non-goal: KHÔNG đổi runner EOF-handling (giữ cho RTSP/source khác); độ-lớn-hang runtime video-không-seek THẬT = field-verify.
+Trade-off: xem T-033 (`03-tradeoffs.md`).

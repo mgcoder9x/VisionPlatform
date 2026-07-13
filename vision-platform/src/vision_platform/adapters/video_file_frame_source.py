@@ -40,6 +40,10 @@ class VideoFileFrameSource:
         self._loop = loop
         self._cap: Optional[VideoCaptureLike] = None
         self._is_setup = False
+        # V1 (#349): loop=True nhưng video RỖNG/không-seek-được → 1 chu kỳ loop (seek→read) KHÔNG ra frame nào
+        # = KHÔNG loop được → THỰC CHẤT finite. Cờ này khiến is_finite→True → runner BREAK trên EOF (thay vì
+        # `continue` mãi = LIVELOCK peg CPU + treo _run_from_config tuần tự). Chỉ set khi loop CHỨNG MINH thất bại.
+        self._loop_failed = False
 
     def setup(self) -> None:
         cap = self._factory(self._path)
@@ -66,6 +70,10 @@ class VideoFileFrameSource:
             ok, frame = self._cap.read()
             if ok and frame is not None:
                 return ReadResult(status=ReadStatus.FRAME, data=frame)
+            # 1 chu kỳ loop (seek→read) KHÔNG ra frame → video bất-khả-loop (rỗng/không-seek-được) →
+            # đánh dấu finite để runner BREAK trên EOF (chống LIVELOCK — V1/#349). Video hợp lệ KHÔNG bao giờ
+            # tới đây (reread-sau-seek ra frame → return FRAME ở trên).
+            self._loop_failed = True
         return ReadResult(status=ReadStatus.EOF)
 
     def _seek_start(self) -> None:
@@ -93,7 +101,8 @@ class VideoFileFrameSource:
 
     @property
     def is_finite(self) -> bool:
-        return not self._loop
+        # loop=True → non-finite; NHƯNG nếu loop CHỨNG MINH thất bại (video bất-khả-loop) → finite (chống LIVELOCK, V1/#349).
+        return (not self._loop) or self._loop_failed
 
     @property
     def source_id(self) -> str:
