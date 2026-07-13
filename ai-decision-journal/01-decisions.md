@@ -1090,3 +1090,13 @@ Links: K-086 (máy), K-087 (model mất), D-094 (bench), D-095 (_det_onnx), K-06
 Nội dung: máy RTX 2060 driver 591.86 (CUDA 13.1) nhưng KHÔNG có CUDA 13 runtime toolkit + cuDNN 9 → onnxruntime-gpu tải `onnxruntime_providers_cuda.dll` thất bại (thiếu `cublasLt64_13.dll`) → chỉ CPU EP. Cài onnxruntime-gpu 1-mình KHÔNG đủ chạy GPU trên Windows.
 Vì sao (bản chất): trên Windows, onnxruntime-gpu KHÔNG bundle CUDA/cuDNN (khác torch tự-chứa) → cần runtime hệ thống. Driver ≠ runtime toolkit. Để chạy GPU: (a) cài CUDA13+cuDNN9 runtime (pip nvidia-*-cu13 wheels HOẶC installer hệ thống — [chưa kiểm cu13 wheel tồn tại]); HOẶC (b) chuyển torch cu124 (tự-chứa CUDA, dễ OOTB hơn — chính lý do đã nêu ở bảng trade-off).
 Đường lùi: `pip install onnxruntime==1.27.0` (khôi phục CPU build) nếu muốn venv sạch như cũ.
+
+### D-097 — 2026-07-13 — BẬT được GPU (onnxruntime CUDA EP) trên máy này qua pip nvidia-cu13 wheels + PATH prepend — VERIFIED
+Status: ✅ (runtime verified: CUDA_LOADED=True; product-wiring chưa → D-098 kế)
+Evidence: probe tạo session CUDA THẬT (script 1-lần rồi xoá): `session_providers=['CUDAExecutionProvider','CPUExecutionProvider']`, CUDA_LOADED=True, run OK. TRƯỚC khi prepend PATH = CUDA fail (thiếu cublasLt64_13.dll). SAU prepend `nvidia/cu13/bin/x86_64`+`nvidia/cudnn/bin` vào PATH = load OK.
+Scope: venv `vision-platform/.venv` (+8 gói nvidia CUDA13 + onnxruntime-gpu). CHƯA đụng code sản phẩm (probe-only).
+Nguồn: LOG Entry #359 · nối D-096 (cài onnxruntime-gpu) · user đèn xanh (A)
+Links: D-096, K-086/K-088, D-047/D-094 (số capacity GPU — nay mở khoá đo được), E.2
+Nội dung: chuỗi cài THẬT: `onnxruntime-gpu==1.27.0` + `nvidia-cudnn-cu13`(9.24, kéo cublas 13.6+nvrtc) + `nvidia-cuda-runtime`(13.3.29)+`nvidia-cufft`(12.3)+`nvidia-curand`(10.4)+`nvidia-cusparse`(12.8) (+nvjitlink). Gói `*-cu13` version 0.0.1 là STUB hỏng-build → BỎ, dùng tên real (nvidia-cublas/nvidia-cuda-runtime...). DLL nằm `nvidia/cu13/bin/x86_64` (sâu hơn `bin`, layout cu13 mới) + `nvidia/cudnn/bin`.
+Vì sao (bản chất) — KHÓA HỌC: (1) onnxruntime-gpu KHÔNG bundle CUDA (khác torch) → cần nvidia runtime wheels. (2) `os.add_dll_directory` KHÔNG đủ cho dep-bắc-cầu của `onnxruntime_providers_cuda.dll` (load-by-fullpath không dùng SEARCH_USER_DIRS) → phải prepend **PATH**. (3) `ort.preload_dlls()` 1.27 KHÔNG biết layout `cu13/bin/x86_64` nên tự-nó fail → tự add PATH.
+Đường lùi: `pip install onnxruntime==1.27.0` (khôi phục CPU) — nếu cần venv sạch.

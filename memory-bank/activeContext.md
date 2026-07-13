@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T10:15:00+07:00.
+**Cập nhật lúc:** 2026-07-13T11:30:00+07:00.
+**[✅ #359 — BẬT ĐƯỢC GPU onnxruntime CUDA EP (VERIFIED CUDA_LOADED=True) — D-097/K-088]**
+- Nối #358 (đèn xanh A). Cài nvidia real wheels: cudnn-cu13 9.24 + cuda-runtime 13.3 + cufft/curand/cusparse (+cublas 13.6/nvrtc/nvjitlink kéo theo). Bỏ stub `*-cu13`==0.0.1 (hỏng build).
+- **Probe session CUDA THẬT:** trước prepend-PATH = fail (thiếu cublasLt64_13.dll); SAU prepend `nvidia/cu13/bin/x86_64`+`nvidia/cudnn/bin` vào PATH = **`session_providers=['CUDAExecutionProvider','CPUExecutionProvider']`, CUDA_LOADED=True**. (add_dll_directory KHÔNG đủ cho dep-bắc-cầu; ort.preload_dlls 1.27 không biết layout cu13.)
+- **Công thức tái lập = K-088.** venv +~2GB nvidia libs; đường lùi `pip install onnxruntime==1.27.0`.
+- **Ghi sổ:** LOG #359 · +D-097 (✅) · +K-088 · INDEX canonical #358→#359 · Σ237→Σ239 (D97·K88) · dòng D-097/K-088 · block này.
+- **Bước kế (triển khai — D-098, cần user OK phạm vi):** (1) helper `ensure_cuda_dll_path()` @adapters (Windows: prepend nvidia DLL dirs vào PATH, idempotent, no-op nếu vắng) + gọi trong `OnnxDetector.setup()` TRƯỚC session → product tự dùng GPU; (2) wire `device`/providers vào `_det_onnx` (config `device=cuda` → providers CUDA) — TDD; (3) LẤY LẠI model yolov8n.onnx (K-087, export/tải — network) để verify e2e + đo throughput GPU thật (đóng D-047/D-094 GPU). CHỜ `vp verify` xác nhận baseline không vỡ sau khi thêm nvidia libs (chạy kế).
+---
 **[🟡 #358 — Cài onnxruntime-gpu (đèn xanh) → CUDA EP chưa load (thiếu CUDA13/cuDNN9 runtime) + model mất (D-096/K-087)]**
 - User đèn xanh onnxruntime-gpu. Gỡ onnxruntime CPU → cài onnxruntime-gpu==1.27.0 (213MB). Kiểm CUDA driver: RTX 2060 / 591.86 / CUDA 13.1.
 - **Probe session CUDA THẬT (không tin get_available_providers):** `session_providers=['CPUExecutionProvider']`, CUDA_LOADED=False — lỗi `onnxruntime_providers_cuda.dll` thiếu `cublasLt64_13.dll` + `Require cuDNN 9.* CUDA 13.*`. → onnxruntime-gpu KHÔNG bundle CUDA (khác torch); máy chỉ có DRIVER, thiếu runtime toolkit+cuDNN → **GPU vẫn CHẶN**.

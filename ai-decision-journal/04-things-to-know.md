@@ -873,3 +873,14 @@ Nguồn: LOG Entry #358 · `Test-Path models/yolov8n.onnx` = False trên máy m�
 Lấy lại (2 cách): (a) export lại từ ultralytics trong venv throwaway (repro K-083, ~heavy: ultralytics+torch-CPU); (b) tải yolov8n.onnx từ nguồn tin cậy (network + kiểm nguồn). Cả 2 = network → chờ đèn xanh.
 Bài học thiết kế: asset weight gitignored = KHÔNG portable qua máy. Cân nhắc: (i) script `tools/fetch_model` tái tạo xác định; (ii) hoặc doc rõ "mỗi máy tự export/tải weight vào models/". Hiện K-083 đã có repro 5 bước.
 Đóng khi: yolov8n.onnx (hoặc weight nghiệp vụ) có mặt lại + verify e2e.
+
+### K-088 — ✅ (2026-07-13) CÔNG THỨC bật GPU onnxruntime trên Windows (máy có driver, KHÔNG có CUDA toolkit)
+Scope: verify/deploy nhánh GPU onnx (tái lập cho máy/phiên khác)
+Nguồn: LOG Entry #359 · D-096/D-097 · verify thực nghiệm CUDA_LOADED=True
+Công thức (đã verify trên RTX 2060 / driver 591.86 / CUDA 13.1 / Windows / Python 3.13 / venv):
+1. `pip install onnxruntime-gpu==1.27.0` (thay onnxruntime CPU; conflict nếu cùng tồn tại → gỡ CPU trước).
+2. `pip install nvidia-cudnn-cu13 nvidia-cuda-runtime nvidia-cufft nvidia-curand nvidia-cusparse` (cudnn-cu13 kéo cublas 13.6 + nvrtc). **TRÁNH** `nvidia-cublas-cu13`/`nvidia-*-cu13`==0.0.1 (STUB sdist HỎNG build) — dùng tên REAL (không hậu tố -cu13, trừ cudnn-cu13).
+3. TRƯỚC khi tạo `InferenceSession`: prepend vào `os.environ["PATH"]` các thư mục chứa DLL: `site-packages/nvidia/cu13/bin/x86_64` + `site-packages/nvidia/cudnn/bin`. (`os.add_dll_directory` KHÔNG đủ cho dep-bắc-cầu của onnxruntime_providers_cuda.dll; `ort.preload_dlls()` 1.27 không biết layout cu13/bin/x86_64.)
+4. Verify: `InferenceSession(model, providers=['CUDAExecutionProvider','CPUExecutionProvider']).get_providers()[0]=='CUDAExecutionProvider'`.
+Ảnh hưởng: mở khoá đo capacity GPU (D-047/D-094 phần GPU) + nhánh onnx-GPU deploy NATIVE (không docker). Product-wiring (OnnxDetector tự prepend PATH + `_det_onnx` device=cuda) = việc kế (D-098). Cần model (K-087) để e2e.
+Giới hạn: [chưa kiểm] onnxruntime-gpu 1.27 + CUDA 13 runtime khớp chính xác cuDNN9 mọi op; mới verify Identity + provider-load. Cần verify e2e YOLO khi có model.
