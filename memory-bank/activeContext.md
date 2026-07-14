@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T20:30:00+07:00.
+**Cập nhật lúc:** 2026-07-13T21:30:00+07:00.
+**[✅ #373 — VERIFY Docker deploy CPU (đóng K-032, +.dockerignore) + RECONCILE sự cố drift phiên-cũ (+D-103, +K-097, +K-098) — máy `k.nguyen.manh.toan` CÓ Docker/no-GPU]**
+- ⚠️ **SỰ CỐ DRIFT (đã xử):** đầu lượt chỉ chạy `git status -sb` (thấy up-to-date) → GIẢ ĐỊNH tiếp nối phiên #356 CỦA MÌNH. Repo THẬT ở frontier #372 (máy khác đẩy tiếp #358-372: onnxruntime-gpu + batch-mux spec). Lỡ append journal STALE (#357/D-096/K-086 trùng số) → PHÁT HIỆN khi str_replace INDEX fail (đọc "Entry #372") → `git checkout` revert 4 file journal → làm lại đúng #373. Việc #349-356 cũ VẪN trong history (ancestor #372, KHÔNG mất). Bài học K-098.
+- **Việc THẬT (song song batch-mux, không cần network/GPU):** máy này CÓ Docker → verify đường container (đóng K-032). Fix gốc thêm `vision-platform/.dockerignore` (trước không có → `COPY . /app` copy `.venv` sai-nền). `docker build` image 1.26GB (python:3.11-slim+onnxruntime+flask, KHÔNG torch) + `docker run -d -p 8000:8000` → `GET /stats` HTTP 200 `video=347555·detect=20866·boxes=1` (web UI+detect live synthetic trong container). Caveat compose K-097 (weight máy cũ + network_mode host Linux-only).
+- **Ghi sổ:** LOG #373 · +D-103 (✅ verify) · +K-097 (🟡 compose) · +K-098 (✅ bài học §0) · INDEX canonical #372→#373 · Σ252→Σ255 (D103·K97·K98) · dòng D-103/K-097/K-098 · block này. `.dockerignore` mới (không đổi code Python → baseline 647/2 giữ).
+- **VERIFY:** `docker build`+`run`+curl 200 THẬT; reconcile drift PASS Σ252 sau revert; verify 647/2 chạy kế.
+- **Bước kế (CHỜ user):** TRỌNG TÂM frontier vẫn là **batch-mux** (Task 0 spike — chờ đèn xanh network re-export dynamic + GPU máy khác). Docker/deploy song song đã verify. Áp §0 TRỌN mọi lượt resume (K-098). Chặn: network/GPU cho batch-mux.
+---
 **[✅ #372 — Cập nhật end.md handoff chuyển máy (frontier #371, batch-mux spec)]**
 - User chuyển máy → viết lại `end.md` (cũ #347 STALE) khớp frontier #371: 8 mục (đầu-phiên · trạng thái 647/2·Σ252·HEAD 26c5bec · cơ chế vận hành · chống-drift 4 lớp · đã-làm #365-371 · TRỌNG TÂM batch-mux spec 3-vòng-review + Task 0 gate · hướng tiếp · chặn · file).
 - **Ghi sổ:** LOG #372 · INDEX canonical #371→#372 (Σ252 giữ, không +D/C/T/K) · block này. KHÔNG code.

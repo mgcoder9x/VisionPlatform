@@ -1151,3 +1151,12 @@ Links: D-100, D-101, K-096, K-016, K-024, zmq-inference-service (D-028).
 Nội dung: batch-mux tích hợp TẠI `InferenceServer.serve` (điểm hội tụ ZMQ ROUTER duy nhất) — gather recv-multipart tới max_batch|batch_timeout → detect_batch → send theo ZMQ ident. KHÔNG BoundedQueue gộp cross-process (K-016). Backpressure camera-side trực giao. Task 3 = LOGIC in-process (test thuần); Task 4 = wire ZMQ (test cross-process).
 Vì sao (bản chất): điểm gom cross-camera DUY NHẤT khả thi là process server (nơi ZMQ hội tụ); gộp in-process qua nhiều camera-process là bất khả (K-016). Chốt sớm tránh thiết kế sai chỗ-lắp.
 Non-goal: chưa code wire; thread/async trong serve để-ngỏ; Triton vs tự-viết để-ngỏ.
+
+### D-103 — 2026-07-13 — VERIFY đường Docker deploy CPU (đóng K-032) + thêm `.dockerignore` (fix gốc build-context)
+Status: ✅ verify (build + run + curl 200 THẬT, máy có Docker no-GPU)
+Nguồn: LOG Entry #373
+Evidence: `docker build -f deploy/Dockerfile -t vision-platform:cpu .` DONE (image 1.26GB); `docker run -d -p 8000:8000` Up; `GET /stats` HTTP 200 `video=347555·detect=20866·boxes=1` (web UI+detect live synthetic trong container)
+Links: D-035/D-037 (web+Docker), K-032 (Dockerfile chưa verify — NAY ĐÓNG), K-097 (caveat compose), K-098 (drift incident), D-095 (onnx config)
+Nội dung: Máy này có Docker Desktop 29.5.2 no-GPU → verify đường container (trước "chưa docker ở máy dev"). (a) Fix gốc: thêm `vision-platform/.dockerignore` (loại `.venv`/cache/`.git`/`models`/`*.onnx`/tests) — trước KHÔNG có → `COPY . /app` copy `.venv` binary-Windows sai-nền + weight (bloat/sai). (b) Dockerfile CPU-viable xác nhận (python:3.11-slim+ffmpeg+`pip install . onnxruntime flask opencv-python-headless`, KHÔNG torch). (c) `docker run` CMD mặc định (synthetic+BrightBlobDetector, không cần weight/RTSP) → curl /stats 200.
+Vì sao (bản chất): container hoá bắt buộc cho sản phẩm thương mại (deploy nhất quán). Verify build+run THẬT (không tin "chắc chạy") + .dockerignore trước = image sạch nền Linux. Image giữ làm artifact (ngoài git).
+Non-goal: slim image <1.26GB (multi-stage sau); GPU container (nvidia-runtime); onnx-in-container (mount weight + đổi command); compose out-of-box (K-097).

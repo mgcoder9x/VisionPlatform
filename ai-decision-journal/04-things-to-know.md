@@ -964,3 +964,17 @@ Bằng chứng THẬT (đọc code):
 - `camera_worker`: mỗi camera = **process RIÊNG**, backpressure 2-tầng (SHM ring `write→None` + client window BoundedQueue DROP_OLDEST), giao tiếp server qua **ZMQ DEALER**.
 - `BoundedQueue` (K-016): **THREAD-safe, KHÔNG process-safe** (docstring cảnh báo: cross-process = khoá vô hiệu → hỏng dữ liệu).
 Bài học (điểm tích hợp batch-mux): (1) gộp cross-camera CHỈ khả thi TẠI `InferenceServer` (1 process nơi ZMQ hội tụ) — KHÔNG dùng BoundedQueue gộp qua nhiều camera-process (vi phạm K-016); (2) đổi serve loop: recv-1→detect-1 thành gather-N→detect_batch→scatter; (3) **scatter key = ZMQ `ident`** (ROUTER route reply đúng client SẴN — mạnh hơn map request_id thủ công, hậu thuẫn Property 1); (4) bulkhead K-024 mở rộng per-sample; (5) backpressure camera-side TRỰC GIAO (không trùng-đếm với shed server-side). Rộng: mọi tối ưu "gom nhiều nguồn" phải xác định ĐIỂM HỘI TỤ PROCESS trước (đọc topology thật), không giả định in-process.
+### K-097 — 🟡 (2026-07-13) `deploy/docker-compose.yml` KHÔNG chạy out-of-box (weight máy cũ + network_mode host Linux-only)
+Scope: `vision-platform/deploy/docker-compose.yml`
+Nguồn: LOG Entry #373 · D-103 · đọc compose thật
+Vấn đề: (1) `command` hardcode `--onnx /app/models/last_vehicle_n_640_04052024_dr.onnx` (weight nghiệp vụ máy cũ, KHÔNG có) + `--rtsp "${RTSP_URL}"` (cần env) → `docker compose up` FAIL nếu thiếu. (2) `network_mode: host` = Linux-only (tới camera LAN); Docker Desktop Windows/Mac KHÔNG đúng + bỏ qua `ports:`.
+Đã verify thay thế (D-103): `docker run -d -p 8000:8000 vision-platform:cpu` (CMD mặc định synthetic) → curl /stats 200 ⇒ IMAGE tốt; chỉ COMPOSE cấu hình Linux-prod+weight-cũ.
+Dùng đúng: (a) Linux+camera: `RTSP_URL=... docker compose up` + mount weight `.onnx` đúng tên; (b) dev Windows: `docker run -p 8000:8000 vision-platform:cpu` HOẶC override bỏ network_mode+đổi command `--onnx models/yolov8n.onnx --yolo v8 --labels ...` (như D-095).
+Đóng khi: thêm `docker-compose.cpu-demo.yml` override / tham-số-hoá command qua env. Chưa làm (compose hiện là bản Linux-prod user).
+
+### K-098 — ✅ (2026-07-13) BÀI HỌC chống-drift: RESUME phiên / chuyển-máy PHẢI chạy TRỌN §0, KHÔNG chỉ `git status -sb`
+Scope: quy trình đầu-phiên (§0/§2) · mọi phiên resume/đa-máy
+Nguồn: LOG Entry #373 · sự cố thật lượt này
+Chuyện gì: đầu lượt (user trỏ `end.md` "máy trước") tôi CHỈ chạy `git status -sb` (thấy "clean, up-to-date") → GIẢ ĐỊNH tiếp nối phiên #356 CỦA MÌNH. Repo THẬT ở frontier #372 (máy khác đẩy tiếp #358-372). → tôi append journal STALE (#357/D-096/K-086 trùng số frontier). PHÁT HIỆN khi str_replace INDEX FAIL (đọc thấy "Entry #372") → `git checkout` revert 4 file journal → làm lại đúng số #373. Việc cũ #349-356 KHÔNG mất (ancestor #372).
+Bài học (bản chất): `git status -sb` "up-to-date" chỉ nói **HEAD==origin**, KHÔNG nói "tôi đang ở đúng entry mới nhất" — sau pull frontier mới, working tree đã là #372 nhưng TÔI tưởng #356. PHẢI: đầu MỖI phiên resume đọc `memory-bank/activeContext.md` (block đầu = entry mới nhất) + LOG-max + chạy `vp check` TRƯỚC khi sửa bất cứ gì. Cùng họ K-064/K-085: tin máy-kiểm/số THẬT, không tin trí-nhớ-phiên. Máy-kiểm (str_replace-fail + C1 đọc LOG-max) đã cứu — nhưng đúng §0 thì không drift ngay từ đầu.
+Đóng: ✅ (đã reconcile + rút bài học). Phòng ngừa: luôn §0 trọn khi resume.

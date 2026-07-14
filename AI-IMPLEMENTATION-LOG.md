@@ -7058,3 +7058,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **3. Trade-off:** viết lại toàn bộ (mất lịch sử end.md cũ) vs giữ-thêm — chọn viết lại vì end.md là snapshot handoff hiện tại, lịch sử đã nằm trong LOG/journal (append-only, không mất).
 **4. Điều bạn nên biết:** máy mới chỉ cần mở end.md → §0 → chọn hướng §6. Bước kế = Task 0 spike (đèn xanh network). Bộ spec batch-mux đã validated 3 vòng, sẵn thi công.
 **Đã verify:** end.md khớp activeContext/INDEX #371 (đọc thật); drift chạy kế. KHÔNG đổi code (647/2 giữ). · **Chưa verify:** không.
+
+### Entry #373 — 2026-07-13 — VERIFY Docker deploy CPU (đóng K-032, +.dockerignore) + SỰ CỐ drift phiên-cũ đã reconcile (+D-103, +K-097, +K-098) — Kiro-Opus
+
+**Bối cảnh:** máy này CÓ Docker (Desktop 29.5.2) no-GPU → verify được đường container (D-035/K-032 "chưa build/verify"). SONG SONG với trọng tâm batch-mux (đang chờ Task 0 network gate — KHÔNG đụng). ⚠️ ĐẦU LƯỢT PHẠM LỖI §0: giả định tiếp nối phiên #356 CỦA TÔI (chỉ chạy `git status -sb`, KHÔNG đọc activeContext/LOG-max) → repo THẬT ở frontier #372 (máy khác đã đẩy tiếp #358-372: onnxruntime-gpu D-097 + batch-mux spec) → tôi lỡ append journal STALE (#357/D-096/K-086 trùng số) → PHÁT HIỆN khi str_replace INDEX FAIL (đọc thấy "Entry #372") → REVERT (git checkout 4 file journal) → làm lại đúng số. Việc #349-356 cũ VẪN trong history (ancestor #372, không mất).
+
+**1. Quyết định AI tự ra (D-103):** verify Docker CPU THẬT (build+run+curl) + thêm `.dockerignore` (fix gốc: trước không có → `COPY . /app` copy `.venv` binary-Windows sai-nền vào image). Khởi động Docker Desktop (daemon chưa chạy) → chờ UP → build.
+
+**2. Chỗ phải đổi:** không đổi code sản phẩm (chỉ +.dockerignore build-config); không sửa compose production (ghi caveat K-097).
+
+**3. Trade-off:** verify bằng `docker run` CMD-mặc-định (synthetic, không cần weight/RTSP) vs `docker compose up` (cần weight máy-cũ + RTSP + network_mode host Linux — K-097). Chọn `docker run` → chứng minh IMAGE tốt độc lập cấu-hình. Image 1.26GB giữ làm artifact (ngoài git).
+
+**4. Điều bạn nên biết:** đóng K-032 (Docker deploy verify được máy này). K-097: compose KHÔNG chạy out-of-box (weight `last_vehicle_...onnx` máy cũ + `network_mode:host` Linux-only). **K-098 (BÀI HỌC ĐẮT — chống drift):** khi RESUME phiên / có tín hiệu chuyển-máy (user trỏ end.md "máy trước") PHẢI chạy TRỌN §0 (đọc `activeContext` + LOG-max + `vp check`) TRƯỚC khi sửa journal — `git status -sb` "clean/up-to-date" KHÔNG đủ (nó chỉ nói HEAD==origin, KHÔNG nói tôi ở đúng entry). Máy-kiểm (str_replace-fail + đọc INDEX) đã cứu; nhưng đúng quy trình thì không drift ngay từ đầu.
+
+**Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, Docker Desktop 29.5.2, no-GPU):** `docker build -f deploy/Dockerfile` DONE image 1.26GB (python:3.11-slim+onnxruntime+flask, KHÔNG torch); `docker run -d -p 8000:8000` Up; `GET /stats` HTTP 200 `video=347555·detect=20866·boxes=1` (web UI+detect live synthetic trong container); container dọn; reconcile: `vp check` frontier #372 Σ252 PASS sau revert. · **Chưa verify:** compose up RTSP+weight thật (K-097); onnx-in-container (mount weight); baseline 647/2 sau .dockerignore (không đổi code → giữ, xác nhận bằng verify kế).

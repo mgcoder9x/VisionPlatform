@@ -1,0 +1,47 @@
+# Build context = vision-platform/. Loại thứ KHÔNG cần trong image (chống bloat + sai-nền + license).
+# Vì sao: Dockerfile `COPY . /app` → không .dockerignore sẽ copy .venv (binary Windows sai OS) + .git + weight.
+
+# Virtual env (binary theo-OS, TUYỆT ĐỐI không đưa vào image Linux)
+.venv/
+**/.venv/
+.venv_old_del/
+.venv_broken/
+
+# Caches / test artifacts
+__pycache__/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+**/.pytest_cache/
+.hypothesis/
+.coverage
+htmlcov/
+
+# VCS
+.git/
+.gitignore
+
+# Build/ship artifacts
+dist/
+build/
+*.egg-info/
+**/*.egg-info/
+
+# Weight model: MOUNT lúc runtime (compose volumes ../models:/app/models), KHÔNG bake (size+license K-029)
+models/
+*.onnx
+*.pt
+*.engine
+
+# Không cần trong image runtime web
+tests/
+benchmarks/
+_tmp*
+_export*
+
+# Output sinh khi chạy
+demo_frames/
+**/demo_frames/
+out/
+**/out/
+events/
