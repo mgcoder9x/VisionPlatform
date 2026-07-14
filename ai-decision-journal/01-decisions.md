@@ -1160,3 +1160,12 @@ Links: D-035/D-037 (web+Docker), K-032 (Dockerfile chưa verify — NAY ĐÓNG),
 Nội dung: Máy này có Docker Desktop 29.5.2 no-GPU → verify đường container (trước "chưa docker ở máy dev"). (a) Fix gốc: thêm `vision-platform/.dockerignore` (loại `.venv`/cache/`.git`/`models`/`*.onnx`/tests) — trước KHÔNG có → `COPY . /app` copy `.venv` binary-Windows sai-nền + weight (bloat/sai). (b) Dockerfile CPU-viable xác nhận (python:3.11-slim+ffmpeg+`pip install . onnxruntime flask opencv-python-headless`, KHÔNG torch). (c) `docker run` CMD mặc định (synthetic+BrightBlobDetector, không cần weight/RTSP) → curl /stats 200.
 Vì sao (bản chất): container hoá bắt buộc cho sản phẩm thương mại (deploy nhất quán). Verify build+run THẬT (không tin "chắc chạy") + .dockerignore trước = image sạch nền Linux. Image giữ làm artifact (ngoài git).
 Non-goal: slim image <1.26GB (multi-stage sau); GPU container (nvidia-runtime); onnx-in-container (mount weight + đổi command); compose out-of-box (K-097).
+
+### D-104 — 2026-07-13 — Thêm `docker-compose.cpu-demo.yml` chạy-NGAY (đóng K-097, additive)
+Status: ✅ verify (docker compose up + curl 200 THẬT)
+Nguồn: LOG Entry #374
+Evidence: `docker compose -p vpdemo -f deploy/docker-compose.cpu-demo.yml up -d --build` → Started; `GET /stats` HTTP 200 `video=1268602·detect=77309·boxes=1`; `docker compose down` sạch
+Links: K-097 (NAY ĐÓNG), D-103 (Docker verify), D-035 (compose prod)
+Nội dung: compose RIÊNG cho demo/eval/CI: port-mapping `8000:8000` (portable Win/Mac/Linux, KHÔNG `network_mode: host`) + CMD mặc định synthetic+BrightBlobDetector (0 phụ thuộc: không weight/RTSP/GPU) + khối comment bật YOLO onnx (mount `../models`). Additive — KHÔNG sửa `docker-compose.yml` prod Linux (weight+RTSP+host-net).
+Vì sao (bản chất): "1 lệnh chạy-ngay mọi máy có Docker" = giá trị onboarding/demo/CI thương mại; đóng đúng gap K-097 (compose cũ không out-of-box). BrightBlob mặc định > YOLO vì mục tiêu là out-of-box thật (YOLO opt-in qua comment). Fix gốc = thêm đường-đúng, không sửa bản prod (giữ ý đồ Linux của user).
+Non-goal: GPU compose (nvidia-runtime); biến thể onnx (comment sẵn, chưa verify — cần mount weight); slim image.

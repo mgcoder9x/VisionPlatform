@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T21:30:00+07:00.
+**Cập nhật lúc:** 2026-07-13T22:00:00+07:00.
+**[✅ #374 — Thêm `docker-compose.cpu-demo.yml` chạy-NGAY (đóng K-097, D-104)]**
+- Đóng nốt 🟡 K-097 (#373): compose prod KHÔNG chạy out-of-box (weight máy cũ + RTSP + network_mode host Linux). batch-mux vẫn gated (GPU+network máy khác — KHÔNG ép).
+- **D-104 (additive):** `deploy/docker-compose.cpu-demo.yml` — port-mapping `8000:8000` (portable, không host-net) + CMD mặc định synthetic+BrightBlobDetector (0 phụ thuộc: không weight/RTSP/GPU) + khối comment bật YOLO onnx (mount weight). KHÔNG đụng compose prod Linux.
+- **VERIFY THẬT:** `docker compose -p vpdemo -f deploy/docker-compose.cpu-demo.yml up -d --build` → Started; `GET /stats` HTTP 200 `video=1268602·detect=77309·boxes=1` (web UI+detect live); `docker compose down` sạch (không container sót).
+- **Ghi sổ:** LOG #374 · +D-104 (✅ verify) · K-097 🟡→✅ (ĐÓNG) · INDEX canonical #373→#374 · Σ255→Σ256 (D103→D104) · dòng D-104 · block này. Chỉ thêm 1 file compose (không đổi code Python → baseline 647/2 giữ).
+- **Bước kế (CHỜ user):** deploy CPU/Docker trọn (build ✅ + run ✅ + compose-demo ✅). TRỌNG TÂM frontier vẫn **batch-mux** (Task 0 chờ đèn xanh network re-export dynamic + GPU máy khác). Hướng no-GPU còn: slim image (multi-stage), hoặc chờ đèn xanh batch-mux. Áp §0 TRỌN mọi resume (K-098).
+---
 **[✅ #373 — VERIFY Docker deploy CPU (đóng K-032, +.dockerignore) + RECONCILE sự cố drift phiên-cũ (+D-103, +K-097, +K-098) — máy `k.nguyen.manh.toan` CÓ Docker/no-GPU]**
 - ⚠️ **SỰ CỐ DRIFT (đã xử):** đầu lượt chỉ chạy `git status -sb` (thấy up-to-date) → GIẢ ĐỊNH tiếp nối phiên #356 CỦA MÌNH. Repo THẬT ở frontier #372 (máy khác đẩy tiếp #358-372: onnxruntime-gpu + batch-mux spec). Lỡ append journal STALE (#357/D-096/K-086 trùng số) → PHÁT HIỆN khi str_replace INDEX fail (đọc "Entry #372") → `git checkout` revert 4 file journal → làm lại đúng #373. Việc #349-356 cũ VẪN trong history (ancestor #372, KHÔNG mất). Bài học K-098.
 - **Việc THẬT (song song batch-mux, không cần network/GPU):** máy này CÓ Docker → verify đường container (đóng K-032). Fix gốc thêm `vision-platform/.dockerignore` (trước không có → `COPY . /app` copy `.venv` sai-nền). `docker build` image 1.26GB (python:3.11-slim+onnxruntime+flask, KHÔNG torch) + `docker run -d -p 8000:8000` → `GET /stats` HTTP 200 `video=347555·detect=20866·boxes=1` (web UI+detect live synthetic trong container). Caveat compose K-097 (weight máy cũ + network_mode host Linux-only).

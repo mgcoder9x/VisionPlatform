@@ -1,0 +1,25 @@
+# DEMO CPU chạy-NGAY trên MỌI máy có Docker (KHÔNG GPU · KHÔNG camera · KHÔNG weight · KHÔNG network_mode host).
+# Khác `docker-compose.yml` (bản Linux-prod: cần weight nghiệp vụ + RTSP_URL + host-network — xem K-097).
+#
+# Chạy:  docker compose -f deploy/docker-compose.cpu-demo.yml up --build
+# Mở:    http://localhost:8000/   (video synthetic + BrightBlobDetector vẽ box — chứng minh luồng chạy)
+services:
+  vision-demo:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    ports:
+      - "8000:8000"          # port-mapping (portable Win/Mac/Linux) — KHÔNG network_mode host
+    # Mặc định: nguồn synthetic + BrightBlobDetector (numpy/cv2 thuần) → 0 phụ thuộc ngoài, chạy mọi nơi.
+    command: >
+      python -m vision_platform.profiles.vision_web_app
+      --host 0.0.0.0 --port 8000
+    # ── Muốn nhận diện YOLO THẬT (CPU, onnxruntime) → bỏ comment 2 khối dưới + đặt models/yolov8n.onnx: ──
+    #   (export: pip install ultralytics; yolo export model=yolov8n.pt format=onnx imgsz=640)
+    # volumes:
+    #   - ../models:/app/models:ro
+    # command: >
+    #   python -m vision_platform.profiles.vision_web_app
+    #   --host 0.0.0.0 --port 8000
+    #   --onnx /app/models/yolov8n.onnx --yolo v8 --model-size 640 --conf 0.25
+    restart: unless-stopped

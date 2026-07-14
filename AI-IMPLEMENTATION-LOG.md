@@ -7072,3 +7072,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** đóng K-032 (Docker deploy verify được máy này). K-097: compose KHÔNG chạy out-of-box (weight `last_vehicle_...onnx` máy cũ + `network_mode:host` Linux-only). **K-098 (BÀI HỌC ĐẮT — chống drift):** khi RESUME phiên / có tín hiệu chuyển-máy (user trỏ end.md "máy trước") PHẢI chạy TRỌN §0 (đọc `activeContext` + LOG-max + `vp check`) TRƯỚC khi sửa journal — `git status -sb` "clean/up-to-date" KHÔNG đủ (nó chỉ nói HEAD==origin, KHÔNG nói tôi ở đúng entry). Máy-kiểm (str_replace-fail + đọc INDEX) đã cứu; nhưng đúng quy trình thì không drift ngay từ đầu.
 
 **Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, Docker Desktop 29.5.2, no-GPU):** `docker build -f deploy/Dockerfile` DONE image 1.26GB (python:3.11-slim+onnxruntime+flask, KHÔNG torch); `docker run -d -p 8000:8000` Up; `GET /stats` HTTP 200 `video=347555·detect=20866·boxes=1` (web UI+detect live synthetic trong container); container dọn; reconcile: `vp check` frontier #372 Σ252 PASS sau revert. · **Chưa verify:** compose up RTSP+weight thật (K-097); onnx-in-container (mount weight); baseline 647/2 sau .dockerignore (không đổi code → giữ, xác nhận bằng verify kế).
+
+### Entry #374 — 2026-07-13 — Thêm `docker-compose.cpu-demo.yml` chạy-NGAY (đóng K-097) — Kiro-Opus
+
+**Bối cảnh:** K-097 (#373) ghi `docker-compose.yml` KHÔNG chạy out-of-box (weight máy cũ + RTSP bắt buộc + `network_mode: host` Linux-only). Đóng nốt thread (kỷ luật không để hở 🟡). batch-mux vẫn gated (GPU+network — máy khác).
+
+**1. Quyết định AI tự ra (D-104):** thêm compose RIÊNG `deploy/docker-compose.cpu-demo.yml` (additive, KHÔNG đụng compose prod Linux) — port-mapping `8000:8000` (portable, không host-network) + CMD mặc định (synthetic + BrightBlobDetector, 0 phụ thuộc: không cần weight/RTSP/GPU) + khối comment sẵn để bật YOLO onnx (mount weight).
+
+**2. Chỗ phải đổi:** không (thêm file mới; compose prod giữ nguyên).
+
+**3. Trade-off:** demo dùng BrightBlobDetector (0-prereq, chạy mọi máy) vs YOLO onnx (cần mount weight). Chọn BrightBlob làm MẶC ĐỊNH — mục tiêu "docker compose up chạy-ngay mọi nơi" quan trọng hơn "khoe YOLO"; onnx để khối comment (opt-in). Đúng "out-of-box thật sự".
+
+**4. Điều bạn nên biết:** K-097 giờ ĐÓNG (có đường compose chạy-ngay). Người đánh giá/onboarding/CI: `docker compose -f deploy/docker-compose.cpu-demo.yml up --build` → http://localhost:8000. Prod Linux vẫn dùng `docker-compose.yml` (RTSP+weight+host-net).
+
+**Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, Docker Desktop 29.5.2, no-GPU):** `docker compose -p vpdemo -f deploy/docker-compose.cpu-demo.yml up -d --build` → container Started; `GET /stats` HTTP 200 `video=1268602·detect=77309·boxes=1` (web UI + detect live); `docker compose down` dọn sạch (không container sót). · **Chưa verify:** biến thể onnx trong compose (khối comment — cần mount weight); GPU compose.
