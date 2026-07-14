@@ -985,3 +985,14 @@ Nguồn: LOG Entry #376 · chạy thật máy `k.nguyen.manh.toan` no-GPU webcam
 Repro: `cv2.VideoCapture(0).read()` loop → `DetectorPipeline(OnnxDetector("models/yolov8n.onnx", chw_float_normalize, yolov8_decode(labels=names_metadata, layout="nc_first")), 640, 640).detect(frame)`; bỏ ~5 frame warmup; conf>=0.35. Headless (KHÔNG cv2.imshow); chạy `.venv` (webcam-trong-Docker/Windows khó).
 Bức tranh "input thật" TRỌN trên CPU: host-image (#351 bus.jpg person×4+bus×1) · config-TOML (#355) · container (#375) · **camera-live (#376)**.
 Non-goal / mở: RTSP IP-camera (K-030 digest Windows — cần URL cam IP thật, path khác webcam); webcam-trong-container (Windows Docker khó passthrough); đa-lớp/đa-người (phụ thuộc cảnh).
+
+### K-100 — 🟡 (2026-07-14) `HOLD_MS=500` là mitigation SAI TẦNG; root-cause class = semantic freshness / frame identity
+Scope: `profiles/vision_web_app.py` (patch client #377) · spec `web-live-overlay-sync`
+Nguồn: LOG Entry #378 · static review toàn bộ `vision_web_app.py` + `webcam_frame_source.py` + detector pipeline · context-gatherer cross-thread/API/frontend map
+Nội dung (điều nên biết — phân biệt triệu chứng vs gốc):
+- **Triệu chứng:** bbox web nhấp nháy liên tục (user quan sát trực quan #377).
+- **Vá đã thử (KHÔNG đạt):** client `HOLD_MS=500` giữ `lastBoxes` theo thời-gian-poll → làm mới `lastSeen` bằng CÙNG snapshot non-empty ⇒ vừa có thể blink khi empty-run, vừa giữ ghost box VÔ HẠN nếu server lặp snapshot cũ. Không biết tuổi detection ⇒ mitigation mù, không phải fix.
+- **Root-cause class (đọc code CHỨNG MINH tĩnh, chưa đo runtime):** (a) detection publish `_boxes` MẤT `raw_ver` của frame input → không có frame identity; (b) `/boxes` chỉ trả list, thiếu generation/timestamp/freshness/health; (c) `setInterval(async,80)` cho fetch overlap + không sequence để loại response cũ (out-of-order); (d) `_video_loop` bỏ qua `retry_after_ms` lúc RECONNECTING → đường busy-spin; (e) detector exception giữ state cũ, không phân biệt lỗi với freshness. Lock hiện tại CHỈ chống torn assignment — KHÔNG có bằng chứng thiếu mutex.
+- **Chưa chứng minh runtime (trung thực):** trigger cụ thể (empty-run / out-of-order HTTP / source reconnect / canvas resize / temporal skew) CHƯA đo → Task 0 diagnostic instrumentation phải đứng trước code fix, không suy diễn trigger chỉ từ đọc code.
+- **Hướng gốc:** sub-spec `web-live-overlay-sync` (D-106) — atomic authority + epoch/lease/frame-identity + tách raw truth ⊥ display projection.
+Đóng khi: root-fix theo D-106 được code + verify (targeted + webcam E2E + full vp verify) + Task 0 trace xác nhận trigger; gỡ `HOLD_MS` client patch khi overlay mới thay thế.

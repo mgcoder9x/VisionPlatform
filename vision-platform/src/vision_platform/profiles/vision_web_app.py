@@ -24,6 +24,7 @@ from flask import Flask, Response, jsonify
 from vision_platform.profiles.vision_demo_app import moving_square_frame, _build_detector
 from vision_platform.adapters.video_file_frame_source import VideoFileFrameSource
 from vision_platform.adapters.rtsp_frame_source import RtspFrameSource, mask_rtsp
+from vision_platform.adapters.webcam_frame_source import WebcamFrameSource
 from vision_platform.kernel.read_result import ReadStatus
 
 app = Flask(__name__)
@@ -45,15 +46,19 @@ _PAGE = """<!doctype html><html><head><meta charset="utf-8"><title>Vision Platfo
 <p id="s"></p>
 <script>
 const img=document.getElementById('v'),cv=document.getElementById('c'),ctx=cv.getContext('2d');
+// CHỐNG NHẤP NHÁY: giữ box cuối trong HOLD_MS (detect ~8fps < redraw) + fetch TRƯỚC rồi mới clear+draw.
+let lastBoxes=[],lastSeen=0;const HOLD_MS=500;
 async function tick(){
-  cv.width=img.clientWidth;cv.height=img.clientHeight;
-  ctx.clearRect(0,0,cv.width,cv.height);
+  let bs=null;
+  try{bs=await(await fetch('/boxes',{cache:'no-store'})).json();}catch(e){bs=null;}   // fetch TRƯỚC (canvas chưa xoá)
+  const now=performance.now();
+  if(bs&&bs.length){lastBoxes=bs;lastSeen=now;}          // có box mới → cập nhật + mốc thời gian
+  const draw=(now-lastSeen<=HOLD_MS)?lastBoxes:[];        // giữ box cuối tới HOLD_MS (lấp gián đoạn detect)
+  if(cv.width!==img.clientWidth||cv.height!==img.clientHeight){cv.width=img.clientWidth;cv.height=img.clientHeight;}  // resize CHỈ khi đổi
+  ctx.clearRect(0,0,cv.width,cv.height);                  // clear + draw SÁT nhau (không await ở giữa → không chớp)
   ctx.strokeStyle='#00ff66';ctx.lineWidth=2;ctx.font='16px sans-serif';ctx.fillStyle='#00ff66';
-  try{
-    const bs=await(await fetch('/boxes',{cache:'no-store'})).json();
-    for(const b of bs){const x=b.x*cv.width,y=b.y*cv.height,w=b.w*cv.width,h=b.h*cv.height;
-      ctx.strokeRect(x,y,w,h);ctx.fillText(b.label+' '+b.conf,x,Math.max(12,y-4));}
-  }catch(e){}
+  for(const b of draw){const x=b.x*cv.width,y=b.y*cv.height,w=b.w*cv.width,h=b.h*cv.height;
+    ctx.strokeRect(x,y,w,h);ctx.fillText(b.label+' '+b.conf,x,Math.max(12,y-4));}
 }
 setInterval(tick,80);
 setInterval(async()=>{try{document.getElementById('s').innerText=await(await fetch('/stats',{cache:'no-store'})).text()}catch(e){}},1000);
@@ -65,6 +70,8 @@ def _open_source(args):
         s = RtspFrameSource(args.rtsp, max_reconnect=args.max_reconnect); s.setup(); return s
     if args.video:
         s = VideoFileFrameSource(args.video, loop=True); s.setup(); return s
+    if getattr(args, "camera", None) is not None:
+        s = WebcamFrameSource(args.camera); s.setup(); return s   # webcam cục bộ theo index
     return None   # synthetic
 
 
@@ -190,6 +197,7 @@ def main() -> int:
     p.add_argument("--threshold", type=int, default=127)
     p.add_argument("--video", type=str, default=None)
     p.add_argument("--rtsp", type=str, default=None)
+    p.add_argument("--camera", type=int, default=None, help="index webcam cục bộ (0,1,...) — cv2.VideoCapture")
     p.add_argument("--max-reconnect", type=int, default=None)
     p.add_argument("--pt", type=str, default=None)
     p.add_argument("--device", type=str, default="cpu")
@@ -203,7 +211,9 @@ def main() -> int:
     args = p.parse_args()
 
     src_name = (f"rtsp={mask_rtsp(args.rtsp)}" if args.rtsp else
-                f"video={args.video}" if args.video else f"synthetic {args.height}x{args.width}")
+                f"video={args.video}" if args.video else
+                f"webcam={args.camera}" if args.camera is not None else
+                f"synthetic {args.height}x{args.width}")
     det_name = (f"Yolov5PtDetector({args.pt},dev={args.device})" if args.pt else
                 f"OnnxDetector({args.onnx})" if args.onnx else f"BrightBlobDetector({args.threshold})")
     print(f"[web] TÁCH LUỒNG · nguồn={src_name} · detector={det_name}")

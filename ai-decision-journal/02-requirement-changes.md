@@ -215,3 +215,12 @@ Evidence: `test_config_observability.py::test_main_routes_metrics_flags_to_confi
 Links: D-086, D-082 (#299 hành vi cũ), T-029
 Đổi: TỪ (#299) `main` tính `obs_interval=5.0` (smart-default) RỒI truyền xuống `_run_from_config` → SANG `main` truyền **RAW** `args.observe_interval` (0.0 khi không set) + `--metrics-host default None`; **smart-default 5s DỜI vào `_run_from_config`** (áp SAU khi merge với `[observability]` TOML).
 Vì sao (bản chất): để merge precedence CLI↔TOML đúng, `_run_from_config` PHẢI biết "CLI có set interval không" (sentinel 0.0) TRƯỚC khi áp smart-default — nếu main pre-compute 5.0 thì mất thông tin "không set" → không merge được với TOML. Hành vi END-TO-END KHÔNG đổi (runner vẫn nhận 5.0 qua smart-default sau-merge); chỉ hợp-đồng-trung-gian đổi. Đường CLI-direct giữ smart-default riêng (không đụng). Backward-compat: test #299 khác duy nhất 1 assertion giá-trị-trung-gian (đã cập nhật + ghi rõ lý do).
+
+### C-022 — 2026-07-14 — C9 design: lệnh đo `behind` SAI HƯỚNG → sửa sang `git rev-list --left-right --count`
+Status: ✅ (đã sửa design; verify empiric bằng lệnh git thật)
+Scope: `.kiro/specs/drift-check-git-reality/design.md` · `_collect_git_facts`
+Nguồn: LOG Entry #380 · probe git read-only trên repo (HEAD 2496e2c)
+Evidence: `git rev-list --count HEAD..@{upstream}`=0 (behind); `git rev-list --left-right --count @{upstream}...HEAD`=`0\t0` (behind\tahead); `git status -sb`=`## <b>...origin/<b>` không `[ahead/behind]`
+Links: D-107, T-035
+Đổi: TỪ `behind = git rev-list --count @{upstream}..HEAD` (draft V1) → SANG `git rev-list --left-right --count @{upstream}...HEAD` parse `behind\tahead`.
+Vì sao (bản chất): `@{upstream}..HEAD` đếm commit CÓ ở HEAD mà KHÔNG ở upstream = **ahead**, không phải behind — draft V1 nhầm hướng. `--left-right` với BA chấm cho cả hai số đúng vai (left=behind, right=ahead) trong 1 lệnh. Bắt được nhờ kiểm-chứng-empiric TRƯỚC khi code — minh chứng "valid thiết kế trước khi triển khai" có giá trị thật (nếu code theo V1 thì C9 sẽ báo ngược: local ahead lại tưởng stale).

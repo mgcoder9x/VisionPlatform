@@ -337,3 +337,28 @@ Chọn: **Phương án A — SOURCE**.
 - **Phương án A (CHỌN) — SOURCE:** `VideoFileFrameSource` set `_loop_failed` khi reread-sau-seek fail → `is_finite→True` → runner break. Chính xác (source có tri-thức "loop bất khả"), tối thiểu (1 cờ), không đụng source khác.
 - **Phương án B (bác) — RUNNER guard chung:** "non-finite source trả EOF không-tiến-triển K vòng liên tiếp → break". Defensive/tổng quát HƠN nhưng cần NGƯỠNG K + threshold mơ hồ + rủi ro đụng hành vi RTSP (EOF transient hợp lệ?). Over-general cho 1 nguồn cụ thể.
 - Vì sao A (bản chất): đặt fix ở nơi CÓ TRI-THỨC (source biết chắc loop thất bại) > guard mù ở runner (đoán bằng đếm). Cái mất: nếu SAU có source non-finite khác cũng livelock trên EOF → cần lặp lại pattern (hoặc thêm runner-guard B khi đó). Chấp nhận (YAGNI: hiện chỉ video-loop có kịch bản này).
+
+### T-034 — 2026-07-14 — Overlay transport: client-overlay + server-stabilizer  vs  server-render JPEG  vs  WebRTC/WebSocket
+Status: 🔵 (design PHA 1, chờ code + user valid)
+Scope: spec `web-live-overlay-sync` · chọn kiến trúc hiển thị overlay
+Nguồn: LOG Entry #378 · design.md §Rollout, Boundaries, and Trade-offs
+Links: D-106, K-100
+Chọn: **client-overlay (canvas vẽ box từ `/overlay`) + server-side DisplayStabilizer (pure, event-driven)** cho V1.
+- Cái mất: KHÔNG pixel-perfect — video MJPEG (`<img>`) và overlay canvas là hai dòng thời gian; JS không biết multipart frame nào đang hiển thị → có thể lệch nhẹ khi detection chậm. Ghi rõ là giới hạn vật lý, không over-claim.
+- Phương án B (bác) — server-render box lên JPEG rồi stream: pixel-perfect (box gắn cứng vào frame) NHƯNG coupling video⊗detection (mất drop-to-latest độc lập), tốn encode lại mỗi frame, detection chậm kéo tụt cả video → phản mục tiêu low-latency.
+- Phương án C (hoãn) — WebRTC/WebSocket: đồng bộ tốt hơn + push thay poll NHƯNG thêm hạ tầng lớn (signaling/negotiation) — follow-on CHỈ khi measured visual skew vượt SLA thật (không đoán liều).
+- Vì sao chấp nhận A (bản chất): mục tiêu V1 = freshness/stability + giữ video low-latency, KHÔNG phải pixel-sync. A giữ hai dòng độc lập (video drop-to-latest ⊥ inference chậm), zero-dep, stabilizer thuần test được xác định. Nâng cấp transport là quyết định đo-lường-dẫn-đường, chốt LÚC có SLA.
+
+### T-035 — 2026-07-14 — C9 git-reality: fail-HẸP (chỉ behind) vs fail-RỘNG (dirty/HEAD) · offline vs fetch
+Status: 🔵 (design PHA 1, chờ code + user valid)
+Scope: spec `drift-check-git-reality` · điều kiện FAIL của C9
+Nguồn: LOG Entry #379 · design.md §Adversarial Self-Review + §Trade-offs
+Links: D-107, K-098, K-078
+Chọn (a): **fail HẸP — C9 chỉ FAIL khi `behind_upstream>0`**; dirty/uncommitted/HEAD-mismatch → KHÔNG fail.
+- Cái mất: không bắt "unaware WIP cùng máy" / HEAD dịch mà pointer chưa ghi SHA.
+- Phương án rộng (bác): fail trên dirty working tree hoặc HEAD≠SHA-ghi-trong-activeContext → bắt nhiều hơn NHƯNG kêu oan giữa turn (đang sửa file = dirty là bình thường) → checker bị phớt lờ/tắt → mất tác dụng (tệ hơn không có).
+- Vì sao (bản chất): giá trị của máy-gate = ĐƯỢC TIN. Zero false-positive là điều kiện sống còn; một check kêu oan sẽ bị bỏ qua như luật văn xuôi. Fail đúng-1-điều-kiện-chứng-minh-được mạnh hơn fail-nhiều-điều-kiện-mơ-hồ.
+Chọn (b): **offline — C9 KHÔNG `git fetch`** (chỉ đọc `@{upstream}` cục bộ).
+- Cái mất: origin đã tiến mà local chưa fetch → C9 report behind=0 (false-NEGATIVE) — ghi rõ, KHÔNG over-claim "chống mọi stale".
+- Phương án fetch (bác cho v1): thấy commit mới nhất origin NHƯNG = network (chậm/treo offline/side-effect) + trái K-078 (network cần đèn xanh). Fetch = opt-in tương lai.
+- Vì sao (bản chất): check phải NHANH + không side-effect để chạy mọi turn/hook; bắt "đã-biết-mình-sau" (rất nhiều case sau auto-fetch của IDE) đã đóng phần lớn rủi ro multi-máy mà không đánh đổi tốc độ/an toàn.

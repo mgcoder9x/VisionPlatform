@@ -7114,3 +7114,128 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết (K-099):** probe `cv2.VideoCapture(0)` opened=True 640×480 (index 1 không có). Pipeline THẬT `webcam(0)→DetectorPipeline(OnnxDetector yolov8n)→CPU`: đọc 20 frame (bỏ 5 warmup) → **20/20 frame CÓ detection · person × 20 (conf cao nhất 0.895)**. Camera thấy người (user) → nhận diện đúng liên tục. ⇒ đường nguồn-LIVE → nhận diện NN thật trên CPU CHẠY (không GPU). Đây là mảnh cuối "input thật": trước có host-image(#351)/config(#355)/container(#375); nay + camera-live. RTSP (K-030) chưa test (cần IP-cam), webcam khác path (cv2 index) đã xong.
 
 **Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, no-GPU, webcam USB):** probe cam0 opened 640×480; live detect 20/20 frame person conf 0.895; names từ metadata 80 lớp (0=person·2=car); scratch xóa; git tree sạch. · **Chưa verify:** RTSP IP-camera (K-030 digest Windows — cần URL cam thật); webcam-trong-container (Windows Docker khó); nhiều-người/đa-lớp (cảnh phụ thuộc).
+
+### Entry #377 — 2026-07-13 — Web UI xem webcam LIVE: adapter `WebcamFrameSource` + wire `--camera` (+D-105) — Kiro-Opus
+
+**Bối cảnh:** user "dựng web đi test". Đọc-valid `vision_web_app`: `_open_source` chỉ có rtsp/video/synthetic — KHÔNG webcam. Gap thật (không xem webcam trên web UI được). batch-mux vẫn gated (GPU).
+
+**1. Quyết định AI tự ra (D-105):** thêm adapter `WebcamFrameSource` (mirror `RtspFrameSource`: IFrameSource, DI `capture_factory(index)`, self-heal 2-nhịp, `is_finite=False`) — root-fix reusable, ĐÚNG layer (adapters leaf, cv2 lazy) thay vì nhét cv2 thô vào profiles. Wire `--camera <index>` vào `vision_web_app._open_source`.
+
+**2. Chỗ phải đổi:** không đổi hành vi cũ (additive: rtsp/video/synthetic giữ; `--camera` mới). web_app import thêm WebcamFrameSource + src_name hiển thị webcam.
+
+**3. Trade-off:** adapter riêng (reusable, test DI) vs cv2 thô trong profiles. Chọn adapter — nhất quán RtspFrameSource/VideoFileFrameSource, test được không cần webcam thật (7 test DI fake capture), tái dùng cho slice/config sau. self-heal mirror RTSP (reopen→RECONNECTING→FRAME 2 nhịp) cho nhất quán.
+
+**4. Điều bạn nên biết:** web UI TÁCH LUỒNG (video MJPEG ⊥ detect async) giờ nhận webcam. Chạy: `vision_web_app --camera 0 --onnx models/yolov8n.onnx --yolo v8 --model-size 640 --labels <COCO>`. VERIFY live: server serving http://127.0.0.1:8000/ · `/stats` video=14117·detect=5559·boxes=1 (YOLO detect webcam live). Nhãn COCO lấy từ metadata model. Baseline 647→654 (+7 test webcam).
+
+**Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, no-GPU, webcam):** 7 test test_webcam_frame_source pass; `vp verify` **654 passed/2 skipped · lint 5 kept/0 broken · drift PASS**; web server live GET / HTTP 200 + /stats detect=5559 boxes=1 (webcam→YOLO live). · **Chưa verify:** hiển thị trực quan browser (cần user mở — server đang chạy); RTSP IP-cam (K-030).
+
+### Entry #378 — 2026-07-14 — Sub-spec `web-live-overlay-sync` design-first V3 (root-fix flicker: atomic authority + epoch/lease) — Kiro-Opus
+
+**Bối cảnh:** #377 phát hiện bbox web nhấp nháy; `HOLD_MS=500` là mitigation sai tầng. Mở sub-spec Design-first `web-live-overlay-sync` tách raw-analytics-truth khỏi display-stabilization, fix gốc semantic freshness/frame identity. Đây là milestone THIẾT KẾ (chưa code, chưa requirements/tasks).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Entry point = **Design-first** (không tạo requirements/tasks trước) — theo yêu cầu xuyên suốt của user "thiết kế → review đối kháng → code → verify" + design phức tạp (concurrency/freshness) cần chốt contract trước.
+- `OverlayStateStore.apply(event)` là **authority serialized check-and-commit** duy nhất; endpoint chỉ đọc snapshot immutable đã commit (D-106).
+- Kiến trúc client-overlay + server-side stabilizer (không server-render JPEG / WebRTC ở V1) — T-034.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- User ban đầu muốn "hết nhấp nháy" → làm rõ ranh giới TRUNG THỰC: MJPEG `<img>` KHÔNG cho JS biết frame nào đang hiển thị → V1 chỉ hứa **freshness/stability**, KHÔNG pixel-perfect. Ghi vào Overview + Trade-offs.
+- Property 1 sửa từ "response equals one immutable snapshot" → **"pure projection của đúng một immutable snapshot + một serializedAtNs"** (fix mâu thuẫn age tính lúc serialize với "immutable").
+
+**3. Trade-off đã cân nhắc:**
+- Client-overlay+server-stabilizer vs server-render vs WebRTC → chọn phương án 1 (giữ video low-latency, zero-dep, không encode lại) — cái mất: không pixel-perfect, cần transport khác nếu measured skew vượt SLA (T-034).
+- Anti-resurrection scope: `/overlay` full guarantee vs cả `/boxes` → scope CHỈ `/overlay`, `/boxes` giữ legacy best-effort (compatibility cost, không phải safety claim).
+
+**4. Điều bạn nên biết:**
+- 14 Correctness Property đã có `**Validates: Requirements X.Y**` **provisional** (requirements CHƯA tồn tại — mapping sẽ được chốt lại khi tạo requirements.md). Diagnostics = 0.
+- Doubt-driven đã chạy 3 vòng adversarial (stop condition tối đa 3): vòng 3 còn 4 blocker (source reopen epoch, retired-process set bound, immutable-vs-age, legacy anti-resurrection) → đã tự reconcile trong V3, KHÔNG spawn vòng 4.
+- **CHƯA verify hành vi runtime** — đây là design thuần, chưa code, chưa đo trace. Task 0 (diagnostic instrumentation) + policy defaults chờ SLA thật.
+- CHỜ user đọc-lại-valid design TRƯỚC khi tạo requirements/tasks/sửa code. `HOLD_MS=500` trong worktree #377 vẫn là mitigation, không phải fix.
+
+**Đã verify:** `get_diagnostics` design.md = 0 diagnostics (14 property có Validates, heading đủ); đọc lại toàn file design nhất quán 4 blocker vòng-3 đã reconcile. · **Chưa verify:** mọi hành vi runtime (chưa code); trigger flicker cụ thể (chờ Task 0 trace); policy default (chờ SLA + cadence đo thật).
+
+### Entry #379 — 2026-07-14 — Thiết kế C9 "git-reality reconciliation gate" cho drift-check (design-first) — Kiro-Opus
+
+**Bối cảnh:** User yêu cầu "1 cách cực mạnh chống drift". Đọc `drift_check.py`+`test_memory_consistency.py`(C1–C8+self_test)+`test_rules_sync.py`: phát hiện lớp drift DUY NHẤT còn hở = "resume trên nền git stale/diverged" (K-064/K-085/K-098) vì C1–C8 chỉ đối chiếu bản-ghi↔bản-ghi/code, KHÔNG chạm git. Tạo spec `.kiro/specs/drift-check-git-reality/design.md` (design-only).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Thêm **C9 git-reality** vào chính `check()` (cùng chỗ C1–C8) để dùng chung report + self_test (D-107).
+- C9 nhận `git_facts` dict **tiêm được** (mặc định None → collector thật) — giữ tính thuần/xác định cho self_test, ĐÚNG pattern C8 (`symbol_exists`).
+- **Fail HẸP:** chỉ FAIL khi `behind_upstream>0`; dirty/uncommitted/HEAD-mismatch KHÔNG fail (chống false-positive giữa turn).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- User nói "tạo 1 thư mục 4 việc" → ĐÍNH CHÍNH: thư mục `ai-decision-journal/` ĐÃ tồn tại + làm đủ 4 việc → KHÔNG tạo trùng (tạo trùng = 2 nguồn sự thật = chính drift). Chỉ cập nhật + tăng cường máy-kiểm.
+
+**3. Trade-off đã cân nhắc (T-035):**
+- Fail-hẹp (chỉ behind) vs fail-rộng (dirty/HEAD) → hẹp (zero false-positive = điều kiện để checker được tin).
+- Offline (không fetch) vs fetch (network) → offline (nhanh, không side-effect, tuân K-078); cái mất: không thấy commit origin chưa pull (false-NEGATIVE, ghi rõ, không over-claim).
+
+**4. Điều bạn nên biết:**
+- Đã tự phản biện câu sống-còn "C9 có thừa so C1–C8?" → KHÔNG: nếu máy local CHƯA pull, file nội-bộ-nhất-quán → C1–C8 PASS trong khi nền đã stale → C9 (nhìn `behind`) mới bắt được.
+- GIỚI HẠN trung thực: C9 không fetch → chỉ bắt "đã biết mình sau upstream", KHÔNG thay `git fetch` tay; không bắt "unaware WIP cùng máy".
+- **CHƯA code** — design-first, chờ user đọc-lại-valid. Chưa đụng `drift_check.py`/`test_memory_consistency.py`.
+
+**Đã verify:** `get_diagnostics` design.md = 0; đọc mã C1–C8+self_test+drift_check xác nhận không lớp nào chạm git (C9 không trùng). · **Chưa verify:** hành vi runtime C9 (chưa code); `_collect_git_facts` chạy git thật (chưa viết); false-negative-do-không-fetch (giới hạn thiết kế, không phải bug).
+
+### Entry #380 — 2026-07-14 — VERIFY empiric lệnh git cho C9 → bắt+sửa lỗi hướng `behind`/`ahead` trong design (design-first) — Kiro-Opus
+
+**Bối cảnh:** Trước khi đề nghị code C9 (D-107), kiểm-chứng empiric các lệnh git mà `_collect_git_facts` dựa vào (đúng nguyên tắc "chính xác có thể kiểm chứng rồi mới triển khai"). Chạy read-only trên repo thật.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Chốt dùng MỘT lệnh `git rev-list --left-right --count @{upstream}...HEAD` (in `behind\tahead`) thay vì hai lệnh riêng — không lẫn hướng, ít subprocess.
+- Bản cài đặt dùng subprocess argv-list (không qua shell) → `@{upstream}` an toàn (probe qua PowerShell bị nuốt `@{...}` là lỗi shell, KHÔNG phải lỗi thiết kế).
+
+**2. Chỗ phải đổi so với thiết kế ban đầu (C-022):**
+- Design V1 ghi `behind = git rev-list --count @{upstream}..HEAD` → SAI HƯỚNG (lệnh đó đếm *ahead*). Sửa sang `--left-right --count @{upstream}...HEAD` (left=behind, right=ahead). Bắt được nhờ probe empiric, không phải suy luận.
+
+**3. Trade-off đã cân nhắc:**
+- `--left-right` (1 lệnh, 2 số) vs 2 lệnh `HEAD..up`/`up..HEAD` → chọn 1 lệnh (rẻ + không lẫn hướng). Cái mất: phải parse tab-separated (nhỏ).
+
+**4. Điều bạn nên biết:**
+- Bằng chứng verify (repo `chore/dev-env-launcher-portable-hooks`, HEAD `2496e2c`): `rev-parse --short HEAD`=`2496e2c`; `--abbrev-ref HEAD`=branch; `status -sb`=`## <b>...origin/<b>` (có upstream, không `[ahead/behind]`=0/0); `rev-list --count HEAD..@{upstream}`=`0` (behind); `rev-list --left-right --count @{upstream}...HEAD`=`0\t0`.
+- Vì behind=0 tại máy này → khi code C9, `vp check` sẽ PASS (C9 không kêu oan).
+- **VẪN CHƯA code C9** — chỉ sửa design cho đúng. Chờ user đọc-lại-valid trước khi thêm vào `test_memory_consistency.py`.
+
+**Đã verify:** chạy 5 lệnh git read-only + đọc output thật (ở trên); design.md sửa xong getDiagnostics=0. · **Chưa verify:** hành vi `_collect_git_facts`/C9 khi CÓ behind>0 (chưa có nhánh sau upstream để thử; sẽ test bằng self_test tiêm `git_facts` giả lúc code).
+
+### Entry #381 — 2026-07-14 — CODE C9 "git-reality gate" (TDD) → đóng lớp drift bản-ghi↔GIT — Kiro-Opus
+
+**Bối cảnh:** Hiện thực D-107 (design #379 + verify lệnh #380) vào `tests/test_memory_consistency.py`. C9 đóng lớp drift DUY NHẤT C1–C8 không phủ: local BEHIND upstream (nền stale, K-064/K-085/K-098) — file local nội-bộ-nhất-quán nên C1–C8 mù.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- C9 dùng tag `C9-GIT` (một tag, message phân biệt PASS/SKIP/stale) để self_test `_fail(r,"C9-GIT")` bắt đúng.
+- `_collect_git_facts` trả dict field cơ-bản (bool/int/str) → tiêm được + serialize dễ; mọi lỗi git → `available=False` → SKIP-PASS (fail-safe).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Không có đổi mới ở bước code (đã đính chính hướng lệnh ở #380/C-022). Giữ đúng design đã valid.
+
+**3. Trade-off đã cân nhắc:**
+- Đặt C9 TRONG `check()` (real check gọi git thật mỗi lần) vs tách hàm riêng gọi tùy chọn → chọn trong `check()` để hook/CI/`vp` TỰ chạy C9 mọi lần (đúng mục tiêu "gate luôn bật"). Cái giá: pytest `test_memory_consistency` giờ chạy subprocess git (đo được: verify vẫn 43.72s, không chậm đáng kể).
+- Fail khi behind>0 trong pytest = INTENDED (dev phải pull trước) — không coi là test-flaky.
+
+**4. Điều bạn nên biết:**
+- self_test PHẢI tiêm `git_facts=gclean` cho MỌI check() call (nếu để None → gọi git thật → mất tính thuần + có thể FAIL khi repo behind). Đã tiêm đủ.
+- Verify-Symbol gắn `tests/test_memory_consistency.py::_collect_git_facts` → C8 tự canh C9 (nếu ai xoá/đổi tên hàm mà quên cập nhật journal → C8 FAIL). Verify-Symbol count 11→12.
+- GIỚI HẠN (giữ nguyên từ design): offline (không fetch) → chỉ bắt "đã biết mình sau upstream" (false-NEGATIVE nếu origin chưa fetch); không bắt "unaware WIP cùng máy". Không over-claim.
+
+**Đã verify:** `scripts\vp.cmd verify` = **654 passed/2 skipped · lint 5 kept/0 broken · drift PASS**; drift output có `[PASS] C9-GIT` (git thật: behind=0·ahead=0·chore/...@2496e2c) + self_test `C9-catch-behind`/`C9-no-upstream-SKIP-PASS`/`C9-unavailable-SKIP-PASS` PASS. · **Chưa verify:** hành vi C9 khi behind>0 trên repo THẬT (chưa dựng nhánh sau upstream; self_test tiêm behind=3 đã phủ logic — đủ cho tính-đúng, số thật cần nhánh diverged thật).
+
+### Entry #382 — 2026-07-14 — Web-live-overlay-sync: audit design bằng code thật + tạo requirements.md + tasks.md (design-first, CHƯA code) — Kiro-Opus
+
+**Bối cảnh:** Tiếp bộ spec fix bbox flicker (design #378). Đọc `vision_web_app.py` audit 6 điểm static-evidence, rồi dẫn xuất requirements + tasks theo workflow design-first. KHÔNG code sản phẩm.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- 5 Requirement EARS map ĐÚNG 14 Correctness Property của design (R1: 1.1-1.3 · R2: 2.1-2.6 · R3: 3.1-3.2 · R4: 4.1-4.2 · R5: 5.1) → mỗi criteria có đúng 1 property `Validates`.
+- tasks.md 13 task (0-12) theo 7 waves TDD; Task 0 = diagnostic behind-flag (đo cadence chốt policy, không đổi behavior); layer placement rõ (DTO→kernel, matching/EMA→domain, store/stabilizer→runtime, endpoint/browser→profiles) + contract import-linter MỚI cấm display DTO import analytics port (Property 10).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Không đổi bản chất. Chỉ sửa FORMAT cho diagnostics=0: requirements H1 phải đúng `# Requirements Document` + Glossary lên `## Glossary`; tasks cần `## Overview` + `## Notes` + Task Dependency Graph dạng **JSON block** (không phải text).
+
+**3. Trade-off đã cân nhắc:**
+- 1 LOG entry gộp requirements+tasks (như batch-mux #367/#368 tách) → gộp vì cùng lượt design-first, KHÔNG +D/C/T/K (dẫn xuất từ design đã có D-106). Σ264 giữ.
+
+**4. Điều bạn nên biết:**
+- **Audit design bằng CODE THẬT — cả 6 static-evidence claim ĐÚNG** (đối chiếu `vision_web_app.py`): (1) `_boxes` publish không kèm `_raw_ver`; (2) `/boxes`=jsonify(_boxes) thiếu meta; (3) `setInterval(tick,80)`+await overlap; (4) `lastSeen` chỉ refresh khi non-empty → blink empty-run/ghost khi lặp; (5) `_video_loop` bỏ `retry_after_ms` (pace=0 busy-spin); (6) mọi state dưới `_lock` → bug semantic không phải race. Khác C9 (#380 có lỗi lệnh) — design overlay grounded đúng, KHÔNG cần sửa.
+- **CHƯA code** — chờ user valid tasks trước khi thi công. Policy default chờ Task 0 đo cadence thật.
+
+**Đã verify:** requirements.md + tasks.md `get_diagnostics` = 0; 14 criteria khớp 14 property Validates; 6/6 static-evidence đối chiếu code thật đúng. · **Chưa verify:** hành vi runtime mọi component (chưa code); trigger flicker cụ thể (chờ Task 0 trace); policy default (chờ cadence đo).

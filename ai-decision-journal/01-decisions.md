@@ -1169,3 +1169,35 @@ Links: K-097 (NAY ĐÓNG), D-103 (Docker verify), D-035 (compose prod)
 Nội dung: compose RIÊNG cho demo/eval/CI: port-mapping `8000:8000` (portable Win/Mac/Linux, KHÔNG `network_mode: host`) + CMD mặc định synthetic+BrightBlobDetector (0 phụ thuộc: không weight/RTSP/GPU) + khối comment bật YOLO onnx (mount `../models`). Additive — KHÔNG sửa `docker-compose.yml` prod Linux (weight+RTSP+host-net).
 Vì sao (bản chất): "1 lệnh chạy-ngay mọi máy có Docker" = giá trị onboarding/demo/CI thương mại; đóng đúng gap K-097 (compose cũ không out-of-box). BrightBlob mặc định > YOLO vì mục tiêu là out-of-box thật (YOLO opt-in qua comment). Fix gốc = thêm đường-đúng, không sửa bản prod (giữ ý đồ Linux của user).
 Non-goal: GPU compose (nvidia-runtime); biến thể onnx (comment sẵn, chưa verify — cần mount weight); slim image.
+### D-105 — 2026-07-13 — Web UI dùng `WebcamFrameSource` riêng + CLI `--camera` (additive)
+Status: ✅ phần nguồn/web wiring · 🟡 trải nghiệm overlay chưa đạt (flicker do freshness/frame identity, xử ở sub-spec riêng)
+Nguồn: LOG Entry #377
+Evidence: 7 test `test_webcam_frame_source.py` pass; full `vp verify` tại #377 = 654 passed/2 skipped · lint 5/0; chạy live `/` HTTP 200 + `/stats` detect=5559, boxes=1
+Links: K-099 (camera→YOLO CPU đã verify), K-030 (RTSP khác path)
+Nội dung: thêm adapter leaf `WebcamFrameSource(index, capture_factory, source_id, reconnect_delay_ms)` với `cv2` lazy, DI capture để test không cần camera, self-heal theo contract nguồn live, `is_finite=False`; `vision_web_app` chỉ composition qua `--camera <index>`. Giữ nguyên rtsp/video/synthetic.
+Vì sao (bản chất): webcam là một nguồn frame tái dùng, không phải chi tiết riêng của Flask profile. Đặt `cv2.VideoCapture(index)` trực tiếp trong profile sẽ ghép transport với composition, khó test và không tái dùng; adapter riêng giữ đúng ranh giới 6 layer và cho test deterministic.
+Ranh giới verify: source+wiring đã chạy thật; **không** suy ra overlay ổn định. User đã quan sát bbox nhấp nháy; patch client `HOLD_MS=500` hiện có trong worktree là mitigation chưa được chấp nhận, không thuộc tính-đúng của D-105 và phải được xử bằng sub-spec freshness/frame-result synchronization.
+
+### D-106 — 2026-07-14 — Sub-spec `web-live-overlay-sync`: atomic OverlayStateStore + epoch/lease contract (design-first)
+Status: 🔵 (design PHA 1 V3 sau 3 vòng adversarial review; CHƯA code)
+Scope: `.kiro/specs/web-live-overlay-sync/design.md`
+Nguồn: LOG Entry #378 · static review `vision_web_app.py` (#377) · context-gatherer cross-thread map
+Links: T-034, K-100, D-105 (webcam source #377)
+Quyết định: fix GỐC bbox flicker bằng tách **raw inference truth** (immutable, cho analytics) khỏi **display projection** (matching/EMA/hit-miss/lease, không đi vào tracker/count/sink). Mọi semantic mutation qua `OverlayStateStore.apply(event)` dưới MỘT lock authority (check-and-commit serialized) → thay một immutable `OverlayViewSnapshot`; endpoint `/overlay` chỉ đọc snapshot đã commit + một `serializedAtNs` (pure projection). Định danh frame: `processEpoch` (UUID/process) · `sourceEpoch` (tăng đúng một lần tại LIVE→discontinuity) · `eventRevision` (mọi commit) · `inferenceGeneration` (completion unique). Client per-track lease hữu hạn (anti-resurrection scope `/overlay`; `/boxes` giữ legacy best-effort). `OverlayExpiryScheduler` gửi `TimerTick` exactly-once.
+- Cái mất: phức tạp hơn nhiều so `HOLD_MS` client (thêm store/scheduler/health/stabilizer + 14 property test); KHÔNG pixel-perfect trên MJPEG `<img>`.
+- Đổi lại: freshness đo được + ghost hết hạn chắc chắn + failure phân biệt được (empty vs detector-error vs source-reconnect) — đúng gốc "semantic freshness/frame identity" thay vì che triệu chứng.
+- Vì sao chấp nhận (bản chất): flicker là hệ quả của việc `/boxes` mất frame identity + poll async không biết freshness; vá thời-gian (HOLD_MS) không chạm gốc. Authority serialized + epoch/lease là mức tối thiểu để đúng-đắn kiểm chứng được.
+Đóng khi: user valid design → tạo requirements/tasks → code TDD → verify (targeted + webcam E2E + full vp verify).
+
+### D-107 — 2026-07-14 — Thêm C9 "git-reality reconciliation gate" vào drift-check
+Status: ✅ (design #379 + verify lệnh #380 + CODE TDD #381 — verify thật)
+Scope: `.kiro/specs/drift-check-git-reality/design.md` · `tests/test_memory_consistency.py` · `tests/drift_check.py`
+Nguồn: LOG Entry #379 (design) · #380 (verify lệnh) · #381 (code) · đọc `drift_check.py`+`test_memory_consistency.py`(C1–C8+self_test)+`test_rules_sync.py` · sự cố K-064/K-085/K-098
+Evidence: `scripts\vp.cmd verify` = 654 passed/2 skipped · lint 5 kept/0 broken · drift PASS; drift có `[PASS] C9-GIT` (git thật behind=0·ahead=0·chore/...@2496e2c) + self_test C9-catch-behind/C9-no-upstream-SKIP-PASS/C9-unavailable-SKIP-PASS PASS (LOG #381)
+Verify-Symbol: tests/test_memory_consistency.py::_collect_git_facts
+Links: T-035, K-098, K-064, K-085
+Quyết định: bổ sung check **C9** đối chiếu **bản-ghi ↔ THỰC TẾ GIT** — lớp drift DUY NHẤT C1–C8 không phủ (chúng chỉ đối chiếu bản-ghi↔bản-ghi/code, không chạm git). C9 sống trong `check()` (dùng chung report+self_test), nhận `git_facts` dict TIÊM ĐƯỢC (mặc định None→collector I/O thật `_collect_git_facts`) để giữ tính thuần/xác định (đúng pattern C8 `symbol_exists`). FAIL HẸP: chỉ khi `behind_upstream>0` (local sau origin = nền stale, K-098); thiếu git/upstream → SKIP-PASS (fail-safe); dirty/uncommitted KHÔNG fail (chống false-positive giữa turn). Read-only + offline (không fetch → không network/side-effect, tuân K-078).
+- Cái mất: +~40 dòng + 4 self-test case + phụ thuộc git CLI; không bắt được commit origin CHƯA pull (không fetch) + không bắt "unaware WIP cùng máy".
+- Đổi lại: biến bước "đối chiếu git bằng tay" của §0 (đã gây 3 sự cố) thành cổng máy-kiểm khách quan — mạnh hơn luật văn xuôi (thứ hay drift). Đóng đúng lớp multi-máy/multi-phiên.
+- Vì sao chấp nhận (bản chất): sự cố tái diễn đều là "resume nền git stale"; fix gốc = cho máy CHỨNG MINH được nền hiện tại không sau upstream, không dựa trí nhớ chạy §0.
+Đóng: ✅ (2026-07-14, #381). C9 sống trong `check()` (real check gọi git thật mỗi lần → hook/CI/`vp` tự chạy); `git_facts` tiêm-được giữ self_test thuần; Verify-Symbol `_collect_git_facts` để C8 tự canh. GIỚI HẠN giữ nguyên (offline → false-NEGATIVE nếu origin chưa fetch; không bắt unaware-WIP cùng máy) — không over-claim.

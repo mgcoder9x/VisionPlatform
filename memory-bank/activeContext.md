@@ -1,7 +1,47 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
-## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T22:50:00+07:00.
+## Trạng thái hiện tại (2026-07-14)
+**Cập nhật lúc:** 2026-07-14T16:00:00+07:00.
+**[🔵 #382 — web-live-overlay-sync: bộ spec HOÀN CHỈNH (design+requirements+tasks), CHƯA code — chờ user valid]**
+- Audit design bằng CODE THẬT `vision_web_app.py`: **6/6 static-evidence claim ĐÚNG** (`_boxes` publish thiếu `_raw_ver`; `/boxes`=jsonify thiếu meta; `setInterval(tick,80)`+await overlap; `lastSeen` chỉ refresh non-empty→blink/ghost; `_video_loop` bỏ `retry_after_ms` pace=0 busy-spin; state dưới `_lock`→bug semantic không race). Khác C9 (#380 có lỗi lệnh) — design overlay grounded đúng, không phải sửa.
+- Tạo `requirements.md`: 5 Requirement EARS map ĐÚNG 14 Correctness Property (R1 1.1-1.3·R2 2.1-2.6·R3 3.1-3.2·R4 4.1-4.2·R5 5.1). Tạo `tasks.md`: 13 task (0-12)/7 waves TDD, Task 0 diagnostic behind-flag, contract import-linter mới cấm display DTO↮analytics. Cả 2 file `get_diagnostics`=0. Sửa format (H1 chuẩn, Glossary/Overview/Notes, Task Dependency Graph JSON).
+- **Ghi sổ:** LOG #382 · INDEX canonical #381→#382 · Σ264 giữ (dẫn xuất D-106, không +ID) · block này.
+- **Bước kế (CHỜ user):** user đọc-lại-valid tasks → tôi thi công theo waves TDD (Task 1 DTO kernel + Task 2 domain matching/EMA trước, leaf/pure). Task 0 diagnostic đo cadence trước khi chốt policy default. KHÔNG code trước khi user duyệt. Song song: C9 (#381) đã LIVE trong drift-check.
+---
+**[✅ #381 — C9 "git-reality gate" ĐÃ CODE + VERIFY: tầng chống-drift thứ 9 (bản-ghi↔GIT) LIVE]**
+- Hiện thực D-107 vào `tests/test_memory_consistency.py` (TDD): `_collect_git_facts()` (read-only/offline subprocess git, tiêm-được) + khối C9 trong `check()` + `git_facts` param + 3 self_test case.
+- C9 đóng lớp drift DUY NHẤT C1–C8 không phủ: local BEHIND upstream = nền stale (K-064/K-085/K-098) — file local nội-bộ-nhất-quán nên C1–C8 mù. FAIL HẸP khi behind>0; thiếu git/upstream→SKIP-PASS (fail-safe); offline (không fetch).
+- **VERIFY THẬT:** `scripts\vp.cmd verify` = **654 passed/2 skipped · lint 5 kept/0 broken · drift PASS**; drift có `[PASS] C9-GIT` (git thật behind=0·ahead=0·@2496e2c) + self_test `C9-catch-behind`/`C9-no-upstream-SKIP-PASS`/`C9-unavailable-SKIP-PASS` PASS (guard-the-guard chứng minh C9 bắt được stale).
+- **Ghi sổ:** LOG #381 · D-107 🔵→✅ (Evidence + Verify-Symbol `_collect_git_facts`) · INDEX canonical #380→#381 · Σ264 giữ (không +ID mới) · dòng D-107 cập nhật ✅ · block này. Verify-Symbol count 11→12.
+- **Bước kế (CHỜ user):** hệ chống-drift giờ có **9 tầng máy-kiểm** (C1–C9) + RULES-sync + self-test. Còn lại: (a) overlay spec #378 chờ user đọc-lại-valid → code fix bbox flicker; (b) mốc sạch. KHÔNG code overlay trước khi user valid.
+---
+**[🔵 #380 — VERIFY empiric lệnh git cho C9 → sửa lỗi hướng trong design (design-first), CHƯA code]**
+- Trước khi đề nghị code C9, kiểm-chứng-empiric các lệnh git thật (đúng "chính xác có thể kiểm chứng rồi mới triển khai"). Bằng chứng: HEAD `2496e2c`, branch có upstream, behind=0, `--left-right --count @{upstream}...HEAD`=`0\t0`.
+- **Bắt lỗi thiết kế:** draft V1 dùng `behind = git rev-list --count @{upstream}..HEAD` — lệnh này đếm *ahead*, ngược hướng. Sửa design sang `git rev-list --left-right --count @{upstream}...HEAD` (left=behind, right=ahead). +C-022. Nếu code theo V1 thì C9 báo ngược (local ahead lại tưởng stale).
+- **Ghi sổ:** LOG #380 · +C-022 (✅ sửa design, verify empiric) · INDEX canonical #379→#380 · Σ263→Σ264 (C22) · dòng C-022 · block này.
+- **Bước kế (CHỜ user):** design C9 giờ đã đúng lệnh + verify empiric. User đọc-lại-valid → code TDD (self_test C9 tiêm `git_facts` giả: baseline behind=0 PASS + behind>0 catch → thêm `_collect_git_facts`+C9 → GREEN → `vp check` PASS + Verify-Symbol). Song song overlay #378 cũng chờ valid. KHÔNG code trước khi duyệt.
+---
+**[🔵 #379 — Thiết kế C9 "git-reality gate" chống-drift (design-first) SẴN đọc-lại-valid, CHƯA code]**
+- User yêu cầu "cách cực mạnh chống drift". ĐÍNH CHÍNH: thư mục `ai-decision-journal/` (4 việc D/C/T/K + INDEX) ĐÃ tồn tại → không tạo trùng (trùng = 2 nguồn sự thật = drift). Đã cập nhật + đề xuất tăng cường máy-kiểm.
+- Đọc trọn `drift_check.py`+`test_memory_consistency.py`(C1–C8+self_test)+`test_rules_sync.py`: lớp drift DUY NHẤT còn hở = "resume nền git stale/diverged" (K-064/K-085/K-098) vì C1–C8 chỉ bản-ghi↔bản-ghi/code, KHÔNG chạm git.
+- Tạo `.kiro/specs/drift-check-git-reality/design.md`: **C9** đối chiếu bản-ghi↔GIT; `git_facts` tiêm-được (pattern C8); FAIL HẸP khi `behind_upstream>0`; thiếu git/upstream→SKIP-PASS; dirty KHÔNG fail; read-only+offline. Adversarial self-review 4 câu sống-còn (không thừa / không false-positive giữa turn / giới hạn không-fetch / giữ self_test thuần). getDiagnostics=0.
+- **Ghi sổ:** LOG #379 · +D-107 (🔵) · +T-035 (🔵) · INDEX canonical #378→#379 · Σ261→Σ263 (D107·T35) · dòng D-107/T-035 · block này.
+- **Bước kế (CHỜ user):** user đọc-lại-valid design C9 → tôi code TDD (self_test C9 RED → thêm C9 + `_collect_git_facts` → GREEN → `vp check` PASS + kèm Verify-Symbol). Song song: overlay design #378 cũng chờ user valid. KHÔNG code trước khi duyệt.
+---
+**[🔵 #378 — Sub-spec `web-live-overlay-sync` design-first V3 SẴN đọc-lại-valid (chờ user), CHƯA code]**
+- Hoàn tất milestone THIẾT KẾ fix gốc bbox flicker: `.kiro/specs/web-live-overlay-sync/design.md` V3. Tách **raw inference truth** ⊥ **display projection**; mọi mutation qua `OverlayStateStore.apply` (serialized check-and-commit → immutable `OverlayViewSnapshot`); định danh frame bằng processEpoch/sourceEpoch/eventRevision/inferenceGeneration; per-track lease hữu hạn; `/overlay` anti-resurrection, `/boxes` giữ legacy.
+- Doubt-driven 3 vòng adversarial (stop tối đa 3) → vòng 3 còn 4 blocker (source reopen epoch, retired-process set, immutable-vs-age, legacy anti-resurrection) → đã TỰ RECONCILE trong V3, KHÔNG spawn vòng 4. Property 1 sửa thành pure-projection (immutable snapshot + serializedAtNs).
+- **VERIFY:** `get_diagnostics` design.md = **0** (14 Correctness Property có `**Validates: Requirements X.Y**` provisional — requirements CHƯA tồn tại, mapping chốt lại khi tạo requirements.md).
+- **Ghi sổ:** LOG #378 · +D-106 (🔵 design) · +T-034 (🔵) · +K-100 (🟡) · INDEX canonical #377→#378 · Σ258→Σ261 (D106·C21·T34·K100) · dòng D-106/T-034/K-100 · block này.
+- **Bước kế (CHỜ user):** user đọc-lại-valid design TRƯỚC → mới tạo requirements/tasks → code TDD → verify (targeted + webcam E2E + full vp verify). KHÔNG sửa behavior code / KHÔNG tạo requirements-tasks trước khi user duyệt. `HOLD_MS=500` trong worktree #377 vẫn là mitigation (K-100), gỡ khi overlay mới thay thế. Có thể đề nghị cross-model second opinion (chờ user ủy quyền). Worktree #377 (webcam source+wiring) vẫn chưa commit — chờ user.
+---
+**[🔵 #377 — Web UI webcam đã chạy, nhưng bbox flicker: DỪNG vá triệu chứng, mở sub-spec Design-first]**
+- Worktree đang dở từ #377: `WebcamFrameSource` + `--camera` + 7 test; LOG #377 đã append nhưng chưa commit. Bằng chứng trước đó: full verify 654/2, web HTTP 200, detect live.
+- User kiểm trực quan phát hiện bbox nhấp nháy. Đọc code xác nhận: video và detection publish độc lập; `/boxes` không mang `frame_id`/generation/timestamp; client poll async không biết freshness. Lock chỉ chống data race, không nối box với frame đang hiển thị.
+- `HOLD_MS=500` hiện trong worktree chỉ giữ list non-empty theo thời gian poll, không biết tuổi detection; có thể vừa blink vừa giữ ghost box vô hạn nếu server lặp snapshot cũ. **Không coi là fix.**
+- Context-gatherer xác nhận không có spec overlay/freshness; `vision-vertical-slice/design.md` chủ ý để async low-latency live thành sub-spec riêng. Lựa chọn entry point = **Design-first** theo yêu cầu xuyên suốt của user.
+- **Bước kế:** đồng bộ #377 (D-105/INDEX) → `vp check` PASS → tạo sub-spec `web-live-overlay-sync` chỉ thiết kế/requirements trước code; Task 0 phải đo trace runtime để xác nhận trigger.
+---
 **[✅ #376 — VERIFY camera LIVE (webcam) → YOLOv8 ONNX nhận diện THẬT trên CPU (+K-099)]**
 - User "chưa GPU nhưng có cam" → webcam USB. Đường nguồn-live TRƯỚC GIỜ chưa verify (không cam + K-030 RTSP-digest Win). Verify-first: probe `cv2.VideoCapture(0)` TRƯỚC.
 - **VERIFY THẬT (no-GPU, webcam):** probe cam0 opened 640×480 (index 1 không có). Pipeline `webcam(0)→DetectorPipeline(OnnxDetector yolov8n)→CPU`: 20 frame (bỏ 5 warmup) → **20/20 CÓ detection · person ×20 conf 0.895**. Tên lớp lấy từ metadata model onnx (`custom_metadata_map['names']` = 80 lớp, 0=person) → chính xác KHÔNG bịa. Camera thấy user → nhận diện đúng liên tục.

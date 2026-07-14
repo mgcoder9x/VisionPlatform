@@ -17,7 +17,11 @@ Mỗi check nhắm ĐÚNG một loại drift ĐÃ TỪNG xảy ra (xem AI-IMPLEM
 - C7  Mọi LOG-# trích trong INDEX đều TỒN TẠI trong LOG          (bắt sync-đè mất đuôi LOG mà INDEX còn trích #phantom).
 - C8  Mọi trường OPT-IN `Verify-Symbol: <relpath>::<symbol>` trong journal → symbol PHẢI còn ĐỊNH NGHĨA trong code
       (bắt drift TÀI LIỆU↔CODE: mục ✅ nói đã build symbol X nhưng X bị xoá/đổi tên mà quên cập nhật journal — D-089).
-      Đây là drift class DUY NHẤT mà C1–C7 KHÔNG phủ (C1–C7 chỉ đối chiếu bản-ghi↔bản-ghi, C8 đối chiếu bản-ghi↔code).
+- C9  Bản-ghi ↔ GIT reality: local KHÔNG được BEHIND upstream (nền stale) — bắt lớp drift "resume trên nền git
+      stale/diverged" (K-064/K-085/K-098) mà C1–C8 KHÔNG thấy: nếu máy chưa `git pull`, file local nội-bộ-nhất-quán
+      nên C1–C8 PASS, nhưng đang xây trên nền cũ. C9 đối chiếu bản-ghi↔GIT (D-107). Read-only + offline (không fetch);
+      FAIL HẸP chỉ khi `behind>0`; thiếu git/upstream → SKIP-PASS (fail-safe). `git_facts` tiêm-được (như C8) → self_test thuần.
+      C8/C9 là hai drift class DUY NHẤT mà C1–C7 (chỉ bản-ghi↔bản-ghi) KHÔNG phủ: C8=bản-ghi↔code, C9=bản-ghi↔git.
 """
 from __future__ import annotations
 
@@ -73,6 +77,51 @@ def _verify_symbol_exists(relpath: str, symbol: str) -> bool:
     return re.search(pat, p.read_text(encoding="utf-8"), re.M) is not None
 
 
+def _collect_git_facts() -> dict:
+    """C9: thu trạng thái GIT THẬT (read-only · offline · zero side-effect) cho reconciliation gate (D-107).
+
+    Bản chất: đây là I/O (subprocess git) → TÁCH khỏi logic thuần C9 để `self_test` tiêm `git_facts` giả
+    (in-memory, xác định) — đúng pattern `symbol_exists` của C8. Truyền argv-list cho git (KHÔNG qua shell)
+    nên `@{upstream}` an toàn. Mọi lỗi (git thiếu / không phải repo / timeout) → available=False → C9 SKIP-PASS
+    (fail-safe: không chặn công việc vì hạ tầng thiếu git). TUYỆT ĐỐI không `fetch`/pull/network (tránh chậm/treo/side-effect).
+
+    Lệnh (đã verify empiric 2026-07-14, LOG #380):
+      git rev-parse --short HEAD                                  -> head
+      git rev-parse --abbrev-ref HEAD                             -> branch
+      git rev-parse --abbrev-ref --symbolic-full-name @{upstream} -> exit≠0 nếu chưa track (has_upstream=False)
+      git rev-list --left-right --count @{upstream}...HEAD        -> "<behind>\t<ahead>" (left=behind·right=ahead)
+    """
+    import subprocess
+
+    def _run(args: list[str]) -> tuple[int, str]:
+        try:
+            p = subprocess.run(["git", *args], cwd=str(ROOT),
+                               capture_output=True, text=True, timeout=5)
+            return p.returncode, p.stdout.strip()
+        except Exception:
+            return 1, ""
+
+    facts = {"available": False, "head": "", "branch": "",
+             "has_upstream": False, "behind": 0, "ahead": 0, "error": None}
+    rc, head = _run(["rev-parse", "--short", "HEAD"])
+    if rc != 0:
+        facts["error"] = "git khong san sang / khong phai repo git"
+        return facts
+    facts["available"] = True
+    facts["head"] = head
+    _, facts["branch"] = _run(["rev-parse", "--abbrev-ref", "HEAD"])
+    rc_up, _ = _run(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"])
+    if rc_up != 0:
+        return facts  # has_upstream giữ False → C9 SKIP-PASS (nhánh chưa track, không có mốc so sánh)
+    facts["has_upstream"] = True
+    rc_c, counts = _run(["rev-list", "--left-right", "--count", "@{upstream}...HEAD"])
+    if rc_c == 0 and counts:
+        parts = counts.split()   # "<behind>\t<ahead>" → split mọi whitespace
+        if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+            facts["behind"], facts["ahead"] = int(parts[0]), int(parts[1])
+    return facts
+
+
 def _contiguity(nums: list[int]) -> tuple[bool, int, list[int], list[int]]:
     """Trả (ok, maxn, duplicates, gaps). ok = không trùng AND đủ 1..max."""
     if not nums:
@@ -86,14 +135,16 @@ def _contiguity(nums: list[int]) -> tuple[bool, int, list[int], list[int]]:
 
 def check(log_text: str | None = None, index_text: str | None = None,
           active_text: str | None = None, journal_texts: dict | None = None,
-          symbol_exists=None) -> tuple[bool, list[str]]:
+          symbol_exists=None, git_facts: dict | None = None) -> tuple[bool, list[str]]:
     """Trả (ok, dòng-báo-cáo). ok=True nếu MỌI check pass.
 
     Tham số text TIÊM (mặc định None → đọc file thật): cho META-TEST kiểm chính checker (D-085) — feed
     text drift tổng-hợp → assert đúng check FAIL. Gọi `check()` không tham số = HÀNH VI CŨ (đọc file), nên
     `drift_check.py`/`vp` không đổi. `journal_texts` = dict prefix→text (None → đọc từng file journal).
     `symbol_exists` (C8, D-089) = Callable(relpath, symbol)->bool để TIÊM cho self_test (mặc định None →
-    `_verify_symbol_exists` đọc file code thật). Tiêm resolver giả giữ self_test thuần-in-memory + xác định."""
+    `_verify_symbol_exists` đọc file code thật). Tiêm resolver giả giữ self_test thuần-in-memory + xác định.
+    `git_facts` (C9, D-107) = dict trạng thái git TIÊM cho self_test (mặc định None → `_collect_git_facts()`
+    chạy git thật). Tiêm dict giả giữ self_test thuần-in-memory + xác định (không I/O, không flake)."""
     report: list[str] = []
     ok_all = True
 
@@ -188,6 +239,23 @@ def check(log_text: str | None = None, index_text: str | None = None,
          f"{len(verify_syms)} Verify-Symbol khớp code" if not missing_syms else
          f"symbol KHÔNG còn trong code={missing_syms} (code bị xoá/đổi tên mà journal chưa cập nhật?)")
 
+    # ---- C9: git-reality reconciliation (bản-ghi ↔ GIT) — đóng lớp drift C1–C8 không phủ (D-107) ----
+    # FAIL HẸP: chỉ khi local BEHIND upstream (nền stale, K-098). Thiếu git/upstream → SKIP-PASS (fail-safe).
+    # dirty/uncommitted KHÔNG fail (bình thường giữa turn). git_facts tiêm-được (None → collector I/O thật).
+    gf = _collect_git_facts() if git_facts is None else git_facts
+    if not gf.get("available", False):
+        line(True, "C9-GIT", f"SKIP: {gf.get('error') or 'git khong san sang'}")
+    elif not gf.get("has_upstream", False):
+        line(True, "C9-GIT", f"SKIP: nhanh '{gf.get('branch', '')}' chua co upstream (khong co moc so sanh)")
+    else:
+        behind = gf.get("behind", 0)
+        c9_ok = behind == 0
+        line(c9_ok, "C9-GIT",
+             (f"local dong-bo/vuot upstream (behind=0 · ahead={gf.get('ahead', 0)} · "
+              f"{gf.get('branch', '')}@{gf.get('head', '')})") if c9_ok else
+             (f"local SAU upstream {behind} commit — GIT PULL/FETCH + reconcile TRUOC khi lam "
+              f"(chong resume nen stale, K-098)"))
+
     return ok_all, report
 
 
@@ -221,47 +289,59 @@ def self_test() -> tuple[bool, list[str]]:
         report.append(f"[{'PASS' if cond else 'FAIL'}] self:{name}")
 
     log, index, active, journal = _self_baseline()
+    # C9 cần git_facts TIÊM: nếu để None thì check() gọi GIT THẬT → self_test mất tính thuần/xác định
+    # + có thể FAIL khi repo tình cờ behind. Baseline sạch = có git · có upstream · behind=0.
+    gclean = {"available": True, "head": "abc123", "branch": "b",
+              "has_upstream": True, "behind": 0, "ahead": 0, "error": None}
 
-    ok0, _ = check(log, index, active, journal)
+    ok0, _ = check(log, index, active, journal, git_facts=gclean)
     rec(ok0, "baseline-clean-PASS")  # baseline phải PASS toàn bộ
 
     # C1: entry TRÙNG mới (max giữ 2 → cô lập C1)
-    _, r = check(log + "### Entry #2 — dup\n", index, active, journal)
+    _, r = check(log + "### Entry #2 — dup\n", index, active, journal, git_facts=gclean)
     rec(_fail(r, "C1-LOG"), "C1-catch-dup")
 
     # C2: INDEX header trích #khác max
-    _, r = check(log, index.replace("Entry #2**", "Entry #9**"), active, journal)
+    _, r = check(log, index.replace("Entry #2**", "Entry #9**"), active, journal, git_facts=gclean)
     rec(_fail(r, "C2-INDEX-LOGREF"), "C2-catch-header-mismatch")
 
     # C4: tổng sai (5→9)
-    _, r = check(log, index.replace("**5 entry**", "**9 entry**"), active, journal)
+    _, r = check(log, index.replace("**5 entry**", "**9 entry**"), active, journal, git_facts=gclean)
     rec(_fail(r, "C4-INDEX-TOTAL"), "C4-catch-wrong-total")
 
     # C5: dòng INDEX orphan (D-009 không có heading trong journal D)
-    _, r = check(log, index + "| D-009 | x | #1 |\n", active, journal)
+    _, r = check(log, index + "| D-009 | x | #1 |\n", active, journal, git_facts=gclean)
     rec(_fail(r, "C5-D"), "C5-catch-orphan")
 
     # C6: activeContext thiếu mốc + thiếu nhắc #max
-    _, r = check(log, index, "nhắc #2 (thiếu mốc)\n", journal)
+    _, r = check(log, index, "nhắc #2 (thiếu mốc)\n", journal, git_facts=gclean)
     rec(_fail(r, "C6-ACTIVE-STAMP"), "C6-catch-missing-stamp")
-    _, r = check(log, index, "Cập nhật lúc: 2026 (thiếu nhắc entry)\n", journal)
+    _, r = check(log, index, "Cập nhật lúc: 2026 (thiếu nhắc entry)\n", journal, git_facts=gclean)
     rec(_fail(r, "C6-ACTIVE-LATEST"), "C6-catch-stale-pointer")
 
     # C7: INDEX trích LOG-# phantom (#99 ∉ {1,2})
-    _, r = check(log, index + "| Z | x | #99 |\n", active, journal)
+    _, r = check(log, index + "| Z | x | #99 |\n", active, journal, git_facts=gclean)
     rec(_fail(r, "C7-INDEX-CITES"), "C7-catch-phantom-cite")
 
     # C8: doc↔code — tiêm resolver GIẢ (in-memory, KHÔNG đọc file → xác định, không flake)
     fake_ok = lambda pth, s: (pth, s) == ("p.py", "foo")  # noqa: E731 — chỉ biết đúng p.py::foo
     j8 = dict(journal, D=journal["D"] + "Verify-Symbol: p.py::foo\n")
-    ok8, _ = check(log, index, active, j8, symbol_exists=fake_ok)
+    ok8, _ = check(log, index, active, j8, symbol_exists=fake_ok, git_facts=gclean)
     rec(ok8, "C8-clean-PASS")                                  # symbol tồn tại → toàn bộ PASS
     j8sym = dict(journal, D=journal["D"] + "Verify-Symbol: p.py::ghost\n")
-    _, r = check(log, index, active, j8sym, symbol_exists=fake_ok)
+    _, r = check(log, index, active, j8sym, symbol_exists=fake_ok, git_facts=gclean)
     rec(_fail(r, "C8-DOC-CODE"), "C8-catch-missing-symbol")    # symbol không có → FAIL
     j8file = dict(journal, D=journal["D"] + "Verify-Symbol: nope.py::foo\n")
-    _, r = check(log, index, active, j8file, symbol_exists=fake_ok)
+    _, r = check(log, index, active, j8file, symbol_exists=fake_ok, git_facts=gclean)
     rec(_fail(r, "C8-DOC-CODE"), "C8-catch-missing-file")      # file/symbol không có → FAIL
+
+    # C9: git-reality (D-107) — tiêm git_facts giả (in-memory, xác định, KHÔNG chạy git)
+    _, r = check(log, index, active, journal, git_facts={**gclean, "behind": 3})
+    rec(_fail(r, "C9-GIT"), "C9-catch-behind")                 # local sau upstream → FAIL (nền stale)
+    ok9u, _ = check(log, index, active, journal, git_facts={**gclean, "has_upstream": False})
+    rec(ok9u, "C9-no-upstream-SKIP-PASS")                      # nhánh chưa track → SKIP-PASS
+    ok9a, _ = check(log, index, active, journal, git_facts={"available": False, "error": "no git"})
+    rec(ok9a, "C9-unavailable-SKIP-PASS")                      # thiếu git → SKIP-PASS (fail-safe)
 
     ok_all = all(line.startswith("[PASS]") for line in report)
     return ok_all, report
