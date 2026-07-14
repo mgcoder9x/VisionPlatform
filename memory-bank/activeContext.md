@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T22:20:00+07:00.
+**Cập nhật lúc:** 2026-07-13T22:50:00+07:00.
+**[✅ #376 — VERIFY camera LIVE (webcam) → YOLOv8 ONNX nhận diện THẬT trên CPU (+K-099)]**
+- User "chưa GPU nhưng có cam" → webcam USB. Đường nguồn-live TRƯỚC GIỜ chưa verify (không cam + K-030 RTSP-digest Win). Verify-first: probe `cv2.VideoCapture(0)` TRƯỚC.
+- **VERIFY THẬT (no-GPU, webcam):** probe cam0 opened 640×480 (index 1 không có). Pipeline `webcam(0)→DetectorPipeline(OnnxDetector yolov8n)→CPU`: 20 frame (bỏ 5 warmup) → **20/20 CÓ detection · person ×20 conf 0.895**. Tên lớp lấy từ metadata model onnx (`custom_metadata_map['names']` = 80 lớp, 0=person) → chính xác KHÔNG bịa. Camera thấy user → nhận diện đúng liên tục.
+- **Ghi sổ:** LOG #376 · +K-099 · INDEX canonical #375→#376 · Σ256→Σ257 (K98→K99) · dòng K-099 · block này. 0 code/file sản phẩm đổi (scratch xóa).
+- **"INPUT THẬT" TRỌN trên CPU:** host-image✅(#351 person×4+bus×1) · config-TOML✅(#355) · container✅(#375) · **camera-live✅(#376)**. Nhận diện NN thật chạy mọi đường-vào trên CPU, không GPU.
+- **Bước kế (CHỜ user):** (a) RTSP IP-camera nếu có URL (K-030 digest Windows — có thể vướng, cần thử); (b) chạy trên video/cảnh nghiệp vụ thật; (c) batch-mux Task 0 (cần GPU máy khác). Áp §0 TRỌN mọi resume (K-098).
+---
 **[✅ #375 — VERIFY nhận diện ONNX THẬT chạy TRONG container CPU (đóng [chưa kiểm] onnx-in-container)]**
 - Đóng nốt [chưa kiểm] của D-103/D-104: detector ONNX chạy BÊN TRONG container = tổ hợp mới (onnxruntime+weight-mount+opencv-headless Linux container) = kịch bản deploy production thật. batch-mux vẫn gated (GPU máy khác — KHÔNG ép).
 - **VERIFY THẬT:** `docker run -v <models>:/app/models:ro --onnx /app/models/yolov8n.onnx --yolo v8 --model-size 640` → log `detector=OnnxDetector(...)` (nạp OK, không crash) + `/stats` HTTP 200 `video=156270·detect=421·boxes=0`. `detect=421` = onnx inference chạy 421 lần; `boxes=0` ĐÚNG (synthetic ≠ vật COCO; độ-chính-xác đã verify #351 person×4+bus×1). Container dọn sạch.

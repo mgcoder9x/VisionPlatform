@@ -7100,3 +7100,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** `docker run -v <models>:/app/models:ro ... --onnx /app/models/yolov8n.onnx --yolo v8` → log `detector=OnnxDetector(/app/models/yolov8n.onnx)` (nạp OK, không crash) + `/stats` HTTP 200 `detect=421` (onnx inference chạy 421 lần) · `boxes=0` ĐÚNG (synthetic không phải COCO object; độ-chính-xác đã verify #351). ⇒ deploy production "detector NN thật trong container CPU" CHẠY. Đóng [chưa kiểm] onnx-in-container. Thread Docker/deploy giờ TRỌN: build✅ run-BrightBlob✅ compose-demo✅ onnx-in-container✅.
 
 **Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, Docker Desktop 29.5.2, no-GPU):** container với `--onnx yolov8n.onnx` (weight mount ro) → OnnxDetector nạp, /stats HTTP 200 detect=421, không crash; container dọn sạch (docker ps -a rỗng); git tree sạch. · **Chưa verify:** onnx-in-container trên VIDEO/ảnh thật (boxes>0 — đã proxy bằng #351 host); GPU container.
+
+### Entry #376 — 2026-07-13 — VERIFY camera LIVE (webcam) → YOLOv8 ONNX nhận diện THẬT trên CPU (+K-099) — Kiro-Opus
+
+**Bối cảnh:** user "chưa GPU nhưng có cam, chạy thử được không" → chọn webcam USB. Đường nguồn-live (RTSP/webcam) TRƯỚC GIỜ CHƯA verify (không có camera + K-030 RTSP-digest Windows). Verify-first: probe webcam TRƯỚC khi chạy pipeline (không giả định có/accessible).
+
+**1. Quyết định AI tự ra:** không (verification thuần, 0 code/file sản phẩm đổi — chỉ scratch probe+detect đã xóa). Chạy trực tiếp `.venv` (webcam trong Docker/Windows khó truy cập), headless (không cv2.imshow). Tên lớp lấy TỪ metadata model onnx (`get_modelmeta().custom_metadata_map['names']`) → chính xác, KHÔNG bịa/hardcode COCO.
+
+**2. Chỗ phải đổi:** không.
+
+**3. Trade-off:** đọc names từ metadata model vs hardcode COCO-80. Chọn metadata — 100% khớp model thật, chống bịa (đúng nguyên tắc user). Bỏ 5 frame warmup (webcam sáng dần) để số sạch.
+
+**4. Điều bạn nên biết (K-099):** probe `cv2.VideoCapture(0)` opened=True 640×480 (index 1 không có). Pipeline THẬT `webcam(0)→DetectorPipeline(OnnxDetector yolov8n)→CPU`: đọc 20 frame (bỏ 5 warmup) → **20/20 frame CÓ detection · person × 20 (conf cao nhất 0.895)**. Camera thấy người (user) → nhận diện đúng liên tục. ⇒ đường nguồn-LIVE → nhận diện NN thật trên CPU CHẠY (không GPU). Đây là mảnh cuối "input thật": trước có host-image(#351)/config(#355)/container(#375); nay + camera-live. RTSP (K-030) chưa test (cần IP-cam), webcam khác path (cv2 index) đã xong.
+
+**Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, no-GPU, webcam USB):** probe cam0 opened 640×480; live detect 20/20 frame person conf 0.895; names từ metadata 80 lớp (0=person·2=car); scratch xóa; git tree sạch. · **Chưa verify:** RTSP IP-camera (K-030 digest Windows — cần URL cam thật); webcam-trong-container (Windows Docker khó); nhiều-người/đa-lớp (cảnh phụ thuộc).
