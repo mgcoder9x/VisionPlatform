@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-13)
-**Cập nhật lúc:** 2026-07-13T22:00:00+07:00.
+**Cập nhật lúc:** 2026-07-13T22:20:00+07:00.
+**[✅ #375 — VERIFY nhận diện ONNX THẬT chạy TRONG container CPU (đóng [chưa kiểm] onnx-in-container)]**
+- Đóng nốt [chưa kiểm] của D-103/D-104: detector ONNX chạy BÊN TRONG container = tổ hợp mới (onnxruntime+weight-mount+opencv-headless Linux container) = kịch bản deploy production thật. batch-mux vẫn gated (GPU máy khác — KHÔNG ép).
+- **VERIFY THẬT:** `docker run -v <models>:/app/models:ro --onnx /app/models/yolov8n.onnx --yolo v8 --model-size 640` → log `detector=OnnxDetector(...)` (nạp OK, không crash) + `/stats` HTTP 200 `video=156270·detect=421·boxes=0`. `detect=421` = onnx inference chạy 421 lần; `boxes=0` ĐÚNG (synthetic ≠ vật COCO; độ-chính-xác đã verify #351 person×4+bus×1). Container dọn sạch.
+- **Ghi sổ:** LOG #375 (verification thuần, KHÔNG +D/C/T/K → Σ256 giữ) · INDEX canonical #374→#375 · block này. 0 code/file đổi.
+- **THREAD DOCKER/DEPLOY TRỌN:** build✅ (#373) · run-BrightBlob✅ (#373) · compose-demo chạy-ngay✅ (#374) · onnx-thật-trong-container✅ (#375). Deploy CPU production-verified.
+- **Bước kế (CHỜ user):** deploy đã trọn. Việc giá-trị-cao thật sự = **batch-mux Task 0** (cần GPU + network re-export — máy khác). No-GPU còn: slim image (giá-trị giảm dần). Áp §0 TRỌN mọi resume (K-098). Không ép việc gated.
+---
 **[✅ #374 — Thêm `docker-compose.cpu-demo.yml` chạy-NGAY (đóng K-097, D-104)]**
 - Đóng nốt 🟡 K-097 (#373): compose prod KHÔNG chạy out-of-box (weight máy cũ + RTSP + network_mode host Linux). batch-mux vẫn gated (GPU+network máy khác — KHÔNG ép).
 - **D-104 (additive):** `deploy/docker-compose.cpu-demo.yml` — port-mapping `8000:8000` (portable, không host-net) + CMD mặc định synthetic+BrightBlobDetector (0 phụ thuộc: không weight/RTSP/GPU) + khối comment bật YOLO onnx (mount weight). KHÔNG đụng compose prod Linux.

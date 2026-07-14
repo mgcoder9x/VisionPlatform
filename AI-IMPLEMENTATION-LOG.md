@@ -7086,3 +7086,17 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 **4. Điều bạn nên biết:** K-097 giờ ĐÓNG (có đường compose chạy-ngay). Người đánh giá/onboarding/CI: `docker compose -f deploy/docker-compose.cpu-demo.yml up --build` → http://localhost:8000. Prod Linux vẫn dùng `docker-compose.yml` (RTSP+weight+host-net).
 
 **Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, Docker Desktop 29.5.2, no-GPU):** `docker compose -p vpdemo -f deploy/docker-compose.cpu-demo.yml up -d --build` → container Started; `GET /stats` HTTP 200 `video=1268602·detect=77309·boxes=1` (web UI + detect live); `docker compose down` dọn sạch (không container sót). · **Chưa verify:** biến thể onnx trong compose (khối comment — cần mount weight); GPU compose.
+
+### Entry #375 — 2026-07-13 — VERIFY nhận diện ONNX THẬT chạy TRONG container CPU (đóng [chưa kiểm] onnx-in-container) — Kiro-Opus
+
+**Bối cảnh:** D-103/D-104 để hở "[chưa kiểm] onnx-in-container". Đây là tổ hợp MỚI (onnxruntime + weight-mount + opencv-headless trong Linux container) — kịch bản deploy production thật, cần verify (có thể vỡ vì container-specific dù host-onnx #351/config-onnx #355/container-BrightBlob #373 đều xanh). batch-mux vẫn gated (GPU máy khác — KHÔNG ép).
+
+**1. Quyết định AI tự ra:** không (verification thuần, 0 code/file đổi — chỉ `docker run` mount weight + đọc /stats, container dọn sau).
+
+**2. Chỗ phải đổi:** không.
+
+**3. Trade-off:** verify onnx-trong-container trên nguồn synthetic (boxes=0 vì không có vật COCO) vs mount video thật (thêm setup). Chọn synthetic — mục tiêu là chứng minh onnx LOADS + RUNS trong container (detect-counter tăng), KHÔNG phải re-chứng-minh độ-chính-xác (đã có #351 person×4+bus×1). Đủ + tối thiểu.
+
+**4. Điều bạn nên biết:** `docker run -v <models>:/app/models:ro ... --onnx /app/models/yolov8n.onnx --yolo v8` → log `detector=OnnxDetector(/app/models/yolov8n.onnx)` (nạp OK, không crash) + `/stats` HTTP 200 `detect=421` (onnx inference chạy 421 lần) · `boxes=0` ĐÚNG (synthetic không phải COCO object; độ-chính-xác đã verify #351). ⇒ deploy production "detector NN thật trong container CPU" CHẠY. Đóng [chưa kiểm] onnx-in-container. Thread Docker/deploy giờ TRỌN: build✅ run-BrightBlob✅ compose-demo✅ onnx-in-container✅.
+
+**Đã verify (CHẠY THẬT máy `k.nguyen.manh.toan`, Docker Desktop 29.5.2, no-GPU):** container với `--onnx yolov8n.onnx` (weight mount ro) → OnnxDetector nạp, /stats HTTP 200 detect=421, không crash; container dọn sạch (docker ps -a rỗng); git tree sạch. · **Chưa verify:** onnx-in-container trên VIDEO/ảnh thật (boxes>0 — đã proxy bằng #351 host); GPU container.
