@@ -55,9 +55,11 @@ Ghi chú: Task 6 (INT8) gated + độc lập nhánh (chỉ cần Task 3 fail-fas
   - Verify: import OK (không unit-test được loop) + webcam E2E (cadence bật → detect thưa, video vẫn mượt, box không giật).
   - _Requirements: 1.1, 1.2, 4.1_
 
-- [ ] 5. Bề mặt cấu hình TOML `[detection]` + merge precedence
-  - Thêm khoá `[detection]` (cùng tên CLI) vào config loader/schema + merge CLI > TOML (tiền lệ D-086) + validate fail-fast.
-  - Test: TOML-only, CLI-override-TOML, giá trị sai → lỗi; `--validate` OK.
+- [x] 5. Bề mặt cấu hình TOML `[detection]` + merge precedence
+  - Thêm khoá `[detection]` (cùng tên CLI) vào config loader + merge CLI > TOML (tiền lệ D-086) + validate fail-fast.
+  - **ĐỔI so với câu chữ (C-023):** KHÔNG nhét vào `AppConfig` schema (buộc `[[pipelines]]` giả cho web app pipeline-less) → dùng `load_detection_config` standalone + `_parse_detection` dùng chung. Reuse `DetectionCadenceConfig` (kernel) làm đích parse (1 nguồn sự thật). Thêm `--config` cho `vision_web_app` + `_merge_detection` (default argparse→None sentinel).
+  - Test (`test_config_detection_toml.py`, 14 test): parse full/empty; bad-types→ConfigError; invariant→ConfigError; TOML-only; CLI-override-TOML; motion-gate OR; roi TOML-only; template `configs/web/example_web_detection.toml`.
+  - **VERIFY (#400):** `scripts\vp.cmd verify` = 819 passed/2 skipped (+14) · lint 6 kept/0 broken · drift PASS. D-121.
   - _Requirements: 4.2, 1.3_
 
 - [ ] 6. (GATED, có thể tách) INT8 quantize artifact + đo accuracy
@@ -65,8 +67,10 @@ Ghi chú: Task 6 (INT8) gated + độc lập nhánh (chỉ cần Task 3 fail-fas
   - ĐO: speed vs accuracy drop trên tập ảnh nhỏ (vd bus.jpg + vài ảnh) so fp32. Giữ CHỈ khi cải thiện đo được (R3.2).
   - _Requirements: 2.2, 3.1, 3.2_
 
-- [ ] 7. Verify tổng + webcam E2E (gate cuối)
-  - `scripts\vp.cmd verify` PASS (không tăng timeout che K-035); unit/property (should_detect, motion-gate, config boundary, fail-fast). Webcam E2E: bật cadence+motion-gate → xác nhận CPU giảm (đo Task 0 lại) + video mượt + box không giật (user nhìn).
+- [~] 7. Verify tổng + webcam E2E (gate cuối) — MỘT PHẦN xong
+  - ✅ `scripts\vp.cmd verify` = 819/2 · lint 6/0 · drift PASS (#400). Unit/property should_detect/motion-gate/config/fail-fast đều xanh.
+  - ✅ **ĐO CPU% ĐỊNH LƯỢNG (R3.1, #401, D-122/K-105):** `benchmarks/measure_cadence_cpu.py` (harness cô lập reuse `should_detect`) → min-interval 200ms **−60% CPU**, 500ms **−80% CPU** (onnx yolov8n CPU máy toann). Lever THẬT tiết kiệm → giữ (R3.2).
+  - ⬜ CÒN: đo motion-gate CPU (cần scene TĨNH thật — synthetic không đại diện) + độ-trễ-bắt-vật-mới + **E2E RTSP/webcam user nhìn** (cần URL RTSP / webcam) + [tuỳ] GPU khi cài torch.
   - _Requirements: 1.1–4.2 (toàn bộ) · design §Testing Strategy_
 
 ## Notes

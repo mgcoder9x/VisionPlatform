@@ -1,0 +1,3 @@
+- generic [active] [ref=e1]:
+  - heading "Vision Platform — video + overlay (freshness/lease, fix flicker)" [level=3] [ref=e2]
+  - paragraph [ref=e5]: video=115826 · detect=2073 · boxes=10 · overlay_rev=3772

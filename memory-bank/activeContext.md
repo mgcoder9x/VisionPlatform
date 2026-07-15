@@ -1,7 +1,101 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
-## Trạng thái hiện tại (2026-07-15)
-**Cập nhật lúc:** 2026-07-15T20:00:00+07:00.
+## Trạng thái hiện tại (2026-07-16)
+**Cập nhật lúc:** 2026-07-16T23:00:00+07:00.
+**[🔵 #412 — REVIEW SÂU kiến trúc overlay/tracking (D-126, design-first, CHƯA code)]**
+- User thấy S1 "box không sát người" + S2 "tắt chậm khi người đi qua" trên video thật; yêu cầu xem lại KIẾN TRÚC tận gốc trước, rồi code có kiến trúc rõ để sau xây NGHIỆP VỤ. → DỪNG vá.
+- Đọc SÂU code thật → **chẩn đoán GỐC:** S1 chủ yếu do **client vẽ TĨNH (sample-and-hold), không ngoại suy vận tốc** (`_PAGE tick()` vẽ vị trí báo-cuối; `project_overlay` không gửi vận tốc) + EMA server trễ + detect CPU thưa. S2 do **xoá theo lease 600ms mù** (off-frame-evict chỉ bắt rời-qua-mép). Kiến trúc: `DisplayStabilizer` GỘP tracking+display+lifecycle; **2 tracker phân kỳ** (analytics iou_tracker vs display).
+- **Đề xuất (design.md):** tách `domain/tracker` (motion+association+lifecycle, DÙNG CHUNG analytics+display = 1 nguồn track, nền nghiệp vụ) ⊥ **client render bù-chuyển-động** (rAF ngoại suy pos+vel*dt, fix S1) ⊥ **removal evidence-based** (time_since_update, fix S2). Wave A(client,rủi-ro-thấp)→B(removal)→C(hợp-nhất-tracker)→D(nghiệp-vụ).
+- **Ghi sổ:** LOG #412 · +D-126 (🔵) · INDEX #411→#412 · Σ294→295. `.kiro/specs/overlay-tracking-refactor/design.md` (get_diagnostics 0 error).
+- **CHỜ USER VALID 4 câu** (cuối design.md): (1) tách tracking⊥display? (2) ưu tiên Wave A client ngoại suy? (3) Wave C hợp nhất tracker ngay/để sau? (4) giảm/bỏ EMA server? → rồi tạo requirements/tasks → code TDD.
+- Server LIVE terminalId=18 (A.mp4) cho user xem. Bug #410 đã fix (#411).
+---
+**[✅ #411 — FIX BUG #410 (crash detect) từ video user A.mp4: _predict_box clamp [0,1] (+K-111)]**
+- Video user `C:\Users\toann\Desktop\New folder (2)\A.mp4` → detect ERROR liên tục `ValueError NORMALIZED bbox x<0`. Bug do `_predict_box` (D-125) dựng BBox với toạ độ dự đoán ÂM (vật gần mép di chuyển ra). FIX: clamp x,y về [0,1]. Test hồi quy `test_prediction_offframe_clamped_no_crash`. 9 motion test GREEN.
+- **VERIFY A.mp4 sau fix:** HẾT crash, person conf 0.46-0.91, ~5 người/khung. False-positive nhãn lạ frisbee×7/potted-plant×1 (nâng conf 0.5 nếu phiền). displayID churn cao (88/25) NHƯNG **vô hình với user** (K-111: đo đúng = visual box-continuity, không đếm ID); box phủ ~5.4/khung. Screenshot `vp-userA.jpg`.
+- **Ghi sổ:** LOG #411 · +K-111 · INDEX #410→#411 · Σ293→294.
+- **Bước kế (chờ user nhìn):** user xem A.mp4 trên web → nếu thấy nhấp nháy/ghost THẬT (visual) → nâng association (center-distance/Hungarian/Kalman); nếu false-positive frisbee phiền → conf 0.5. RTSP thật khi có.
+---
+**[✅ #410 — Đổi video demo phù hợp hơn: people-detection.mp4 (normal-speed, sạch)]**
+- User: vtest.avi tua nhanh+đông. Tải `people-detection.mp4` (intel-iot-devkit/sample-videos, người đi hành lang normal-speed) về sample_videos/ (gitignored).
+- **VERIFY:** person conf **0.70–0.90** (rất chắc), **0 false-positive** với `--conf 0.45`. Clip có khúc trống (không ai) = bình thường. Detection SẠCH.
+- Server LIVE terminalId=15: `--video sample_videos/people-detection.mp4 --onnx models/yolov8n.onnx --yolo v8 --overlay-motion --coco-labels --conf 0.45`. http://127.0.0.1:8000/
+- **Ghi sổ:** LOG #410 · INDEX #409→#410 · Σ293 giữ (không +ID). Không đổi code.
+- **Bước kế:** xem overlay/tracking trên video sạch này; RTSP thật khi có → per-camera tuning. Mini-tracker (D-123/124/125) + conf (K-110) + video sạch sẵn sàng.
+---
+**[✅ #409 — Giảm false-positive: nâng conf 0.25→0.45 (data-driven, verify browser)]**
+- User "conf cao lên chút, vài cảnh báo nhận nhầm là người". Data-driven: poll /overlay 176 detect → band noise 0.25-0.45 (~16%). Chọn `--conf 0.45`.
+- **VERIFY browser MCP:** minConf 0.456, **0 box <0.45**, nhãn rác (backpack/skis/surfboard) BIẾN MẤT, còn person/truck/car. False-positive sạch.
+- **TRADE-OFF (K-110):** nâng conf → recall vật XA giảm (đối nghịch chống-flicker K-106). Runtime cờ `--conf` (KHÔNG đổi default 0.25 trong code). Chọn theo cảnh.
+- **Ghi sổ:** LOG #409 · +K-110 · INDEX #408→#409 · Σ292→293. Không đổi code (runtime tuning).
+- Server LIVE (terminalId=14): `--overlay-motion --coco-labels --conf 0.45`. http://127.0.0.1:8000/
+- **Bước kế:** RTSP thật khi có → đo per-object churn/ghost + chọn conf per-camera. Mini-tracker (D-123/124/125) + conf tuning sẵn sàng.
+---
+**[✅ #408 — Mini-tracker hoàn chỉnh (giữ CPU): motion-predicted matching + favicon + COCO labels]**
+- User giữ CPU + "xử lý nốt". Fix gốc flicker vật di chuyển (K-107): D-125 `matchUsePrediction` + `_predict_box` (khớp theo vị trí DỰ ĐOÁN → vật di chuyển giữa 2 detect thưa vẫn match). CLI umbrella `--overlay-motion` = D-123 hysteresis + D-124 off-frame-evict + D-125 predict-match (mini-tracker đầy đủ). + favicon 204 (hết 404 console) + `--coco-labels` (tên person/car...).
+- **8 unit motion test GREEN.** favicon 404 HẾT (browser console). labels hiện tên (verify /overlay).
+- **TRUNG THỰC E2E:** churn vtest.avi 45 distinct-ID KHÔNG kết luận được — metric "distinct IDs" SAI cho cảnh người-đi-ngang-qua (nhiều track ngắn HỢP LỆ). Cần RTSP THẬT (cảnh ổn định) đo per-object churn sạch. Bộ 3 cơ chế unit-đúng + additive, chưa chứng minh E2E trên video đông.
+- **Ghi sổ:** LOG #408 · +D-125 (Verify-Symbol `_predict_box` → C8 27→28) · INDEX #407→#408 · Σ291→292.
+- **Bước kế:** (a) khi có RTSP thật → chạy `--overlay-motion --coco-labels` đo per-object churn/ghost sạch → tinh chỉnh (center-distance/Kalman nếu cần); (b) mini-tracker sẵn sàng. Lệnh demo: `--video sample_videos/vtest.avi --onnx models/yolov8n.onnx --yolo v8 --overlay-motion --coco-labels`.
+---
+**[ℹ️ #407 — VERIFY: web app chạy CPU cho YOLO; GPU (onnxruntime-gpu) SẴN cho ONNX không cần torch (+K-109, đính chính K-104)]**
+- User hỏi CPU/GPU. Kiểm THẬT: web app dùng `OnnxDetector` default `CPUExecutionProvider` + `_build_detector` không truyền providers → **CPU**. venv có **onnxruntime-gpu 1.27** (providers CUDA/Tensorrt, RTX 2060) → GPU dùng được cho ONNX **KHÔNG cần torch** (torch chỉ cho .pt — đính chính K-104).
+- **Gap:** `_build_detector` nhánh onnx hard-code CPU (bỏ qua --device). Bật GPU = wire CUDA provider + ensure_cuda_dll_path (D-098).
+- **Ghi sổ:** LOG #407 · +K-109 · INDEX #406→#407 · Σ290→291. Không đổi code.
+- **Bước kế (đề xuất, connect flicker/ghost):** wire GPU cho web app onnx → detect-rate tăng mạnh → bớt throttle → GIẢM cả flicker (K-107) lẫn ghost (K-108) + perf thương mại. Verify `session.get_providers()`=CUDA + đo throughput. Rồi mới cân fix association nếu cần.
+---
+**[✅ #406 — Fix GHOST "người đi qua rồi bbox 1 lúc mới tắt": motion-aware eviction (TDD, unit GREEN)]**
+- User báo ghost + gợi ý detect+tracking. Nhìn sâu: flicker (K-106/7) + ghost = 2 đầu 1 gốc = display THIẾU motion model (giữ box theo đồng hồ mù).
+- Thi công D-124: `DisplayStabilizer` + motion model nhẹ (vận tốc tâm 2 khớp) → miss thì dự đoán tâm → ra ngoài [0,1] → xoá NGAY (nhánh unmatched + on_tick). Gate `evictPredictedOffFrame` default-off + CLI `--overlay-evict-offframe`. Vật đứng-yên giữ theo lease (không hại). **6 unit test GREEN.**
+- **Ghi sổ:** LOG #406 · +D-124 · +K-108 · INDEX #405→#406 · Σ288→290. RTSP tạm chưa có → verify E2E bằng video vtest.avi qua browser MCP.
+- **Bước kế:** (a) verify browser: bật `--overlay-evict-offframe` → box người rời khung tắt nhanh hơn; (b) flicker vật-nhỏ-di-chuyển gốc IoU-association (K-107) — xử khi có RTSP thật hoặc nếu user muốn association motion-aware; (c) quick-win favicon + labels COCO.
+---
+**[⚠️ #405 — Fix flicker THỬ-1 (confidence-hysteresis, TDD) — VERIFY lộ CHƯA ĐỦ, chẩn đoán lại gốc trội]**
+- Thi công D-123: `OverlayConfig.createConfThreshold/sustainConfThreshold` (Schmitt, default 0/0 additive) + `DisplayStabilizer` lọc leftover theo create + CLI `--overlay-create/sustain-conf` + tự hạ decode conf về sustain. **7 unit test GREEN** (`test_oscillating_conf_no_churn` đúng cho conf-oscillation).
+- **VERIFY browser MCP THẬT (không bịa):** vtest.avi throttle+hysteresis = 7 displayId (≈ baseline #404), KHÔNG throttle = 28 (tệ hơn, hạ conf 0.12 ngập box yếu cảnh đông). ⇒ **fix CHƯA đủ**. Gốc TRỘI (K-107) = **IoU-association fail vật nhỏ di chuyển** (overlap<0.3 giữa 2 detect → track chết→promote ID mới) + ngập box yếu; conf-oscillation chỉ phụ.
+- **Ghi sổ:** LOG #405 · +D-123 (hysteresis, unit✅/E2E⚠️) · +K-107 (empiric âm tính + gốc trội) · INDEX #404→#405 · Σ286→288. Giữ hysteresis làm lever (additive default-off). Bài học: validate nhiều lần lộ fix chưa đủ → KHÔNG vá mù.
+- **Bước kế (CHỜ user chốt — design-first cho fix THẬT):** (A) cải thiện association: motion-aware (dự đoán vị trí) / center-distance / size-aware IoU (nới tolerance box nhỏ) — thay/kèm greedy_associate IoU thuần; (B) KHÔNG hạ decode conf mù; (C) test trên RTSP THẬT (ít đông hơn vtest.avi — có thể đã đủ). Cân trước khi code.
+- Server đã dừng (không nền chạy khi vp verify — tránh K-035).
+---
+**[🔎 #404 — REVIEW browser (Playwright MCP): XÁC NHẬN gốc bug flicker vật XA (+K-106), CHƯA sửa]**
+- Playwright MCP đã kết nối (tools khả dụng) → mở `http://127.0.0.1:8000/` (video vtest.avi+YOLO) soi thật.
+- **Lõi web OK:** video MJPEG live (hash frame đổi), canvas khớp 768×576, overlay vẽ box (1488 px xanh), mọi /overlay+/stats = 200 OK. Lỗi console duy nhất = `favicon.ico` 404.
+- **BUG user báo XÁC NHẬN (K-106):** poll /overlay 16 mẫu/3s → vật gần ổn định (1:724,1:1041 = 16/16) NHƯNG vật XA (box height<0.12) sinh **7 displayId mới/3s** (churn) vì conf DAO ĐỘNG quanh ngưỡng 0.25. Gốc 3 tầng: (a) 1 ngưỡng conf cứng @decode; (b) stabilizer XÓA candidate ngay khi 1 result không match → cần 2-hit-liên-tiếp promote → churn ID; (c) cadence (motion-gate+min-interval 200ms #400) làm khoảng trống detect dài hơn.
+- **Ghi sổ:** LOG #404 · +K-106 (root-cause verified) · INDEX #403→#404 · Σ285→286 (K106). Chưa đổi code sản phẩm.
+- **Bước kế (CHỜ user chốt hướng — design-first, cân ghost vs flicker):** (A) stabilizer temporal-hysteresis (candidate miss-tolerance + hold, giữ 1 displayId) — RECOMMEND (đúng chỗ dập nhiễu); (B) conf-hysteresis @decode (2 ngưỡng); (C) nới cadence khi cần bắt vật nhỏ. Sẽ viết design → valid → TDD → verify browser lại (churn giảm). Server LIVE terminalId=6.
+- Quick-win độc lập: favicon 404 + `--labels` COCO (cosmetic).
+---
+**[✅ #403 — Task 7 E2E: YOLO THẬT qua VIDEO vtest.avi trên web (thay webcam)]**
+- Máy không webcam → dùng `--video`. Tải `vtest.avi` (OpenCV, người đi bộ, ~8.1MB) về `sample_videos/` (gitignored; thêm ignore media vào `.gitignore`).
+- **Lệnh (server LIVE terminalId=6):** `python -m vision_platform.profiles.vision_web_app --video sample_videos/vtest.avi --onnx models/yolov8n.onnx --yolo v8 --config configs/web/example_web_detection.toml --host 127.0.0.1 --port 8000`.
+- **VERIFY E2E (đọc /stats+/overlay THẬT):** video=7982≫detect=112 (cadence throttle từ TOML) · `/overlay` 6 box: person(label 0) 0.863/0.812/0.779/0.442 + car(2) + truck(7), health detector/source=LIVE. ⇒ web-live-overlay + adaptive-detection-perf chạy THẬT với YOLO trên video.
+- **Ghi sổ:** LOG #403 · INDEX #402→#403. KHÔNG đổi code sản phẩm (chỉ demo + `.gitignore`) → baseline 819/2 giữ. Không +D/C/T/K.
+- **Mở xem:** http://127.0.0.1:8000/ (box bám người đi bộ). Label hiện dạng số (chưa truyền `--labels` COCO — cosmetic).
+- **Bước kế:** (a) thêm `--labels` COCO cho tên đẹp (person/car...); (b) Playwright MCP sau reconnect → tự screenshot verify; (c) URL RTSP cho real-time; (d) Task 7 còn motion-gate CPU + độ-trễ; (e) [tuỳ] commit các task.
+---
+**[⚙️ #402 — Hạ tầng: thêm Playwright MCP cho AI xem web + phát hiện fetch-MCP DEAD]**
+- User muốn AI "xem web". Kiểm lại: `powers list`=rỗng; chỉ có `fetch` MCP — nhưng **DEAD vì `uvx` KHÔNG cài** (node/npx CÓ, verify #402). Đó là lý do "gửi mà không dùng được".
+- Thêm `playwright` (`npx -y @playwright/mcp@latest`) vào `.kiro/settings/mcp.json` (giữ `fetch`). Package chính chủ Microsoft (verify web). **CHƯA verify kết nối trong phiên** — cần Kiro reconnect MCP + lần đầu tải browser qua mạng. User có thể cần reconnect trong MCP panel.
+- Máy KHÔNG webcam (#401) → demo trực quan = synthetic (server LIVE terminalId=5 tại http://127.0.0.1:8000/); YOLO người thật cần URL RTSP.
+- **Bước kế:** (a) sau reconnect, dùng Playwright MCP navigate `http://127.0.0.1:8000/` + screenshot verify; (b) hoặc user cấp URL RTSP → demo YOLO; (c) Task 7 còn motion-gate/độ-trễ. KHÔNG đổi code sản phẩm → baseline 819/2 giữ.
+---
+**[✅ #401 — adaptive-detection-perf Task 7 (một phần): ĐO CPU% cadence ĐỊNH LƯỢNG (R3.1)]**
+- Công cụ `benchmarks/measure_cadence_cpu.py` (§3.1 script cố định): đo CPU% detect-loop dưới cadence sweep, **tái dùng policy production `should_detect`** + `DetectorPipeline(OnnxDetector)` THẬT trong harness CÔ LẬP (không Flask/MJPEG — video/transport CPU trực giao). psutil `Process.cpu_percent` + detect/s; DELTA = tín hiệu.
+- **SỐ THẬT (máy toann, onnx yolov8n CPU, window 8s):** baseline min-interval=0 = 12.88 detect/s·CPU 504.7% → 200ms = 3.88/s·203.5% (**−60% CPU**) → 500ms = 1.88/s·100.5% (**−80% CPU**). Cadence giảm CPU ~tuyến tính → R3.1 PASS, giữ lever (R3.2). Baseline≠K-102 (máy khác + loop-throughput đa-thread) → K-105.
+- **Ghi sổ:** LOG #401 · +D-122 (phương pháp, Verify-Symbol ×1 → C8 26→27) · +K-105 (số) · INDEX #400→#401 · Σ283→285 (D122·K105). KHÔNG đổi code sản phẩm (chỉ thêm benchmark) → baseline 819/2 giữ.
+- **§3.1 — đề nghị Trusted Command mới (chỉ đọc/đo, không ghi repo):** `python -m benchmarks.measure_cadence_cpu *`.
+- **Bước kế (Task 7 gate cuối còn):** đo motion-gate CPU (cần scene TĨNH thật, synthetic không đại diện) + độ-trễ-bắt-vật-mới + **E2E RTSP/webcam cho user nhìn** (cần URL RTSP hoặc webcam). Task 6 INT8 gated. GPU: cần cài torch (`vp setup` extras pt).
+---
+**[✅ #400 — adaptive-detection-perf Task 5: `[detection]` TOML + merge CLI>TOML (TDD), verify 819/2 · ĐỔI MÁY `toann`]**
+- **ĐỔI MÁY (K-104):** phiên này chạy máy `toann` — **CÓ GPU · CÓ RTSP · KHÔNG Docker** (khác máy cũ NO-GPU/CÓ-Docker). venv `vision-platform/.venv` Python 3.13.12; `py` hệ thống KHÔNG có → dùng `.venv\Scripts\python.exe`/`vp.cmd`. `vp check` PASS đầu phiên (#399/Σ280, commit c449527, tree sạch). torch CHƯA cài (extras `dev,onnx,cv2,web`) → GPU/RTSP path CHƯA verify được, cần `vp setup` extras `pt`.
+- **Task 5 (D-121, TDD):** `_parse_detection`@application (kiểm KIỂU→ConfigError; range/invariant do kernel `DetectionCadenceConfig` — 1 nguồn sự thật) + `load_detection_config(path)` STANDALONE (KHÔNG đòi `[[pipelines]]` — web app pipeline-less) + `--config` cho `vision_web_app` + `_merge_detection(cli,toml)` precedence CLI-explicit>TOML>default (tiền lệ `_merge_observability` D-086). Default argparse cadence→None sentinel (phân biệt gõ-cờ vs default). Template `configs/web/example_web_detection.toml` (subdir tránh glob test_example_configs).
+- **ĐỔI so tasks.md (C-023):** KHÔNG nhét `[detection]` vào `AppConfig` schema (buộc `[[pipelines]]` giả) → standalone loader. Lý do bản chất: web app không có pipeline.
+- **VERIFY:** `scripts\vp.cmd verify` = **819 passed/2 skipped** (805→819, +14) · lint 6 kept/0 broken (application→kernel hợp lệ) · drift PASS. get_diagnostics config_loader/vision_web_app=0. RED→GREEN thật.
+- **Ghi sổ:** LOG #400 · +D-121 (✅, Verify-Symbol ×3 → C8 25→28) · +C-023 · +K-104 · INDEX canonical #399→#400 · Σ280→283 (D121·C23·K104) · block này. Additive (mặc định=hành vi cũ).
+- **Bước kế:** Task 7 (verify tổng — ĐÃ 819/2 · CÒN đo CPU% định lượng bằng psutil + webcam/RTSP E2E cho user xem). Task 6 INT8 gated. Cân nhắc: dùng GPU (cần cài torch) khi user muốn.
+---
+## Trạng thái trước (2026-07-15)
+**Cập nhật lúc (cũ):** 2026-07-15T20:00:00+07:00.
 **[✅ #399 — FIX GỐC K-103 = heartbeat detectMaxIntervalMs (design-first + TDD), verify 805/2]**
 - K-103 (#398) lộ gốc: motion-gate/cadence bỏ detect quá lâu → vật đứng-yên hết lease → mất box. FIX BẢN CHẤT (không vá đếm-frame motion-gate): heartbeat ở tầng policy.
 - Cập nhật design.md + requirements.md (R1.4) TRƯỚC (0-diag) → TDD: `detectMaxIntervalMs` @config (+ bất biến `min<=max`, `max<=displayLease`) + `should_detect(max_interval_ns)` reason MAX_INTERVAL (override mọi cổng) + wire loop (`reason==MAX_INTERVAL → run=True` override motion) + CLI `--detect-max-interval-ms`.

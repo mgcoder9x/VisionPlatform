@@ -1,0 +1,25 @@
+# Ví dụ khai báo [detection] cho vision_web_app (webcam/RTSP → YOLO → overlay), spec adaptive-detection-perf.
+# Web app KHÔNG theo mô hình pipelines → file này CHỈ cần [detection] (không [[pipelines]]).
+# Lệnh:
+#   python -m vision_platform.profiles.vision_web_app --camera 0 --onnx models/yolov8n.onnx --yolo v8 \
+#          --config configs/web/example_web_detection.toml
+# Precedence: cờ CLI (vd --detect-min-interval-ms 100) ĐÈ giá trị dưới đây; giá trị dưới đây ĐÈ mặc định.
+#
+# RÀNG BUỘC P5 (liên-spec overlay, displayLeaseMs mặc định = 600ms): để box KHÔNG giật / KHÔNG mất,
+#   detect_min_interval_ms <= 600  VÀ  (nếu bật heartbeat) detect_max_interval_ms <= 600.
+# Sai ràng buộc → fail-fast lúc khởi động (DetectionConfigError), không chạy ngầm sai.
+
+[detection]
+# --- điều tiết nhịp detect (runtime lever, tiết kiệm CPU no-GPU) ---
+detect_min_interval_ms = 200   # tối thiểu 200ms giữa 2 detect (~5 detect/s; baseline CPU máy này ~8.5/s)
+detect_max_interval_ms = 500   # HEARTBEAT: ép detect nếu >500ms chưa detect (chống mất box vật đứng-yên, K-103)
+detect_every_n = 1             # 1 = xét mọi frame-version (chỉ min-interval điều tiết)
+
+# --- motion-gate: bỏ detect khi cảnh gần như tĩnh (tái dùng domain.motion.changed_ratio) ---
+motion_gate = true
+motion_threshold = 25          # ngưỡng pixel đổi (0..255)
+motion_min_area = 0.005        # tỉ lệ pixel đổi < ngưỡng này → coi là tĩnh → bỏ detect
+motion_max_skip = 30           # sau 30 frame skip liên tiếp ép 1 detect (an toàn kép cùng heartbeat)
+# motion_roi = [0.1, 0.1, 0.8, 0.8]   # (tuỳ chọn) vùng quan tâm CHUẨN-HOÁ [0,1]: chỉ xét chuyển động trong ROI
+
+experimental = true            # default CHƯA chốt bằng SLA đo thật (Task 0) — chỉ chẩn đoán, không "tối ưu"

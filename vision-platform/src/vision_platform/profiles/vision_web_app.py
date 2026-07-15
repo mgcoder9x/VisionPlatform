@@ -32,6 +32,7 @@ from vision_platform.domain.bbox import BBox, CoordinateSpace
 from vision_platform.kernel.overlay_config import OverlayConfig
 from vision_platform.kernel.overlay_view import Outcome, SourceState, DetectorState
 from vision_platform.kernel.detection_cadence import DetectionCadenceConfig, assert_cadence_fits_lease
+from vision_platform.application.config_loader import load_detection_config
 from vision_platform.domain.detect_cadence import should_detect
 from vision_platform.domain.motion_gate import MotionGate
 from vision_platform.runtime.overlay_state_store import OverlayStateStore
@@ -249,6 +250,17 @@ def _detect_loop(args) -> None:
 
 
 # process epoch cố định cho phiên (UUID) — client dùng chống rollback qua restart
+# COCO 80 lớp (thứ tự chuẩn Ultralytics: 0=person, 2=car, 7=truck — khớp label số quan sát #403).
+# Dùng qua --coco-labels (opt-in) để hiện tên đẹp thay chỉ số; KHÔNG auto để tránh gán sai cho model custom.
+_COCO80 = ("person,bicycle,car,motorcycle,airplane,bus,train,truck,boat,traffic light,fire hydrant,stop sign,"
+           "parking meter,bench,bird,cat,dog,horse,sheep,cow,elephant,bear,zebra,giraffe,backpack,umbrella,"
+           "handbag,tie,suitcase,frisbee,skis,snowboard,sports ball,kite,baseball bat,baseball glove,skateboard,"
+           "surfboard,tennis racket,bottle,wine glass,cup,fork,knife,spoon,bowl,banana,apple,sandwich,orange,"
+           "broccoli,carrot,hot dog,pizza,donut,cake,chair,couch,potted plant,bed,dining table,toilet,tv,laptop,"
+           "mouse,remote,keyboard,cell phone,microwave,oven,toaster,sink,refrigerator,book,clock,vase,scissors,"
+           "teddy bear,hair drier,toothbrush")
+
+
 _PROCESS_EPOCH = uuid.uuid4().hex
 
 
@@ -277,6 +289,11 @@ def _mjpeg():
 @app.route("/")
 def index():
     return _PAGE
+
+
+@app.route("/favicon.ico")
+def favicon():
+    return Response(status=204)   # No Content — tránh 404 favicon mỗi lần load (polish thương mại)
 
 
 @app.route("/stream")
@@ -308,6 +325,33 @@ def stats():
     return f"video={_vframes} · detect={_dframes} · boxes={n} · overlay_rev={ev}"
 
 
+def _merge_detection(cli: dict, toml_det: Optional[DetectionCadenceConfig]) -> DetectionCadenceConfig:
+    """Hợp nhất cadence TỪ cờ CLI ↔ section `[detection]` TOML (spec adaptive-detection-perf Task 5).
+
+    Precedence: **CLI-explicit > TOML > built-in default** (tiền lệ observability D-086). Arg số dùng sentinel
+    `None` (chưa gõ cờ → None → lấy TOML/default); `motion_gate` là store_true nên OR-semantics như `observe`
+    (`--motion-gate` HOẶC TOML motion_gate=true → bật). Hạn chế v1 (Non-Goal, ghi rõ): không TẮT motion-gate
+    qua CLI khi TOML bật. `motionRoi` chỉ từ TOML (CLI chưa có `--motion-roi`). `toml_det=None` → chỉ CLI/default.
+    """
+    t = toml_det or DetectionCadenceConfig()
+
+    def pick(cli_key: str, toml_val):
+        v = cli.get(cli_key)
+        return toml_val if v is None else v
+
+    return DetectionCadenceConfig(
+        detectMinIntervalMs=pick("detect_min_interval_ms", t.detectMinIntervalMs),
+        detectMaxIntervalMs=pick("detect_max_interval_ms", t.detectMaxIntervalMs),
+        detectEveryN=pick("detect_every_n", t.detectEveryN),
+        motionGate=bool(cli.get("motion_gate")) or t.motionGate,   # OR-semantics (store_true)
+        motionPixelDiffThreshold=pick("motion_threshold", t.motionPixelDiffThreshold),
+        motionMinAreaRatio=pick("motion_min_area", t.motionMinAreaRatio),
+        motionMaxConsecutiveSkip=pick("motion_max_skip", t.motionMaxConsecutiveSkip),
+        motionRoi=t.motionRoi,   # roi: TOML-only (CLI chưa expose --motion-roi)
+        experimental=t.experimental,
+    )
+
+
 def main() -> int:
     global _store
     p = argparse.ArgumentParser(prog="vision_platform.profiles.vision_web_app")
@@ -331,26 +375,63 @@ def main() -> int:
     p.add_argument("--yolo", type=str, default="v5", choices=["v5", "v8"])
     p.add_argument("--conf", type=float, default=0.25)
     p.add_argument("--iou", type=float, default=0.5)
-    # --- điều tiết detect (adaptive-detection-perf) — mặc định = hành vi hiện tại ---
-    p.add_argument("--detect-min-interval-ms", type=int, default=0,
+    # --- điều tiết detect (adaptive-detection-perf) — mặc định = hành vi hiện tại (additive) ---
+    # Cấu hình qua TOML `[detection]` (--config) + cờ CLI; precedence CLI-explicit > TOML > default (D-086).
+    # Default = None (sentinel "chưa gõ cờ") để merge phân biệt CLI-explicit vs TOML — KHÔNG phải 0/1 (0/1 là
+    # giá trị TOML/mặc định hợp lệ; nếu để default 0/1 thì không biết user có gõ hay không → TOML bị đè oan).
+    p.add_argument("--config", type=str, default=None,
+                   help="file .toml khai báo [detection] (min/max-interval, every-n, motion-gate...). "
+                        "Cờ CLI đè TOML; TOML đè mặc định. Web app KHÔNG cần [[pipelines]].")
+    p.add_argument("--detect-min-interval-ms", type=int, default=None,
                    help="ns tối thiểu giữa 2 detect (0=không giới hạn). Phải <= displayLeaseMs (chống giật).")
-    p.add_argument("--detect-max-interval-ms", type=int, default=0,
+    p.add_argument("--detect-max-interval-ms", type=int, default=None,
                    help="HEARTBEAT: ép detect nếu quá lâu không detect (0=tắt). Phải <= displayLeaseMs "
                         "(chống mất box vật đứng-yên khi bật motion-gate). Nên đặt khi dùng --motion-gate.")
-    p.add_argument("--detect-every-n", type=int, default=1, help="chỉ detect mỗi N frame-version (1=mọi frame)")
+    p.add_argument("--detect-every-n", type=int, default=None, help="chỉ detect mỗi N frame-version (1=mọi frame)")
     p.add_argument("--motion-gate", action="store_true", help="bỏ detect khi cảnh tĩnh (tiết kiệm CPU)")
-    p.add_argument("--motion-threshold", type=int, default=25, help="ngưỡng pixel đổi (0..255)")
-    p.add_argument("--motion-min-area", type=float, default=0.005, help="tỉ lệ pixel đổi < ngưỡng → coi là tĩnh")
-    p.add_argument("--motion-max-skip", type=int, default=0, help="sau N skip liên tiếp ép 1 detect (0=không ép)")
+    p.add_argument("--motion-threshold", type=int, default=None, help="ngưỡng pixel đổi (0..255)")
+    p.add_argument("--motion-min-area", type=float, default=None, help="tỉ lệ pixel đổi < ngưỡng → coi là tĩnh")
+    p.add_argument("--motion-max-skip", type=int, default=None, help="sau N skip liên tiếp ép 1 detect (0=không ép)")
+    # --- confidence hysteresis (chống flicker vật xa, K-106) — opt-in, mặc định tắt ---
+    p.add_argument("--overlay-create-conf", type=float, default=0.0,
+                   help="hysteresis: ngưỡng conf CAO để TẠO track mới (0=tắt). Chống bbox vật xa nhấp nháy.")
+    p.add_argument("--overlay-sustain-conf", type=float, default=0.0,
+                   help="hysteresis: ngưỡng conf THẤP để NUÔI track đã tồn tại (<=create). Bật thì decode conf tự hạ về đây.")
+    p.add_argument("--overlay-evict-offframe", action="store_true",
+                   help="motion: khi track bị miss, dự đoán tâm theo vận tốc — ra ngoài khung → xoá NGAY (chống ghost người đã đi qua).")
+    p.add_argument("--overlay-motion", action="store_true",
+                   help="BẬT motion model đầy đủ (mini-tracker): match theo vị trí DỰ ĐOÁN (chống flicker vật di chuyển) + off-frame evict (chống ghost). = predict-match + evict-offframe.")
+    p.add_argument("--coco-labels", action="store_true",
+                   help="dùng 80 nhãn COCO (person/car/... thay chỉ số) — chỉ đúng cho model train COCO (vd yolov8n).")
     args = p.parse_args()
 
+    if args.coco_labels and not args.labels:
+        args.labels = _COCO80   # tên lớp đẹp cho model COCO (opt-in an toàn)
+
+    global _cfg
+    _cfg_kwargs = {}
+    if args.overlay_create_conf > 0.0:
+        # bật hysteresis: HẠ decode conf xuống sustain để box yếu tới được stabilizer.
+        _cfg_kwargs.update(createConfThreshold=args.overlay_create_conf,
+                           sustainConfThreshold=args.overlay_sustain_conf)
+        if args.conf > args.overlay_sustain_conf:
+            args.conf = args.overlay_sustain_conf
+    if args.overlay_evict_offframe or args.overlay_motion:
+        _cfg_kwargs["evictPredictedOffFrame"] = True
+    if args.overlay_motion:
+        _cfg_kwargs["matchUsePrediction"] = True
+    if _cfg_kwargs:
+        _cfg = OverlayConfig(**_cfg_kwargs)
+
     global _cadence_cfg
-    _cadence_cfg = DetectionCadenceConfig(
-        detectMinIntervalMs=args.detect_min_interval_ms, detectMaxIntervalMs=args.detect_max_interval_ms,
-        detectEveryN=args.detect_every_n,
-        motionGate=args.motion_gate, motionPixelDiffThreshold=args.motion_threshold,
-        motionMinAreaRatio=args.motion_min_area, motionMaxConsecutiveSkip=args.motion_max_skip,
-    )
+    toml_det = load_detection_config(args.config) if args.config else None   # None → chỉ CLI/default (additive)
+    _cadence_cfg = _merge_detection(
+        {"detect_min_interval_ms": args.detect_min_interval_ms,
+         "detect_max_interval_ms": args.detect_max_interval_ms,
+         "detect_every_n": args.detect_every_n, "motion_gate": args.motion_gate,
+         "motion_threshold": args.motion_threshold, "motion_min_area": args.motion_min_area,
+         "motion_max_skip": args.motion_max_skip},
+        toml_det)
     assert_cadence_fits_lease(_cadence_cfg, display_lease_ms=_cfg.displayLeaseMs)   # P5 fail-fast startup
 
     _store = OverlayStateStore(_PROCESS_EPOCH, 1, _cfg)

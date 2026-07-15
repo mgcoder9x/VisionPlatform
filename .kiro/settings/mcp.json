@@ -2,12 +2,33 @@
   "mcpServers": {
     "fetch": {
       "command": "uvx",
-      "args": ["mcp-server-fetch"],
+      "args": [
+        "mcp-server-fetch"
+      ],
       "env": {
         "FASTMCP_LOG_LEVEL": "ERROR"
       },
       "disabled": false,
-      "autoApprove": ["fetch"]
+      "autoApprove": [
+        "fetch"
+      ]
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp@latest"
+      ],
+      "env": {},
+      "disabled": false,
+      "autoApprove": [
+        "browser_navigate",
+        "browser_snapshot",
+        "browser_take_screenshot",
+        "browser_console_messages",
+        "browser_network_requests",
+        "browser_evaluate"
+      ]
     }
   }
 }

@@ -1374,3 +1374,60 @@ Quyết định: thêm HEARTBEAT `detectMaxIntervalMs` ở tầng policy `should
 - Đổi lại: đóng K-103 tận GỐC, tổng quát (bao motion-gate/every-N/min-interval ở 1 chỗ), không rải logic thời-gian vào motion-gate.
 - Vì sao (bản chất): guarantee cần là "không được không-detect quá lâu hơn lease" — đây là ràng buộc THỜI GIAN thuộc policy cadence, không phải đếm-frame của motion-gate. Đặt đúng chỗ = fix gốc.
 Đóng khi: (đã ✅) — dùng `--motion-gate --detect-max-interval-ms <= lease` cho scene giữ-box. Còn Task 5 (TOML) + Task 7 (đo CPU% định lượng).
+
+### D-121 — adaptive-detection-perf Task 5: `[detection]` TOML + merge CLI>TOML (reuse kernel config + standalone loader)
+Trạng thái: ✅ code (verify 819/2 · lint 6/0 · drift PASS, #400).
+Quyết định:
+- Parse `[detection]` bằng `_parse_detection` @application (kiểm KIỂU fail-fast→ConfigError; RANGE/INVARIANT do `DetectionCadenceConfig.__post_init__` — 1 nguồn sự thật, không drift 2 validator). Gói `DetectionConfigError`→`ConfigError`.
+- `load_detection_config(path)` STANDALONE (KHÔNG đòi `[[pipelines]]`) cho `vision_web_app` (pipeline-less). `load_app_config` refactor dùng chung `_read_toml` (DRY).
+- Thêm `--config` cho `vision_web_app` + `_merge_detection(cli, toml)` precedence CLI-explicit > TOML > default (tiền lệ `_merge_observability` D-086). Default argparse cadence → sentinel `None` (phân biệt gõ-cờ vs default).
+- Khoá TOML snake_case bám cờ CLI: detect_min_interval_ms / detect_max_interval_ms / detect_every_n / motion_gate / motion_threshold / motion_min_area / motion_max_skip / motion_roi / experimental.
+Vì sao (bản chất): reuse type sẵn có = 1 nguồn sự thật; standalone loader = tôn trọng bản chất web app không có pipeline; None-sentinel = merge đúng ngữ nghĩa "CLI-explicit đè".
+Cái giá: loader phụ thuộc kernel.detection_cadence (hợp lệ layer); motion_gate OR-semantics (không tắt qua CLI khi TOML bật — Non-Goal v1); motionRoi TOML-only.
+Đóng khi: (đã ✅). Còn Task 7 (đo CPU% định lượng psutil + RTSP/webcam E2E) · Task 6 INT8 gated.
+Verify-Symbol: vision-platform/src/vision_platform/application/config_loader.py::_parse_detection
+Links: D-086 (tiền lệ merge observability), D-118/D-119/D-120 (adaptive-detection-perf), C-023 (đổi so tasks.md).
+
+### D-122 — Phương pháp đo cadence CPU: harness CÔ LẬP tái dùng `should_detect` (Task 7/R3.1)
+Trạng thái: ✅ code+đo (verify số thật, #401).
+Quyết định: `benchmarks/measure_cadence_cpu.py` đo CPU% detect-loop dưới cadence sweep — TÁI DÙNG policy production `domain.detect_cadence.should_detect` (+ MotionGate) + `DetectorPipeline(OnnxDetector)` THẬT, trong harness cô lập (KHÔNG Flask/MJPEG). Mô hình video≫detect bằng `frame_version=elapsed*video_fps`. Metric = psutil `Process.cpu_percent` (mọi thread) + detect/s; DELTA giữa variant là tín hiệu.
+Vì sao (bản chất): cadence chỉ điều khiển TẦN SUẤT detect → thứ cần đo là CPU của detect-loop, KHÔNG phải video/transport (trực giao). Đo cả web-app process trộn Flask/JPEG = nhiễu, che tín hiệu. Cô lập + tái dùng `should_detect` = đo đúng đòn bẩy MÀ không lệch logic production (không nhân bản).
+Cái giá: không đo CPU video/transport (đúng — không phải mục tiêu); CPU% có nhiễu → report DELTA + điều kiện, không gọi là "capacity tuyệt đối".
+Kết quả (K-105): min-interval 200ms→−60% CPU, 500ms→−80% CPU (máy toann, onnx yolov8n CPU) → R3.1 PASS, giữ lever.
+Đóng khi: (đã ✅ cho min-interval). Còn: đo motion-gate (scene tĩnh) + độ-trễ-bắt-vật-mới + E2E RTSP/webcam (Task 7 gate cuối).
+Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
+Links: D-121, K-102 (baseline cũ), K-105 (số mới), R3.1/R3.2.
+
+### D-123 — Confidence hysteresis @OverlayConfig+DisplayStabilizer (lever chống flicker, additive)
+Trạng thái: ✅ code + unit-verified (7 test GREEN) · ⚠️ E2E CHƯA đủ fix flicker vtest.avi (xem K-107).
+Quyết định: thêm `createConfThreshold`/`sustainConfThreshold` vào OverlayConfig (default 0/0 = tắt, additive; invariant 0<=sustain<=create<=1). DisplayStabilizer: leftover box chỉ TẠO candidate nếu conf>=create; box yếu (sustain<=conf<create) chỉ NUÔI confirmed sẵn có (bước match dùng mọi box). CLI `--overlay-create-conf/--overlay-sustain-conf` + tự hạ decode conf về sustain.
+Vì sao (bản chất): conf 1-ngưỡng cứng → vật quanh ngưỡng nhảy vào/ra. Hysteresis (Schmitt) = tạo khó/nuôi dễ → ổn định track vật conf dao động. Unit `test_oscillating_conf_no_churn` chứng minh đúng cho nguyên nhân này.
+Cái giá (thành hiện thực): hạ decode conf để feed sustain → NGẬP box yếu cảnh đông → churn khác (K-107). ⇒ hysteresis đúng nhưng KHÔNG phải fix trội cho vtest.avi.
+Đóng khi: giữ làm lever (additive). Fix flicker THẬT cho vật nhỏ di chuyển cần xử association/motion (D kế, chờ chốt).
+Links: K-106 (gốc flicker), K-107 (empiric fix chưa đủ + gốc trội), OverlayConfig, display_stabilizer.py.
+
+### D-124 — Motion-aware eviction @DisplayStabilizer (chống ghost người rời khung, additive)
+Trạng thái: ✅ code + unit-verified (6 test GREEN).
+Quyết định: motion model nhẹ trong `DisplayStabilizer` — `_Confirmed` mang vận tốc tâm (từ 2 lần khớp); `_predicted_offframe(st, now)` dự đoán tâm theo vận tốc; nếu ra ngoài [0,1] → xoá NGAY ở nhánh unmatched-confirmed VÀ on_tick. Gate `OverlayConfig.evictPredictedOffFrame` (default False, additive) + CLI `--overlay-evict-offframe`.
+Vì sao (bản chất): ghost = giữ box theo đồng hồ (lease/maxMisses) mù, không biết người đã RỜI khung. Motion model xoá theo BẰNG CHỨNG "dự đoán đã ra ngoài khung" → đúng chỗ. Vật đứng-yên/bị-che (dự đoán còn trong khung) không bị xoá oan → không đánh đổi flicker.
+Cái giá: vận tốc 2-điểm thô (đủ cho "đang rời"); Kalman/nhiều-điểm là follow-on. Cần >=2 khớp mới có vận tốc (1 khớp → không xoá sớm).
+Đóng khi: verify browser video/RTSP thật thấy ghost giảm rõ (đang làm). Cùng D-123 (hysteresis) tạo bộ "mini-tracker" cho display.
+Links: K-108 (ghost bug), K-107/K-106 (flicker), display_stabilizer.py (_predicted_offframe), OverlayConfig.
+
+### D-125 — Motion-predicted matching @DisplayStabilizer + polish (favicon/COCO labels)
+Trạng thái: ✅ code + unit-verified (8 motion test) · E2E per-object chờ RTSP thật.
+Quyết định: `OverlayConfig.matchUsePrediction` (default False, additive) + `DisplayStabilizer._predict_box` (last box + vận tốc*dt) → dùng vị trí DỰ ĐOÁN khi khớp new↔confirmed. CLI umbrella `--overlay-motion` = matchUsePrediction + evictPredictedOffFrame (mini-tracker: D-123 hysteresis + D-124 evict + D-125 predict-match). favicon route 204 (hết 404). `--coco-labels` opt-in (80 tên, không auto — tránh gán sai model custom).
+Vì sao (bản chất): flicker vật di chuyển gốc là IoU-association fail khi box dịch giữa 2 detect thưa (K-107). Dự đoán vị trí = khớp nơi vật ĐÁNG LẼ đang ở → match thành công → giữ identity. Tái dùng vận tốc đã có (D-124) → 1 motion model dùng cho cả match lẫn evict.
+Cái giá: cần >=2 khớp mới có vận tốc; cảnh đông association vẫn khó (không giải bằng motion đơn thuần). COCO labels chỉ đúng model COCO.
+Đóng khi: verify per-object churn giảm trên RTSP thật (vtest.avi metric distinct-ID sai vì cảnh transient-traffic). Nếu RTSP còn → cân center-distance/size-aware IoU hoặc Kalman.
+Verify-Symbol: vision-platform/src/vision_platform/runtime/display_stabilizer.py::_predict_box
+Links: K-107 (gốc flicker association), D-123/D-124 (mini-tracker), K-109 (CPU/GPU).
+
+### D-126 — Mở sub-spec `overlay-tracking-refactor` design-first: tách tracking⊥display + client render mượt
+Trạng thái: 🔵 design-only (CHƯA code, chờ user valid 4 câu hỏi).
+Quyết định: sau khi user thấy S1 "box không sát" + S2 "tắt chậm" trên video thật, DỪNG vá `DisplayStabilizer`, review kiến trúc tận gốc → `.kiro/specs/overlay-tracking-refactor/design.md`.
+Chẩn đoán gốc (grounded code #412): S1 chủ yếu do **client vẽ tĩnh sample-and-hold** (không ngoại suy vận tốc) + EMA server trễ + detect CPU thưa; S2 do xoá theo lease mù. Kiến trúc: `DisplayStabilizer` GỘP tracking+display+lifecycle; 2 tracker phân kỳ (analytics iou_tracker vs display).
+Đề xuất: tách `domain/tracker` (motion+association+lifecycle, DÙNG CHUNG analytics+display — 1 nguồn track) ⊥ client render bù-chuyển-động (rAF ngoại suy) ⊥ removal evidence-based. Chia wave A(client, rủi ro thấp)→B(removal)→C(hợp nhất tracker)→D(nghiệp vụ). Kiến trúc này làm NỀN nghiệp vụ (đếm/zone/tốc-độ đọc cùng tracker).
+Cái giá: Wave C refactor lớn (đụng analytics) → tách spec + TDD từng bước; hoặc hoãn tới khi nghiệp vụ cần.
+Đóng khi: user valid 4 câu hỏi → tạo requirements/tasks → code TDD theo wave.
+Links: K-106/107/108/111 (triệu chứng flicker/ghost/bug), D-123/124/125 (các vá trước), object-tracking-count D-059 (tracker analytics cần hợp nhất).

@@ -224,3 +224,10 @@ Evidence: `git rev-list --count HEAD..@{upstream}`=0 (behind); `git rev-list --l
 Links: D-107, T-035
 Đổi: TỪ `behind = git rev-list --count @{upstream}..HEAD` (draft V1) → SANG `git rev-list --left-right --count @{upstream}...HEAD` parse `behind\tahead`.
 Vì sao (bản chất): `@{upstream}..HEAD` đếm commit CÓ ở HEAD mà KHÔNG ở upstream = **ahead**, không phải behind — draft V1 nhầm hướng. `--left-right` với BA chấm cho cả hai số đúng vai (left=behind, right=ahead) trong 1 lệnh. Bắt được nhờ kiểm-chứng-empiric TRƯỚC khi code — minh chứng "valid thiết kế trước khi triển khai" có giá trị thật (nếu code theo V1 thì C9 sẽ báo ngược: local ahead lại tưởng stale).
+
+### C-023 — Task 5 `[detection]`: standalone loader thay vì nhét vào `AppConfig` schema
+Trạng thái: ✅ (verify 819/2, #400).
+Đổi: tasks.md Task 5 ghi "thêm khoá `[detection]` vào config loader/**schema**" (hàm ý `AppConfig` như `[observability]`). SANG: KHÔNG thêm field `detection` vào `AppConfig`; thay bằng `load_detection_config(path)` standalone + `_parse_detection` dùng chung.
+Vì sao (bản chất): `AppConfig`/`parse_app_config` BẮT BUỘC có mảng `[[pipelines]]` (`_require(isinstance(pipelines_raw, list), ...)`). Nhưng consumer của `[detection]` là `vision_web_app` — webcam→detect BESPOKE, KHÔNG theo mô hình pipelines. Nếu nhét vào `AppConfig` thì file config web phải mang `[[pipelines]]` GIẢ (vô nghĩa) mới parse được → sai bản chất + rác. Standalone loader (không đòi pipelines) tôn trọng đúng consumer, vẫn dùng chung parser `_parse_detection` nên KHÔNG drift validate.
+Ảnh hưởng: `[detection]` trong một file pipelines (`vision_slice_app --config`) hiện KHÔNG được `parse_app_config` đọc (bị bỏ qua như key lạ). Đây KHÔNG phải mất mát: cadence chỉ wire ở web app (slice_app dùng motion-gate qua Stage). Nếu sau này slice_app cần cadence → thêm field vào AppConfig + gọi `_parse_detection` (parser đã sẵn).
+Links: D-121, D-086.

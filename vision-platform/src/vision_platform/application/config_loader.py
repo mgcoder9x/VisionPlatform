@@ -12,10 +12,13 @@ from __future__ import annotations
 import tomllib
 from typing import Any
 
+from typing import Optional
+
 from vision_platform.kernel.config import (
     AppConfig, PipelineConfig, SourceConfig, StageConfig, SinkConfig, DetectorConfig, ObservabilityConfig,
 )
 from vision_platform.kernel.backpressure import BackpressurePolicy
+from vision_platform.kernel.detection_cadence import DetectionCadenceConfig, DetectionConfigError
 
 
 class ConfigError(Exception):
@@ -91,6 +94,64 @@ def _parse_observability(raw: Any) -> ObservabilityConfig:
     )
 
 
+def _parse_detection(raw: Any) -> DetectionCadenceConfig:
+    """Parse table top-level `[detection]` → `DetectionCadenceConfig` (spec adaptive-detection-perf Task 5).
+
+    PHÂN VAI (tránh drift 2 validator): loader kiểm **KIỂU/CẤU TRÚC** (fail-fast ConfigError, chặn bool-as-int
+    như `_parse_observability`); **RANGE + INVARIANT** (min<=max, roi∈[0,1], threshold∈[0,255]...) do
+    `DetectionCadenceConfig.__post_init__` — 1 nguồn sự thật. Lỗi invariant kernel (`DetectionConfigError`)
+    được gói lại thành `ConfigError` để caller nhận một loại lỗi thống nhất.
+
+    Khoá TOML = snake_case bám tên cờ CLI (`vision_web_app`): detect_min_interval_ms / detect_max_interval_ms /
+    detect_every_n / motion_gate / motion_threshold / motion_min_area / motion_max_skip / motion_roi / experimental.
+    """
+    _require(isinstance(raw, dict), f"detection phải là bảng, nhận {type(raw).__name__}")
+
+    def _int(key: str, default: int) -> int:
+        v = raw.get(key, default)
+        _require(isinstance(v, int) and not isinstance(v, bool),
+                 f"detection.{key} phải là số nguyên (nhận {v!r})")
+        return v
+
+    def _bool(key: str, default: bool) -> bool:
+        v = raw.get(key, default)
+        _require(isinstance(v, bool), f"detection.{key} phải là bool (nhận {v!r})")
+        return v
+
+    min_interval = _int("detect_min_interval_ms", 0)
+    max_interval = _int("detect_max_interval_ms", 0)
+    every_n = _int("detect_every_n", 1)
+    motion_gate = _bool("motion_gate", False)
+    threshold = _int("motion_threshold", 25)
+
+    area = raw.get("motion_min_area", 0.005)
+    _require(isinstance(area, (int, float)) and not isinstance(area, bool),
+             f"detection.motion_min_area phải là số (nhận {area!r})")
+
+    max_skip = _int("motion_max_skip", 0)
+
+    roi_raw = raw.get("motion_roi")
+    roi: Optional[tuple] = None
+    if roi_raw is not None:
+        _require(isinstance(roi_raw, (list, tuple)) and len(roi_raw) == 4,
+                 f"detection.motion_roi phải là mảng 4 số [x,y,w,h] chuẩn-hoá [0,1] (nhận {roi_raw!r})")
+        for elem in roi_raw:
+            _require(isinstance(elem, (int, float)) and not isinstance(elem, bool),
+                     f"detection.motion_roi phần tử phải là số (nhận {elem!r})")
+        roi = tuple(float(x) for x in roi_raw)
+
+    experimental = _bool("experimental", True)
+
+    try:
+        return DetectionCadenceConfig(
+            detectMinIntervalMs=min_interval, detectMaxIntervalMs=max_interval, detectEveryN=every_n,
+            motionGate=motion_gate, motionPixelDiffThreshold=threshold, motionMinAreaRatio=float(area),
+            motionMaxConsecutiveSkip=max_skip, motionRoi=roi, experimental=experimental,
+        )
+    except DetectionConfigError as e:
+        raise ConfigError(f"detection: {e}") from e
+
+
 def parse_app_config(raw: dict) -> AppConfig:
     """Dựng `AppConfig` từ dict đã đọc + validate CẤU TRÚC. Sai → `ConfigError`.
 
@@ -139,13 +200,29 @@ def parse_app_config(raw: dict) -> AppConfig:
     return AppConfig(pipelines=pipelines, observability=observability)
 
 
-def load_app_config(path: str) -> AppConfig:
-    """Đọc file TOML (`tomllib`, mở 'rb') → `parse_app_config`. File thiếu/sai TOML → `ConfigError`."""
+def _read_toml(path: str) -> dict:
+    """Đọc file TOML (`tomllib`, mở 'rb') → dict. File thiếu/sai TOML → `ConfigError`. DÙNG CHUNG (DRY)."""
     try:
         with open(path, "rb") as f:
-            raw = tomllib.load(f)
+            return tomllib.load(f)
     except FileNotFoundError as e:
         raise ConfigError(f"không tìm thấy file config: {path}") from e
     except tomllib.TOMLDecodeError as e:
         raise ConfigError(f"TOML sai cú pháp trong {path}: {e}") from e
-    return parse_app_config(raw)
+
+
+def load_app_config(path: str) -> AppConfig:
+    """Đọc file TOML → `parse_app_config` (mô hình pipelines — cho `vision_slice_app --config`)."""
+    return parse_app_config(_read_toml(path))
+
+
+def load_detection_config(path: str) -> Optional[DetectionCadenceConfig]:
+    """Đọc `[detection]` từ file TOML → `DetectionCadenceConfig` (hoặc None nếu không có section).
+
+    Dành cho profile KHÔNG theo mô hình pipelines (vd `vision_web_app`) — KHÔNG đòi `[[pipelines]]` (khác
+    `load_app_config`). Vì `vision_web_app` là webcam→detect bespoke, không có khái niệm pipeline; ép nó
+    mang `[[pipelines]]` giả sẽ sai bản chất. Parser `_parse_detection` dùng chung → không drift validate.
+    """
+    raw = _read_toml(path)
+    det = raw.get("detection")
+    return _parse_detection(det) if det is not None else None

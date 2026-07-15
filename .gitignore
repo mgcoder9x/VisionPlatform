@@ -50,3 +50,11 @@ scripts/env.local.cmd
 # Output runtime (event log JSONL... sinh khi chay) — KHONG commit
 out/
 **/out/
+
+# Video/media mẫu tải về để demo (KHONG commit — tài sản ngoài, tải lại được)
+*.avi
+*.mp4
+*.mkv
+*.mov
+sample_videos/
+**/sample_videos/

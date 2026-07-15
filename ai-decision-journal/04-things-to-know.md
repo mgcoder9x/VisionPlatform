@@ -1026,3 +1026,94 @@ Nội dung (điều nên biết — chống bịa, đã verify E2E):
 - **BẢN CHẤT:** `motionMaxConsecutiveSkip` ép re-detect theo FRAME-count, KHÔNG bounded theo lease-TIME → không đảm bảo detect lại trước khi box hết hạn. P5 (`detectMinIntervalMs<=displayLeaseMs`) CẦN nhưng CHƯA ĐỦ cho motion-gate.
 - **HƯỚNG (candidate refine, chưa làm):** (a) motion-gate hợp scene "motion=sự-kiện" (line-crossing/vào-ra) — vật đứng-yên không phải mục tiêu; (b) cho scene "giữ box vật tồn tại": thêm force-re-detect THEO THỜI GIAN (≤ displayLease) thay/kèm frame-count; (c) mặc định khuyên dùng min-interval (an toàn) hơn motion-gate.
 Đóng khi: bổ sung ràng buộc time-based cho motion-gate (Task tinh chỉnh trong spec) HOẶC ghi rõ motion-gate chỉ cho scene motion=event → cập nhật design/requirements.
+
+### K-104 — Đổi máy sang `toann`: CÓ GPU + CÓ RTSP + KHÔNG Docker (khác máy cũ NO-GPU/CÓ-Docker)
+Trạng thái: ✅ (dữ kiện môi trường, #400).
+Sự thật: phiên #396-399 chạy máy cũ `k.nguyen.manh.toan` (NO-GPU, CÓ Docker+webcam). Từ #400 chuyển máy `toann` — user xác nhận: **CÓ GPU · CÓ luồng RTSP · KHÔNG Docker**. venv tại `vision-platform/.venv` (Python 3.13.12; máy cũ 3.11.9); `py` launcher hệ thống KHÔNG có → chạy qua `vision-platform\.venv\Scripts\python.exe` hoặc `scripts\vp.cmd` (tự dò venv). `vp check` PASS đầu phiên (#399/Σ280 khớp, commit c449527).
+Ảnh hưởng backlog (progress.md "CHẶN bởi điều kiện"):
+- 🟢 MỞ được (trước chặn): nhánh `Yolov5PtDetector` CUDA · `probe_capabilities` nhánh có-CUDA (D-073) · RTSP E2E `RtspFrameSource` (K-030) · tune motion-gate-roi RTSP. NHƯNG [chưa kiểm]: venv extras hiện `dev,onnx,cv2,web` — **torch CHƯA cài** → GPU-path CHƯA chạy được; cần `vp setup` với extras `pt` (tải torch cu, cần MẠNG). GPU phần cứng có ≠ torch sẵn.
+- 🔴 chặn thêm: bài cần Docker (máy này KHÔNG có Docker) → hoãn (máy cũ đã verify Docker #373-375). **KHÔNG có webcam** (verify #401: `cv2.VideoCapture(0)` out-of-range) → E2E trực quan cần URL RTSP (máy CÓ luồng RTSP theo user).
+- **MCP:** workspace `.kiro/settings/mcp.json` chỉ có `fetch` (mcp-server-fetch, content-only, CHƯA surface thành Kiro Power → AI không gọi trực tiếp) — KHÔNG chụp được pixel. `web_fetch` native chỉ HTTPS (không hit localhost HTTP). Muốn AI tự "xem"/screenshot web → cần MCP browser (Playwright) — chưa cài. Xem web = USER mở trình duyệt; AI verify server-side qua `curl /stats`+`/overlay`.
+Việc cần làm khi dùng GPU/RTSP: (a) kiểm `nvidia-smi` + `torch.cuda.is_available()` trong venv TRƯỚC khi khẳng định; (b) RTSP cần URL thật (KHÔNG commit secret — K-031).
+Links: K-066/K-077 (torch-install cần mạng), K-030 (RTSP), D-073 (capability probe).
+
+### K-105 — SỐ đo cadence CPU máy `toann` (onnx yolov8n CPU): min-interval giảm CPU tuyến tính
+Trạng thái: ✅ (verify đo thật, #401 · công cụ `benchmarks/measure_cadence_cpu.py`).
+Số THẬT (window 8s/variant, frame 480x640, video-fps 120 mô phỏng, CPUExecutionProvider):
+- baseline min-interval=0: **12.88 detect/s · CPU 504.7%** (onnxruntime đa-thread ~5 lõi).
+- min-interval=200ms: **3.88 detect/s · CPU 203.5%** → **−59.7% CPU** vs baseline.
+- min-interval=500ms: **1.88 detect/s · CPU 100.5%** → **−80.1% CPU** vs baseline.
+Ý nghĩa: cadence giảm CPU ~tuyến tính theo tần suất detect → lever THẬT tiết kiệm (R3.1 PASS, R3.2 giữ lever). Với overlay lease 600ms, min-interval tới ~500ms vẫn không mất box (P5) → dư địa cắt ~80% CPU detect mà vẫn mượt.
+LƯU Ý so K-102: baseline 12.88/s ≠ K-102 8.52/s (máy cũ `k.nguyen.manh.toan`). Khác vì: (a) máy khác (`toann`); (b) K-102 đo `measure_infer` batch=1 latency-based, K-105 đo loop-throughput đa-thread onnxruntime. Cả hai đúng trong ngữ cảnh của nó — dùng K-105 cho quyết định cadence trên máy này.
+Còn thiếu (Task 7): motion-gate CPU (cần scene TĨNH thật, synthetic không đại diện); độ-trễ-bắt-vật-mới; E2E RTSP/webcam.
+Links: D-122 (phương pháp), D-121 (Task 5), K-102 (baseline cũ), K-104 (máy toann).
+
+### K-106 — Bug flicker vật ở XA (bbox có/mất/lại-có): GỐC = conf dao động quanh ngưỡng + stabilizer giòn (verify browser MCP #404)
+Trạng thái: ✅ root-cause verified (chưa sửa) · bằng chứng: poll /overlay 16 mẫu qua Playwright MCP.
+Triệu chứng: user mở browser thấy vật ở xa "có bbox rồi mất rồi lại có". Vật gần KHÔNG bị.
+Bằng chứng THẬT (video vtest.avi + yolov8n, cadence motion-gate+min-interval 200ms):
+- Vật gần: displayId 1:724, 1:1041 xuất hiện 16/16 mẫu (ổn định).
+- Vật xa (box height<0.12): 7 displayId mới trong 3s (1522→1530), mỗi ID sống 2-6 mẫu → churn.
+- Conf vật xa dao động quanh 0.25: 0.251/0.257/0.259/0.268/0.273/0.277/0.284... → rớt <0.25 thì mất khỏi rawResult.
+Gốc 3 tầng:
+1. **@decode:** 1 ngưỡng conf CỨNG (0.25) → vật ~0.26 nhảy vào/ra từng inference.
+2. **@stabilizer (display_stabilizer.py):** candidate bị XÓA NGAY nếu 1 accepted-result không match (step 4) → cần minHits=2 hit LIÊN TIẾP mới promote → vật nhấp nháy không đạt → mỗi lần vượt ngưỡng lại promote displayId MỚI (counter++). Confirmed xóa sau maxMisses=2 (3 miss) hoặc hết displayLease 600ms.
+3. **@cadence (config #400):** motion-gate+min-interval 200ms → detect thưa → khoảng trống dài hơn → dễ vượt ngưỡng xóa (đòn bẩy tiết kiệm CPU XUNG ĐỘT với giữ track vật nhỏ — Forces cadence↔lease↔flicker).
+Hướng sửa (chờ chốt design, cân ghost vs flicker):
+- (A) stabilizer temporal-hysteresis: candidate có miss-tolerance (không xóa ngay) → promote ổn định + giữ 1 displayId; ± nới maxMisses/displayLease cho vật nhỏ.
+- (B) confidence-hysteresis @decode: 2 ngưỡng (cao tạo mới, thấp duy trì) → giảm dao động tận nguồn.
+- (C) cấu hình: giảm throttle khi cảnh cần bắt vật nhỏ.
+Đóng khi: chốt design fix + TDD + verify browser lại (churn giảm rõ, ghost trong ngưỡng chấp nhận).
+Links: display_stabilizer.py (minHits/maxMisses/lease), OverlayConfig, D-121/#400 (cadence), K-100/K-103 (họ overlay flicker/lease).
+
+### K-107 — Fix flicker thử-1 (conf-hysteresis) CHƯA ĐỦ trên vtest.avi: gốc trội = IoU-association vật nhỏ di chuyển (verify browser MCP #405)
+Trạng thái: ✅ empiric-verified (âm tính) · fix flicker CÒN MỞ.
+Bằng chứng THẬT (browser MCP poll /overlay, đo churn = số displayId phân biệt/16 mẫu ~3s):
+- #404 baseline (throttle, decode 0.25, KHÔNG hysteresis): 7 displayId (2 ổn định + churn).
+- throttle + hysteresis (create 0.35/sustain 0.12): **7 displayId** → KHÔNG cải thiện.
+- KHÔNG throttle + hysteresis: **28 displayId** (24 promote mới/3s) → TỆ HƠN; weakRaw 3-6 box/mẫu (hạ decode 0.12 NGẬP box yếu cảnh đông).
+Kết luận (chống overclaim): confidence-hysteresis (D-123) logic ĐÚNG (unit `test_oscillating_conf_no_churn`) nhưng chỉ trị nguyên nhân PHỤ. GỐC TRỘI ở vtest.avi (đông người, vật nhỏ di chuyển nhanh):
+1. **IoU-association fail:** box nhỏ dịch chuyển → overlap giữa 2 detect < iouThreshold 0.3 → `greedy_associate` không match → confirmed miss→chết (maxMisses) → promote displayId MỚI. Box NHỎ mất overlap nhanh hơn box lớn → đúng "vật ở xa" bị.
+2. **Ngập box yếu:** hạ decode conf về sustain (0.12) để feed hysteresis → cảnh đông sinh nhiều detection yếu → nhiều candidate/promote thoáng qua.
+3. Cadence throttle (motion-gate+min-interval) làm khoảng trống detect dài → association càng dễ fail.
+Hướng fix THẬT (chờ chốt design): (A) association motion-aware/center-distance/size-aware IoU (box nhỏ nới tolerance) thay/kèm IoU thuần; (B) KHÔNG hạ decode conf mù (giữ ngưỡng vừa, tránh ngập); (C) test trên RTSP thật (ít đông hơn vtest.avi có thể đã đủ). Giữ D-123 làm lever.
+Links: K-106 (triệu chứng+gốc conf), D-123 (hysteresis), display_smoothing.greedy_associate (IoU matching), D-121/#400 (cadence).
+
+### K-108 — Ghost "người đi qua rồi bbox 1 lúc mới tắt": gốc = display không có motion model → fix motion-aware eviction (D-124)
+Trạng thái: ✅ code+unit (D-124) · E2E A/B video: giảm NHẸ (chưa kịch tính trên cảnh đông).
+E2E A/B (browser MCP, vtest.avi, 20 mẫu/run — metric: display box KHÔNG có raw backing = "treo"):
+- evict ON: 105 box, treo 17 (16.2%), treo-gần-mép 7.
+- evict OFF: 118 box, treo 23 (19.5%), treo-gần-mép 8.
+⇒ có tác dụng thật (16.2% < 19.5%) nhưng nhỏ trên cảnh ĐÔNG (nhiều "treo" là dropout ngắn hợp lệ ≠ rời-khung + đo nhiễu). Unit test chứng minh hành vi đúng (rời-khung→xoá-ngay). Cảnh RTSP thật (người đi rõ ra khỏi khung, thưa) kỳ vọng rõ hơn — verify khi có URL.
+Triệu chứng (user #405): người di chuyển nhanh rời khung → bbox nán lại ~displayLease (600ms) mới tắt.
+Gốc: `DisplayStabilizer` giữ confirmed track theo lease/maxMisses cố định sau lần khớp cuối — KHÔNG biết người đã RỜI khung → box đứng ở vị trí cũ tới khi hết lease. Cùng gốc với flicker (K-106/107): thiếu MODEL CHUYỂN ĐỘNG.
+Fix (D-124, additive default-off): ước lượng vận tốc tâm (2 lần khớp) → khi miss, dự đoán tâm; ra ngoài [0,1] → xoá ngay (đã rời). Vật đứng-yên/bị-che (dự đoán trong khung) → giữ theo lease (không hại). Cờ `evictPredictedOffFrame` / `--overlay-evict-offframe`.
+Lưu ý bản chất (2 đầu 1 gốc): flicker vật-xa = chết-quá-sớm; ghost người-rời = chết-quá-muộn. Cả hai vì giữ box theo đồng hồ mù. Motion model (mini-SORT: vận tốc + dự đoán + xoá-khi-ra-khung) là hướng thống nhất; nâng cấp: Kalman + association motion-aware (K-107) nếu RTSP thật còn flicker.
+Links: D-124 (fix), K-106/K-107 (flicker cùng gốc), OverlayConfig.evictPredictedOffFrame.
+
+### K-109 — Web app đang chạy CPU cho YOLO; GPU (onnxruntime-gpu) SẴN cho ONNX KHÔNG cần torch (đính chính K-104)
+Trạng thái: ✅ verify (#407, đọc code + query onnxruntime).
+Sự thật:
+- `onnxruntime` trong venv = **onnxruntime-gpu 1.27.0**, `get_available_providers()` = ['TensorrtExecutionProvider','CUDAExecutionProvider','CPUExecutionProvider'] → CUDA khả dụng (RTX 2060).
+- `OnnxDetector` default `providers=("CPUExecutionProvider",)`; `vision_demo_app._build_detector` nhánh onnx KHÔNG truyền providers + KHÔNG map `--device` → **web app + mọi demo onnx đang chạy CPU** (hard-code). (bench_capacity CÓ map --device→providers → chỉ bench mới ra GPU.)
+- ⇒ Câu trả lời "CPU hay GPU": hiện **CPU**. Số K-105 (8.5/s...) là CPU.
+**ĐÍNH CHÍNH K-104:** "GPU cần torch" chỉ đúng nhánh `.pt` (Yolov5PtDetector). Nhánh **ONNX chạy GPU qua onnxruntime-gpu, KHÔNG cần torch**. K-104 imprecise ở điểm này.
+Hệ quả (hướng): bật GPU cho web app = wire `--device cuda → providers=[CUDAExecutionProvider, CPUExecutionProvider]` vào `_build_detector` (nhánh onnx) + `ensure_cuda_dll_path` (D-098 đã có). GPU tăng detect-rate mạnh → GIÁN TIẾP giảm flicker (K-107) + ghost (K-108) vì bớt phải throttle cadence. Verify bằng `session.get_providers()` ra CUDA + đo throughput.
+Links: K-104 (máy toann GPU/torch), K-105 (số CPU), D-098/K-088 (cuda_dll_path), onnx_detector.py, vision_demo_app._build_detector.
+
+### K-110 — Ngưỡng conf: 0.45 khử false-positive (data-driven, verify) — trade-off recall vật xa
+Trạng thái: ✅ verify (browser MCP #409).
+Vấn đề: conf mặc định 0.25 → vật lạ conf thấp gán nhầm "person" + nhãn rác (backpack/skis/surfboard trong cảnh phố).
+Data (176 detect vtest.avi): 72% conf≥0.6; band 0.25-0.45 (~16%) = noise. `--conf 0.45` → minConf 0.456, 0 box<0.45, nhãn còn person/truck/car (hết rác). False-positive sạch.
+TRADE-OFF (bản chất, đối nghịch K-106): nâng conf = ít false-positive NHƯNG **recall giảm** — người XA/nhỏ (conf thấp) bị bỏ → tăng "missing vật xa". Ngược mục tiêu chống-flicker-vật-xa. Không có 1 ngưỡng đúng cho mọi cảnh:
+- cảnh cần độ TIN CẬY (ít báo nhầm) → conf cao (0.45-0.5).
+- cảnh cần bắt VẬT XA/nhỏ → conf thấp (0.25-0.35) + dựa mini-tracker (D-123/124/125) ổn định hiển thị.
+Runtime: cờ `--conf` (KHÔNG đổi default 0.25 trong code). Ứng dụng thương mại nên cho chỉnh per-camera.
+Links: K-106 (flicker vật xa — đối nghịch), K-109 (CPU), D-123..125 (mini-tracker).
+
+### K-111 — Bug #410 (crash detect) + churn trên video THẬT A.mp4: metric ID-churn ≠ visual flicker
+Trạng thái: ✅ bug fixed (#411) · churn visual chờ user đánh giá.
+Bug #410 (đã fix): `_predict_box` (D-125) dựng `BBox(NORMALIZED)` với toạ độ dự đoán ÂM/>1 (vật gần mép di chuyển ra) → BBox validate [0,1] ném ValueError → detect crash liên tục trên A.mp4. Fix: clamp x,y về [0,1] trong `_predict_box`. Test hồi quy `test_prediction_offframe_clamped_no_crash`. BÀI HỌC: extrapolate/predict PHẢI clamp trước khi dựng đối tượng validated.
+Quan sát A.mp4 (~5 người, browser MCP): detect person conf 0.46-0.91 OK; false-positive nhãn lạ frisbee×7/potted-plant×1 (nâng conf 0.5 nếu phiền); **displayID churn cao (88 distinct/25 mẫu, 0 ổn định)**.
+LƯU Ý QUAN TRỌNG (chống hiểu sai metric): **displayID churn VÔ HÌNH với user** — họ thấy BOX có/mất, KHÔNG thấy ID. Box coverage ~5.4/khung (phủ người khá liên tục). ID mới ở CÙNG vị trí = KHÔNG nhấp nháy nhìn thấy. ⇒ đánh giá đúng phải là **visual box-continuity**, không phải đếm displayID. Nếu user nhìn thấy nhấp nháy THẬT → mới cần nâng association (center-distance/Hungarian/Kalman). Đo đúng: box có phủ liên tục mỗi người không, không phải ID có đổi không.
+Links: D-125 (_predict_box), K-106/107 (flicker), K-110 (conf).
