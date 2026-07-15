@@ -996,3 +996,33 @@ Nội dung (điều nên biết — phân biệt triệu chứng vs gốc):
 - **Chưa chứng minh runtime (trung thực):** trigger cụ thể (empty-run / out-of-order HTTP / source reconnect / canvas resize / temporal skew) CHƯA đo → Task 0 diagnostic instrumentation phải đứng trước code fix, không suy diễn trigger chỉ từ đọc code.
 - **Hướng gốc:** sub-spec `web-live-overlay-sync` (D-106) — atomic authority + epoch/lease/frame-identity + tách raw truth ⊥ display projection.
 Đóng khi: root-fix theo D-106 được code + verify (targeted + webcam E2E + full vp verify) + Task 0 trace xác nhận trigger; gỡ `HOLD_MS` client patch khi overlay mới thay thế.
+
+### K-101 — 2026-07-15 — Backlog production-readiness cho `vision_web_app.py` (hoãn có chủ đích, chống-quên)
+Status: 🟡 (nợ đã biết — hoãn theo quyết định user, D-116)
+Nguồn: LOG Entry #392 · review code + user triage
+Nội dung (điều nên biết — các mục HOÃN, kèm lý do + khi nào nên làm):
+- **(1) `vision_web_app.py` không có test tự động nào.** Wire (#391) mới chỉ E2E thủ công 1 lần. Rủi ro: regression thầm lặng khi sửa. Hoãn theo user TRỪ KHI phục vụ đo performance. → Task 9 (barrier video-indep) / 11 (legacy snapshot) / 12 (property E2E) trong spec `web-live-overlay-sync` vẫn `[ ]`.
+- **(2) Flask dev-server (`app.run`).** Werkzeug dev-server KHÔNG dành production (chính Flask cảnh báo). Thương mại → WSGI thật: Windows `waitress`, Linux `gunicorn`/`uvicorn`. Hoãn (demo/nội bộ đủ dùng).
+- **(3) Không auth trên endpoint.** `/stream`/`/overlay`/`/boxes`/`/stats` mở cho mọi client trong mạng. Hoãn — khi expose ngoài localhost phải thêm auth + bind cẩn thận (đã có tiền lệ secure-default localhost ở metrics D-079).
+- **(4-INT8) Quantize INT8 model ONNX** (onnxruntime static quantization): giải thích ngắn cho user — chuyển trọng số model từ float32 sang int8 → ít bộ nhớ + CPU tính nhanh hơn nhiều; ĐỔI LẠI cần "dữ liệu calibration" (một ít ảnh đại diện để dò dải giá trị) và phải ĐO sụt độ chính xác. Hoãn — cân nhắc trong sub-spec perf.
+- **Cảnh báo license (nhắc lại K-029):** YOLOv8 = AGPL-3.0 → sản phẩm đóng thương mại phải mua license Ultralytics HOẶC đổi model Apache-2.0 (RTMDet/RT-DETR/YOLOX). Quyết định pháp lý cần user chốt.
+Đóng khi: từng mục được làm trong spec tương ứng (perf/frontend/production-hardening) → rút khỏi backlog.
+
+### K-102 — 2026-07-15 — Baseline perf CPU máy này (verify #395) + input-size cố định (empiric)
+Status: ✅ (đo thật phiên #395)
+Nguồn: LOG Entry #395 · `bench_capacity --mode infer --onnx yolov8n.onnx`
+Nội dung (SỐ THẬT — dùng chốt default adaptive-detection-perf, chống bịa):
+- **`yolov8n@640` CPU (máy `k.nguyen.manh.toan`) = 8.52 infer/s** · p50 110.9ms · p95 177.5ms · p99 203.0ms · min 66ms · max 261ms (n=120, warmup 15). ⚠️ #352 ghi 11.72/s = máy/điều-kiện KHÁC → dùng 8.52 cho máy này.
+- **Input-size CỐ ĐỊNH 640 (empiric):** `bench --imgsz 416` → `onnxruntime InvalidArgument: Got 416 Expected 640`. ⇒ (a) đổi input-size KHÔNG khả thi lúc runtime (phải re-export .onnx / dynamic-axes = deploy-time); (b) lỗi hiện tối nghĩa → cần fail-fast rõ lúc setup (Task 3).
+- **Hệ quả default:** budget detect ~8.5/s; overlay `displayLeaseMs=600` → detect min-interval tới ~600ms (~1.6/s) vẫn không giật (Property 5) → dư địa throttle lớn.
+Đóng khi: (số baseline — giữ tham chiếu; cập nhật nếu đo lại máy khác/điều-kiện khác).
+
+### K-103 — 2026-07-15 — Webcam E2E: tradeoff motion-gate↔lease (vật đứng-yên mất box) + min-interval an toàn
+Status: ✅ (ĐÓNG bởi D-120 #399 — heartbeat `detectMaxIntervalMs`; dùng `--motion-gate --detect-max-interval-ms <= lease`)
+Nguồn: LOG Entry #398 · đọc /stats+/overlay THẬT (cam0+yolov8n CPU), nhiều mẫu
+Nội dung (điều nên biết — chống bịa, đã verify E2E):
+- **min-interval throttle AN TOÀN:** `--detect-min-interval-ms 200` → detect ~5/s (vs 8.5/s baseline, ~40% ít inference) mà box GIỮ ổn định (interval 200ms < displayLease 600ms → refresh trước khi hết hạn), health LIVE, không giật. Đây là lever tiết kiệm CPU AN TOÀN mặc-định-khuyên-dùng.
+- **motion-gate có TRADEOFF:** `--motion-gate` (max-skip=0) cắt CPU cực mạnh khi cảnh tĩnh (video=1627·detect=5) NHƯNG vật ĐỨNG YÊN mất box (display=[] reason TICK_EXPIRE — box hết lease 600ms vì không detect lại). health vẫn LIVE đúng (detector khỏe, chỉ gated).
+- **BẢN CHẤT:** `motionMaxConsecutiveSkip` ép re-detect theo FRAME-count, KHÔNG bounded theo lease-TIME → không đảm bảo detect lại trước khi box hết hạn. P5 (`detectMinIntervalMs<=displayLeaseMs`) CẦN nhưng CHƯA ĐỦ cho motion-gate.
+- **HƯỚNG (candidate refine, chưa làm):** (a) motion-gate hợp scene "motion=sự-kiện" (line-crossing/vào-ra) — vật đứng-yên không phải mục tiêu; (b) cho scene "giữ box vật tồn tại": thêm force-re-detect THEO THỜI GIAN (≤ displayLease) thay/kèm frame-count; (c) mặc định khuyên dùng min-interval (an toàn) hơn motion-gate.
+Đóng khi: bổ sung ràng buộc time-based cho motion-gate (Task tinh chỉnh trong spec) HOẶC ghi rõ motion-gate chỉ cho scene motion=event → cập nhật design/requirements.

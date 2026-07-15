@@ -71,12 +71,14 @@ class OnnxDetector:
         postprocess_fn: PostprocessFn,
         input_name: Optional[str] = None,
         providers: Sequence[str] = ("CPUExecutionProvider",),
+        expected_input_size: Optional[int] = None,
     ):
         self._model_path = model_path
         self._preprocess = preprocess_fn
         self._postprocess = postprocess_fn
         self._input_name = input_name
         self._providers = list(providers)
+        self._expected_input_size = expected_input_size
         self._session = None
 
     def setup(self) -> None:
@@ -94,8 +96,24 @@ class OnnxDetector:
             from vision_platform.adapters.cuda_dll_path import ensure_cuda_dll_path
             ensure_cuda_dll_path()
         self._session = ort.InferenceSession(self._model_path, providers=self._providers)
+        inp = self._session.get_inputs()[0]
         if self._input_name is None:
-            self._input_name = self._session.get_inputs()[0].name
+            self._input_name = inp.name
+        self._assert_input_size(inp.shape)
+
+    def _assert_input_size(self, shape) -> None:
+        """Fail-fast: nếu model có H/W CỐ ĐỊNH khác `expected_input_size` → raise RÕ lúc setup
+        (thay vì onnxruntime `InvalidArgument Got X Expected Y` tối nghĩa lúc run — verify empiric #395).
+        Dynamic axis (dim là str/None/<=0) → KHÔNG chặn (model nhận đa kích thước)."""
+        if self._expected_input_size is None or len(shape) < 4:
+            return
+        for axis in (2, 3):                     # NCHW → H=2, W=3
+            dim = shape[axis]
+            if isinstance(dim, int) and dim > 0 and dim != self._expected_input_size:
+                raise ValueError(
+                    f"OnnxDetector: model '{self._model_path}' input {shape} có H/W cố định = {dim} "
+                    f"nhưng cấu hình model-size = {self._expected_input_size}. "
+                    f"Re-export model đúng kích thước (hoặc export dynamic-axes), hoặc sửa --model-size.")
 
     def detect(self, frame: np.ndarray) -> list[Detection]:
         if self._session is None:

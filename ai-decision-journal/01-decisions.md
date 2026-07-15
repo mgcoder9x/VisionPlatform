@@ -1201,3 +1201,176 @@ Quyết định: bổ sung check **C9** đối chiếu **bản-ghi ↔ THỰC T�
 - Đổi lại: biến bước "đối chiếu git bằng tay" của §0 (đã gây 3 sự cố) thành cổng máy-kiểm khách quan — mạnh hơn luật văn xuôi (thứ hay drift). Đóng đúng lớp multi-máy/multi-phiên.
 - Vì sao chấp nhận (bản chất): sự cố tái diễn đều là "resume nền git stale"; fix gốc = cho máy CHỨNG MINH được nền hiện tại không sau upstream, không dựa trí nhớ chạy §0.
 Đóng: ✅ (2026-07-14, #381). C9 sống trong `check()` (real check gọi git thật mỗi lần → hook/CI/`vp` tự chạy); `git_facts` tiêm-được giữ self_test thuần; Verify-Symbol `_collect_git_facts` để C8 tự canh. GIỚI HẠN giữ nguyên (offline → false-NEGATIVE nếu origin chưa fetch; không bắt unaware-WIP cùng máy) — không over-claim.
+
+### D-108 — 2026-07-14 — web-live-overlay-sync WAVE 1: DTO+config@kernel + EMA@domain, matching REUSE
+Status: ✅ code (TDD verify thật)
+Scope: `kernel/overlay_view.py` · `kernel/overlay_config.py` · `domain/display_smoothing.py` (spec web-live-overlay-sync Task 1+2)
+Nguồn: LOG Entry #384 · design.md §Data Models/§Components · requirements 1.1/2.4/2.5 · tasks Task 1/2
+Evidence: `scripts\vp.cmd verify` = 707 passed/2 skipped (654→707, +53 test) · lint 5 kept/0 broken (import-linter domain/kernel KEPT) · drift PASS (LOG #384); get_diagnostics 6 file = 0
+Links: D-106 (design), T-034
+Quyết định: (a) DTO bất biến frozen @kernel (`InputFrameSnapshot`/`RawDetectionSnapshot`/`HealthSnapshot`/`NormalizedBox`/`DisplayTrack`/`DisplayView`/`OverlayViewSnapshot` + enum `Outcome`/`SourceState`/`DetectorState`), validate finite/range fail-fast, tái dùng `Detection`+`BBox` (không đẻ DTO thừa); (b) `OverlayConfig` fail-fast mọi invariant (lease ordering, clamp, cadence-fit); (c) **matching Property 8 = TÁI DÙNG `greedy_associate`** (re-export ở `display_smoothing`, không viết lại), phần MỚI chỉ EMA (`ema_scalar`/`ema_box` convex-combo, constant-no-drift = Property 9).
+- Cái mất: tie-break matching là `(-iou,new,prev)` (greedy_associate) thay vì `(-iou,oldDisplayId,new)` design ghi — tương đương tính xác định (displayId↔prev 1-1). DTO validate raise = defense trùng với projection-lọc (Task 8) — chấp nhận (defense-in-depth).
+- Đổi lại: DRY (không trùng thuật toán matching đã verified), layer sạch (kernel DTO/domain thuần, import-linter KEPT), additive (chưa wire → hệ đang chạy không đổi, baseline chỉ tăng test).
+- Vì sao (bản chất): leaf/pure trước → nền chắc cho stabilizer (Task 3) + store (Task 4); tái dùng cái đã đúng thay vì phát minh lại (K-028).
+Verify-Symbol: vision-platform/src/vision_platform/kernel/overlay_view.py::OverlayViewSnapshot
+Verify-Symbol: vision-platform/src/vision_platform/kernel/overlay_config.py::OverlayConfig
+Verify-Symbol: vision-platform/src/vision_platform/domain/display_smoothing.py::ema_box
+Đóng khi: (đã ✅ wave 1) — tiếp Task 3 (DisplayStabilizer) dùng các DTO + greedy_associate + ema_box này.
+
+### D-109 — 2026-07-14 — web-live-overlay-sync Task 3: DisplayStabilizer @runtime (hit-streak/miss/lease)
+Status: ✅ code (TDD verify thật)
+Scope: `runtime/display_stabilizer.py` (+ field `confidence` cho `DisplayTrack`@kernel) — spec Task 3
+Nguồn: LOG Entry #385 · design §Stabilizer exact semantics · requirements 2.2/2.3/2.4/2.5 · tasks Task 3
+Evidence: `scripts\vp.cmd verify` = 719 passed/2 skipped (707→719, +12 test) · lint 5/0 (runtime KEPT) · drift PASS (LOG #385)
+Links: D-108 (wave 1 DTO/EMA/matching), D-106 (design), T-034
+Quyết định: `DisplayStabilizer` giữ state (candidates+confirmed+counter/revision), clock TIÊM qua `now_ns` (thuần, test fake-clock). accepted-result: match new↔confirmed (greedy_associate) → matched: EMA+lease-refresh+trackRevision++ +miss=0; unmatched-confirmed: miss++ xóa khi >maxMisses (Property 7); new-thừa→candidate; candidate unmatched-result→xóa; promotion pass hitStreak>=minHits → confirmed displayId `<epoch>:<counter>` (đơn điệu/epoch). on_tick xóa quá-hạn-lease (Property 5), no-op không tăng revision (Property 4/13). on_discontinuity clear+reset counter (epoch mới). Per-track lease ĐỘC LẬP (match track khác không gia hạn track này).
+- Cái mất: candidate lưu box raw (không EMA) → chấp nhận (smoothing chỉ áp confirmed). Thêm `confidence` vào DisplayTrack (additive default 0.0).
+- Đổi lại: tái dùng greedy_associate/ema_box (D-108), layer runtime sạch (import-linter KEPT), additive (chưa wire → hệ đang chạy không đổi).
+- Vì sao (bản chất): promotion pass riêng xử đúng mọi minHits; per-track lease + trackRevision là gốc chống "ghost vô hạn" + "match track khác kéo dài nhầm" (Property 5).
+Verify-Symbol: vision-platform/src/vision_platform/runtime/display_stabilizer.py::DisplayStabilizer
+Đóng khi: (đã ✅ Task 3) — tiếp Task 4 (`OverlayStateStore` bọc stabilizer + acceptance gate + immutable snapshot).
+
+### D-110 — 2026-07-14 — web-live-overlay-sync Task 4: OverlayStateStore authority check-and-commit
+Status: ✅ code (TDD verify thật)
+Scope: `runtime/overlay_state_store.py` — spec Task 4
+Nguồn: LOG Entry #386 · design §OverlayStateStore/§6 · requirements 1.1/1.2/1.3/2.1 · tasks Task 4
+Evidence: `scripts\vp.cmd verify` = 731 passed/2 skipped (719→731, +12 test) · lint 5/0 (runtime KEPT) · drift PASS (LOG #386)
+Links: D-109 (stabilizer), D-108 (DTO), D-106 (design), T-034
+Quyết định: authority DUY NHẤT — mọi mutation qua method dưới `threading.Lock`: gate (processEpoch→sourceEpoch→token→version, reject=no-op+bounded reason counter, KHÔNG tăng revision/generation) → stabilizer transition → tăng eventRevision → thay MỘT immutable `OverlayViewSnapshot`. `snapshot()` đọc dưới lock trả reference immutable (Property 1 atomic). `begin_inference` single-flight token; `apply_source_discontinuity` tăng token+epoch+reset version (completion in-flight cũ bị reject — đóng race Property 2). `apply_tick` chỉ commit khi display_revision đổi (Property 4). `set_health` commit khi đổi.
+- Cái mất: Lock-based (contention nhẹ) thay lock-free — chấp nhận cho web 1-process single-flight.
+- Đổi lại: đúng-đắn kiểm chứng được (barrier/concurrency test), atomic read, gate đóng mọi race epoch/token/version.
+- Vì sao (bản chất): flicker gốc = trộn kết quả cũ/mới + không biết freshness; authority + gate + immutable snapshot là cơ chế CHỨNG MINH ĐƯỢC không trộn (Property 1/2/3/4).
+Verify-Symbol: vision-platform/src/vision_platform/runtime/overlay_state_store.py::OverlayStateStore
+Đóng khi: (đã ✅ Task 4) — tiếp Task 5 (ExpiryScheduler phát TimerTick qua apply_tick) → Task 6/7 → Task 8 wire /overlay.
+
+### D-111 — 2026-07-14 — web-live-overlay-sync Task 5: OverlayExpiryScheduler (TimerTick đúng-lúc)
+Status: ✅ code (TDD verify thật)
+Scope: `runtime/overlay_expiry_scheduler.py` (+ `next_expiry_ns` cho stabilizer+store) — spec Task 5
+Nguồn: LOG Entry #387 · design §6 · requirements 2.6 · tasks Task 5
+Evidence: `scripts\vp.cmd verify` = 737 passed/2 skipped (731→737, +6 test) · lint 5/0 · drift PASS (LOG #387)
+Links: D-110 (store), D-109 (stabilizer), T-034
+Quyết định: scheduler chờ tới deadline lease SỚM NHẤT (`next_expiry_ns`) rồi `store.apply_tick` — không busy-poll; `idle_poll_ns` khi rỗng + `max_wait_ns` cap. Exactly-once (Property 13) do STORE đảm bảo (apply_tick commit chỉ khi đổi); scheduler chỉ lo timing. Ngủ NGOÀI lock (đọc next_expiry snapshot nhanh → sleep → apply_tick tự-lock). clock+sleep tiêm (test fake-clock); serve() dừng qua stop_event.
+- Cái mất: hỏi `next_expiry_ns` (1 lock-read) mỗi vòng — rẻ, luôn đúng sau commit.
+- Đổi lại: tick đúng-giờ không busy-poll; tách trách nhiệm (store=đúng-đắn exactly-once, scheduler=timing) → mỗi phần test độc lập.
+- Vì sao (bản chất): endpoint KHÔNG được lazy-expire (design) → cần đồng hồ đẩy expiry; đặt exactly-once ở store (1 nơi) thay vì scheduler tránh trùng logic.
+Verify-Symbol: vision-platform/src/vision_platform/runtime/overlay_expiry_scheduler.py::OverlayExpiryScheduler
+Đóng khi: (đã ✅ Task 5) — tiếp Task 6 (health/failure truthfulness) + Task 7 (reconnect pacing) → Task 8 wire /overlay.
+
+### D-112 — 2026-07-14 — web-live-overlay-sync Task 6: derive_health (trung thực lỗi, Property 6)
+Status: ✅ code (TDD verify thật)
+Scope: `runtime/overlay_health.py` (+ 3 ngưỡng health cho OverlayConfig) — spec Task 6
+Nguồn: LOG Entry #388 · design §3 · requirements 3.1 · tasks Task 6
+Evidence: `scripts\vp.cmd verify` = 744 passed/2 skipped (737→744, +7 test) · lint 5/0 · drift PASS (LOG #388)
+Links: D-110 (store.set_health), D-106 (design), T-034
+Quyết định: `derive_health(now_ns, config, facts...)` hàm THUẦN @runtime → HealthSnapshot phân biệt init/live/stale/error cho source ⊥ detector. Ưu tiên error>hung/stale>init>live; detector hung = in-flight > detectorHangMs; stale = no-completion > detectorStaleMs; source stale = no-read > sourceStaleMs. Lỗi KHÔNG bịa EMPTY + KHÔNG refresh display (chỉ set_health) → box cũ sống hết lease (Property 6).
+- Cái mất: caller cấp facts mỗi lần (không giữ state) — rẻ, rõ.
+- Đổi lại: thuần → test fake-clock xác định; tách policy timing khỏi store.
+- Vì sao (bản chất): "màn hình trống mơ hồ / box giả" là do không phân biệt được vì-sao-không-có-box; derive_health làm 4 tình huống PHÂN BIỆT ĐƯỢC → chẩn đoán đúng, không hồi sinh giả.
+Verify-Symbol: vision-platform/src/vision_platform/runtime/overlay_health.py::derive_health
+Đóng khi: (đã ✅ Task 6) — tiếp Task 7 (reconnect pacing) → Task 8 wire /overlay + Task 10 client (để webcam-test bản fix).
+
+### D-113 — 2026-07-14 — web-live-overlay-sync Task 7: reconnect pacing + epoch bump-once (Property 11)
+Status: ✅ code (TDD verify thật)
+Scope: `runtime/reconnect_pacer.py` — spec Task 7
+Nguồn: LOG Entry #389 · design §Reconnect pacing · requirements 3.2 · tasks Task 7
+Evidence: `scripts\vp.cmd verify` = 756 passed/2 skipped (744→756, +12 test) · lint 5/0 · drift PASS (LOG #389)
+Links: D-110 (store.apply_source_discontinuity), D-106 (design), T-034, K-100 (#5 busy-loop)
+Quyết định: `clamp_retry_ns` (retry_after → clamp[min,max], invalid→min, KHÔNG bao giờ 0 → chống busy-loop) + `ReconnectPacer` (bump epoch ĐÚNG MỘT LẦN mỗi episode qua flag `_in_discontinuity`; `on_live` reset → episode sau bump lại). Tách "khi bump" (pacer) khỏi "cách bump nguyên tử" (store).
+- Cái mất: pacer generic (caller quyết trạng thái reconnect) — không tự dispatch enum; chấp nhận (tách trách nhiệm).
+- Đổi lại: Property 11 chứng minh được (bump-once + clamp mỗi attempt); đóng lỗ busy-loop `_video_loop` (K-100#5).
+- Vì sao (bản chất): reconnect lặp mà bump epoch mỗi lần = sai (nhiều epoch giả); bump-once + clamp là đúng bản chất "một episode mất-kết-nối = một epoch mới".
+Verify-Symbol: vision-platform/src/vision_platform/runtime/reconnect_pacer.py::ReconnectPacer
+Đóng khi: (đã ✅ Task 7 — hết logic server-side) — tiếp Task 8 wire `/overlay` (BEHAVIOR) + Task 10 client → webcam E2E.
+
+### D-114 — 2026-07-14 — web-live-overlay-sync Task 8A: project_overlay thuần + contract cô lập analytics (Property 1/10)
+Status: ✅ (phần A code+verify #390; phần B Flask-wire #391/D-115 xong)
+Scope: `runtime/overlay_projection.py` + contract import-linter mới — spec Task 8
+Nguồn: LOG Entry #390 · design §Data Models/§Correctness · requirements 1.1/4.1 · tasks Task 8
+Evidence: `scripts\vp.cmd verify` = 761 passed/2 skipped (756→761, +5 test) · **lint 6 kept/0 broken** (contract "Overlay display khong import analytics" KEPT) · drift PASS (LOG #390)
+Links: D-110 (store/snapshot), D-106 (design), T-034
+Quyết định: `project_overlay(snap, now_ns, ghost_sla_ms)` THUẦN → dict JSON: pure projection (Property 1 — không mutate snapshot, age/lease dẫn xuất từ now); clamp remainingLease [0,ghost]; clip toạ độ [0,1]; loại zero-area. + Contract import-linter cưỡng chế Property 10 (display KHÔNG import tracker/tracking-DTO/crossing-event) — 6 contract KEPT.
+- Cái mất: Task 8 còn phần B (Flask wire) → chưa webcam-test được.
+- Đổi lại: phần A kiểm-chứng-được-ngay (không cần webcam/flask), tách rủi ro; Property 10 giờ cưỡng chế bằng máy (không nhắc miệng).
+- Vì sao (bản chất): "raw truth ⊥ display" phải cưỡng chế bằng import-linter (giống 5-layer), không dựa kỷ luật; projection thuần test byte-được → chống drift endpoint.
+Verify-Symbol: vision-platform/src/vision_platform/runtime/overlay_projection.py::project_overlay
+Đóng khi: phần B — wire `/overlay` vào `vision_web_app.py` (detect-loop feed store, scheduler thread, endpoint no-store) + Task 10 browser → webcam E2E. Rồi Status → ✅.
+
+### D-115 — 2026-07-15 — web-live-overlay-sync Task 8B: wire Flask `/overlay` + scheduler + detect-loop feed (webcam E2E LIVE)
+Status: ✅ (wire integration-verified qua webcam thật; test chuyên biệt 9/10/11/12 còn nợ)
+Scope: `profiles/vision_web_app.py` (viết lại) — spec Task 8 phần B
+Nguồn: LOG Entry #391 · design §Threads/§Wire · tasks Task 8/9/10/11
+Evidence: `scripts\vp.cmd verify` = 761 passed/2 skipped · lint 6 kept/0 broken · drift PASS; webcam server (cam0+yolov8n.onnx CPU) import OK + Flask serving; curl `/overlay` JSON schema đúng (health LIVE·DETECTED·displayId/trackRevision/remainingLeaseMs·person 0.9068) + `/boxes` legacy + `/stats` video=7091≫detect=1687 (LOG #391)
+Links: D-114 (project_overlay/contract), D-110 (store), D-111 (scheduler), D-112 (health), D-113 (pacer), D-106 (design)
+Quyết định: viết lại `vision_web_app.py` wire toàn bộ logic server-side vào web app THẬT: `_detect_loop` feed `OverlayStateStore` (begin_inference token → detect → `_norm_boxes` NORMALIZED → apply_completion DETECTED/EMPTY; exception → health detector ERROR không bịa empty); thread `OverlayExpiryScheduler.serve`; endpoint `/overlay` = `project_overlay(snapshot, now, ghostSlaMs)` no-store; browser JS đọc `/overlay` (per-track lease + epoch rollback) INLINE; GIỮ `/boxes` legacy. `_PROCESS_EPOCH=uuid/phiên`.
+- Cái mất: browser JS inline (chưa tách hàm thuần test-được — Task 10 nợ); Task 9/10/11 chức năng có nhưng chưa test chuyên biệt; verdict flicker chờ user nhìn.
+- Đổi lại: E2E chạy được NGAY + verify HTTP thật (webcam) — điểm user thấy fix; wire thay `HOLD_MS` mù bằng lease/epoch/frame-identity (fix GỐC).
+- Vì sao (bản chất): logic server-side (Task 1-7) additive vô nghĩa tới khi wire vào điểm phát-sinh-flicker; đây là turn nối "raw truth ⊥ display" vào `vision_web_app.py` — nơi bug gốc sống.
+Đóng khi: (đã ✅ wire + E2E LIVE) — còn Task 9 barrier-test / Task 10 JS-fixture / Task 11 legacy-snapshot / Task 12 property-E2E để khép spec + gỡ `HOLD_MS` cũ (worktree #377).
+
+### D-116 — 2026-07-15 — Triage sau webcam E2E: hoãn production-hardening (ghi backlog) + design-first cho perf/reconnect
+Status: ✅ (quyết định triage — không code logic turn này)
+Scope: hướng đi sau #391; không đụng code sản phẩm
+Nguồn: LOG Entry #392 · review `OnnxDetector`/`vision_web_app.py` + user triage
+Links: D-115 (wire), K-101 (backlog), K-100 (HOLD_MS mitigation)
+Quyết định: theo chỉ đạo user, chia 8 mục review:
+- **HOÃN — ghi backlog (K-101), làm sau:** (1) test tự động cho `vision_web_app.py` [trừ khi phục vụ benchmark], (2) thay Flask dev-server bằng WSGI production (waitress), (3) auth cho endpoint, (4-INT8) quantize INT8 ONNX.
+- **CẦN THIẾT KẾ tối ưu rồi làm (design-first):** wire `ReconnectPacer`/`apply_source_discontinuity` vào reconnect thật (source_epoch đang hard-code=1); tách browser JS thành hàm thuần test-được; transport WebRTC/WebSocket giảm skew; **input-size model cấu-hình-được (runtime/config)**; session-options + motion-gate + detect-mỗi-N-frame/downscale (điều-tiết CPU).
+- Cái mất: chưa có regression test cho wire ngay (rủi ro có ghi nhận K-101).
+- Đổi lại: không code khi chưa thiết kế → tránh vá ngọn; nhóm perf gói 1 sub-spec (`adaptive-detection-perf`) vì các đòn bẩy tương tác nhau (cadence↔lease↔accuracy).
+- Vì sao (bản chất): user ưu tiên tốc độ + "thiết kế tối ưu nhất"; thiết kế đúng 1 lần rẻ hơn code-rồi-sửa; backlog ghi lại chống-quên (chống drift trí nhớ).
+Đóng khi: mở sub-spec `adaptive-detection-perf` design-first (user chốt scope) + spec riêng cho reconnect-wire & frontend-refactor; backlog K-101 rút dần khi từng mục xong.
+
+### D-117 — 2026-07-15 — Sub-spec `adaptive-detection-perf` design-first: tách deploy-time⊥runtime lever
+Status: 🔵 design-only (CHƯA code — chờ user valid)
+Scope: `.kiro/specs/adaptive-detection-perf/design.md`
+Nguồn: LOG Entry #393 · đọc `MotionGateStage`/`DetectorPipeline`/`domain.motion.changed_ratio` + `describe_onnx` empiric #393
+Links: D-116 (triage mở spec), D-115 (wire), K-101 (backlog), K-093 (model input cố định), K-083/#352 (fps CPU)
+Quyết định: thiết kế điều-tiết detect trên CPU no-GPU, xương sống = **tách deploy-time ⊥ runtime**:
+- **Runtime lever (an toàn, sẵn-dùng):** `should_detect` thuần @domain (min-interval + every-N) + motion-gate tái dùng `changed_ratio` trong `_detect_loop` (bỏ detect khi tĩnh, lease overlay làm mượt). Cấu-hình CLI+TOML, mặc định = hành vi hiện tại (additive).
+- **Deploy-time lever:** input-size = chọn .onnx (model shape CỐ ĐỊNH `[1,3,640,640]` verify #393 → KHÔNG đổi runtime) + **fail-fast** đối chiếu input thật (`describe_onnx`) lúc setup; INT8 = artifact quantized offline + đo accuracy; SessionOptions benchmark-gated [chưa kiểm].
+- Ràng buộc liên-spec (Property 5): `detectMinIntervalMs <= displayLeaseMs` (overlay) chống giật.
+- Cái mất: input-size không đổi runtime (giới hạn bản chất model shape cố định) — đính chính so hình dung ban đầu của user, có bằng chứng.
+- Đổi lại: đúng bản chất (không hứa điều bất khả); runtime-levers đủ tiết kiệm CPU mà không re-export.
+- Vì sao (bản chất): trần throughput = CPU inference; giảm TẦN SUẤT detect (không giảm chất lượng mỗi lần) là đòn bẩy an toàn nhất khi không có GPU; lease overlay đã làm mượt nên detect thưa không giật (trong ràng buộc P5).
+Đóng khi: user valid design → tạo requirements.md (EARS) → tasks.md (Task 0 đo trước) → code TDD → verify (unit + Task 0 benchmark + webcam E2E) → Status ✅.
+
+### D-118 — 2026-07-15 — adaptive-detection-perf Task 1: config cadence @kernel + should_detect @domain (TDD)
+Status: ✅ code+verify
+Scope: `kernel/detection_cadence.py` + `domain/detect_cadence.py` + `tests/test_detection_cadence.py` — spec Task 1
+Nguồn: LOG Entry #396 · design §Components/§Data Models · requirements 1.1/1.3/4.2 · tasks Task 1
+Evidence: `scripts\vp.cmd verify` = 784 passed/2 skipped (761→784, +23) · lint 6 kept/0 broken (Kernel/Domain contract KEPT) · drift PASS (LOG #396)
+Links: D-117 (design), K-102 (baseline), OverlayConfig (displayLeaseMs cho P5)
+Quyết định: `DetectionCadenceConfig` frozen fail-fast @kernel + `assert_cadence_fits_lease` TÁCH riêng (P5 cadence<=lease, gọi lúc wire) + `should_detect` THUẦN @domain nhận PRIMITIVE (2 cổng min-interval/every-N, reason bounded).
+- Cái mất: `should_detect` không nhận cfg trực tiếp (caller phải rút field) — lệch tasks.md.
+- Đổi lại: domain giữ THUẦN (không import kernel — tránh circular, đúng import-linter); config test độc lập.
+- Vì sao (bản chất): tách policy (thuần, xác định) khỏi config (fail-fast) khỏi cross-config-invariant (composition) = mỗi thứ test/kiểm được riêng; every-N delta-version robust hơn modulo khi detect chậm hơn video.
+Verify-Symbol: vision-platform/src/vision_platform/kernel/detection_cadence.py::DetectionCadenceConfig
+Verify-Symbol: vision-platform/src/vision_platform/domain/detect_cadence.py::should_detect
+Đóng khi: (đã ✅) — tiếp Task 2 (motion-gate reuse) + Task 3 (fail-fast input-size) → Task 4 wire vào `_detect_loop`.
+
+### D-119 — 2026-07-15 — adaptive-detection-perf Task 2+3+4: MotionGate@domain + fail-fast input-size + wire loop/CLI
+Status: ✅ code+verify
+Scope: `domain/motion_gate.py` + `adapters/onnx_detector.py` (expected_input_size) + `profiles/vision_web_app.py` (wire) + `profiles/vision_demo_app.py` (kích hoạt) + 2 test file — spec Task 2/3/4
+Nguồn: LOG Entry #397 · design §Components · requirements 1.1/1.2/2.1/4.1 · tasks Task 2/3/4
+Evidence: `scripts\vp.cmd verify` = 797 passed/2 skipped (784→797, +13) · lint 6 kept/0 broken · drift PASS (LOG #397)
+Links: D-118 (config/policy Task 1), K-102 (baseline + input-size cố định), K-100 (HOLD_MS thay bằng lease), D-115 (wire overlay)
+Quyết định: MotionGate lõi @domain (reuse changed_ratio, decouple Stage) + fail-fast input-size @OnnxDetector.setup (đóng lỗ #395) + wire `_detect_loop` 2 cổng (motion+cadence, skip→giữ overlay+detector LIVE) + CLI + P5 assert startup + kích hoạt fail-fast qua `_build_detector`.
+- **SỬA GỐC (valid lại bắt lỗi):** Task 1 validate motionRoi như pixel int → SAI (hệ dùng roi chuẩn-hoá [0,1]) → sửa dùng `validate_roi` + type float×4 + test [0,1]. Không bắt thì vỡ lúc wire.
+- Cái mất: loop không unit-test được (verify = import + webcam E2E).
+- Đổi lại: additive (mặc định = hành vi cũ, 797/2 giữ); fail-fast input-size cho lỗi rõ lúc setup; motion+cadence cắt CPU khi tĩnh/không cần nhịp cao mà lease overlay giữ mượt.
+- Vì sao (bản chất): giảm TẦN SUẤT detect (không giảm chất lượng) = đòn bẩy CPU an toàn nhất no-GPU; reuse motion domain (1 nguồn sự thật, không viết lại); skip=LIVE là truthful (detector khỏe, chỉ gated).
+Verify-Symbol: vision-platform/src/vision_platform/domain/motion_gate.py::MotionGate
+Verify-Symbol: vision-platform/src/vision_platform/adapters/onnx_detector.py::OnnxDetector
+Đóng khi: (đã ✅ Task 2/3/4) — tiếp Task 5 (TOML) + Task 7 (verify+webcam E2E đo CPU). Task 6 INT8 gated.
+
+### D-120 — 2026-07-15 — adaptive-detection-perf: heartbeat max-interval (FIX GỐC K-103, chống mất box)
+Status: ✅ code+verify
+Scope: `kernel/detection_cadence.py` (+detectMaxIntervalMs +invariant) + `domain/detect_cadence.py` (+max_interval_ns/MAX_INTERVAL) + `profiles/vision_web_app.py` (wire override) + `tests/test_detection_cadence.py` (+8) + design.md/requirements.md (R1.4)
+Nguồn: LOG Entry #399 · K-103 (phát hiện E2E) · design §Components C1/§Property 5 · requirements 1.3/1.4
+Evidence: `scripts\vp.cmd verify` = 805 passed/2 skipped (797→805, +8) · lint 6 kept/0 broken · drift PASS (LOG #399)
+Links: D-119 (motion-gate+cadence Task 2/3/4), D-118 (config/policy Task 1), K-103 (bug đóng bởi đây), OverlayConfig.displayLeaseMs
+Quyết định: thêm HEARTBEAT `detectMaxIntervalMs` ở tầng policy `should_detect` (reason MAX_INTERVAL, override mọi cổng gồm motion-gate) + bất biến `min<=max<=displayLease` → đảm bảo detect lại trước khi lease hết → vật đứng-yên KHÔNG mất box.
+- Cái mất: thêm 1 param config (phức tạp hơn chút); loop verify bằng webcam (không unit-test).
+- Đổi lại: đóng K-103 tận GỐC, tổng quát (bao motion-gate/every-N/min-interval ở 1 chỗ), không rải logic thời-gian vào motion-gate.
+- Vì sao (bản chất): guarantee cần là "không được không-detect quá lâu hơn lease" — đây là ràng buộc THỜI GIAN thuộc policy cadence, không phải đếm-frame của motion-gate. Đặt đúng chỗ = fix gốc.
+Đóng khi: (đã ✅) — dùng `--motion-gate --detect-max-interval-ms <= lease` cho scene giữ-box. Còn Task 5 (TOML) + Task 7 (đo CPU% định lượng).

@@ -90,3 +90,20 @@ source_modules = ["vision_platform.adapters"]
 forbidden_modules = [
     "vision_platform.runtime", "vision_platform.application", "vision_platform.profiles",
 ]
+
+# Overlay display projection KHONG duoc dung analytics (tracker/count/event) — Property 10 (spec web-live-overlay-sync).
+# Raw truth ⊥ display: module hien-thi cam import tracker/tracking-DTO/crossing-event (khong de display "chay nguoc" vao analytics).
+[[tool.importlinter.contracts]]
+name = "Overlay display khong import analytics (Property 10)"
+type = "forbidden"
+source_modules = [
+    "vision_platform.kernel.overlay_view",
+    "vision_platform.runtime.display_stabilizer",
+    "vision_platform.runtime.overlay_state_store",
+    "vision_platform.runtime.overlay_projection",
+]
+forbidden_modules = [
+    "vision_platform.runtime.iou_tracker",
+    "vision_platform.kernel.tracking_protocol",
+    "vision_platform.kernel.crossing_event",
+]

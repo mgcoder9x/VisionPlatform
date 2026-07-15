@@ -32,49 +32,49 @@ Ghi chú graph: Task 5 phụ thuộc 4; Task 8 phụ thuộc 4+6; Task 9 phụ t
   - Xuất cadence p50/p95/p99 → dùng chốt `candidateLeaseMs/displayLeaseMs/ghostSlaMs/clientSilenceCapMs` (nếu không có SLA → giữ explicit experimental config, KHÔNG tuyên bố "tối ưu").
   - _Requirements: (grounding cho 2.2, 3.2) · design §Diagnostic measurement task_
 
-- [ ] 1. DTO bất biến @kernel + config invariants fail-fast
+- [x] 1. DTO bất biến @kernel + config invariants fail-fast
   - `InputFrameSnapshot` (processEpoch/sourceEpoch/frameVersion/inputAcquiredNs/dims/buffer), `RawDetectionSnapshot` (input identity + start/end/publish ns + outcome DETECTED|EMPTY + immutable boxes), `HealthSnapshot` (source/detector enum), `NormalizedBox` (finite-clamped wire contract), `OverlayViewSnapshot` (immutable committed view) — đều frozen dataclass.
   - `OverlayConfig` + validate fail-fast: `0<iouThreshold<=1`, `0<emaAlpha<=1`, `minHits>=1`, `maxMisses>=0`, `reconnectMinMs<=reconnectMaxMs`, `candidateLeaseMs<=displayLeaseMs<=ghostSlaMs`, `clientSilenceCapMs<=ghostSlaMs`; impossible ghost-SLA-vs-cadence → `ConfigError`.
   - Test: mọi invariant boundary (đậu/rớt); frozen (immutability); no NaN/Inf/negative wire value.
   - _Requirements: 1.1 (snapshot immutable), 2.2 (lease fields) · design §Data Models, §Configuration invariants_
 
-- [ ] 2. Matching một-một + EMA THUẦN @domain
+- [x] 2. Matching một-một + EMA THUẦN @domain
   - `match_one_to_one(prev_tracks, new_boxes, iou_threshold)`: cùng label, candidates `IoU>=threshold`, sort `(-IoU, oldDisplayId, newIndex)`, greedy claim; nhãn khác KHÔNG khớp. Trả kept pairs (index-based, KHÔNG import Detection — K-028).
   - `ema_step(prev, new, alpha)`: mỗi toạ độ smoothed ∈ [prev,new]; input hằng → không drift.
   - Test (pure, xác định): cùng input có thứ tự → output y hệt; khác-label không khớp; EMA bound + constant-no-drift.
   - _Requirements: 2.4 (Property 8), 2.5 (Property 9)_
 
-- [ ] 3. `DisplayStabilizer` — pure transition (hit-streak/miss/lease/trackRevision)
+- [x] 3. `DisplayStabilizer` — pure transition (hit-streak/miss/lease/trackRevision)
   - Nhận unique accepted result + TimerTick; mỗi confirmed track có `displayId="<sourceEpoch>:<counter>"`, `trackRevision`, lease deadline, missCount riêng.
   - Matched: missCount=0, EMA update, lease refresh, `trackRevision+=1` (kể cả coords bằng). Unmatched: missCount+=1, KHÔNG refresh lease; xóa khi `missCount>maxMisses` HOẶC TimerTick chạm lease. Candidate hitStreak: đủ `minHits` → promote; bất kỳ result unmatched → xóa candidate.
   - `EMPTY` = mọi track/candidate unmatched. Detector/source error KHÔNG gọi hit/miss, KHÔNG refresh lease. Discontinuity clear tất cả ngay.
   - Test (fake clock): exact miss (giữ ở miss thứ nhất, xóa ở maxMisses+1, match reset); per-track lease độc lập; promote sau minHits; deterministic displayId.
   - _Requirements: 2.2 (Property 5 server-side), 2.3 (Property 7) · design §Stabilizer exact semantics_
 
-- [ ] 4. `OverlayStateStore` — authority serialized check-and-commit
+- [x] 4. `OverlayStateStore` — authority serialized check-and-commit
   - Một lock authority: `apply(event)` validate epochs/token/version → pure transition → tăng revisions → thay MỘT immutable `OverlayViewSnapshot`. Endpoint chỉ đọc snapshot đã commit (không mutate/lazy-expire).
   - Acceptance gate: completion nhận CHỈ khi epochs khớp + single-flight token hiện hành + `sourceFrameVersion` > last accepted; duplicate/old = no-op + bounded reason counter (KHÔNG tăng inference generation).
   - Epoch anti-rollback (server side) + revision đơn điệu.
   - Test (barrier race discontinuity↔completion): check-and-commit atomic; concurrent read chỉ thấy committed snapshot; poll idempotence (revision lặp → state không đổi).
   - _Requirements: 1.1 (Property 1), 1.2 (Property 2 server), 1.3 (Property 3), 2.1 (Property 4)_
 
-- [ ] 5. `OverlayExpiryScheduler` — TimerTick exactly-once
+- [x] 5. `OverlayExpiryScheduler` — TimerTick exactly-once
   - Phát `TimerTick(nowNs)` tại next deadline qua cùng `apply`; tick lặp qua cùng deadline → no-op (không tăng revision). Clock/wait tiêm được.
   - Test (fake clock): nhiều tick qua cùng deadline → hiệu ứng state exactly-once; KHÔNG đọc HTTP nào mutate state.
   - _Requirements: 2.6 (Property 13)_
 
-- [ ] 6. Health hai chiều + trung thực lỗi
+- [x] 6. Health hai chiều + trung thực lỗi
   - source `INITIALIZING|LIVE|RECONNECTING|STALE|STOPPED|ERROR`; detector `INITIALIZING|LIVE|STALE|ERROR|STOPPED`. Detector hung phát hiện qua TimerTick (in-flight start/last completion deadline). Source STALE theo read-success cadence.
   - Raw `EMPTY` = valid (tăng generation + 1 miss event); detector ERROR/STALE KHÔNG bịa empty + KHÔNG refresh; init/null trước first result.
   - Test: 4 trạng thái (init/empty/source-degrade/detector-degrade) phân biệt được; lỗi không refresh display.
   - _Requirements: 3.1 (Property 6)_
 
-- [ ] 7. Reconnect pacing + source discontinuity (epoch tăng đúng một lần)
+- [x] 7. Reconnect pacing + source discontinuity (epoch tăng đúng một lần)
   - Tại `LIVE→discontinuity` lần đầu: state store tăng `sourceEpoch` + clear ĐÚNG MỘT LẦN trước retry; retry/reopen/success thuộc epoch mới, KHÔNG tăng thêm. Consumer sleep `clamp(retry_after_ms, reconnectMinMs, reconnectMaxMs)` (wait/clock tiêm được); missing/invalid → configured minimum; success reset backoff; KHÔNG busy-loop/zero.
   - Test (fake clock): discontinuity tăng epoch/clear đúng-một-lần; mỗi attempt obey clamp; success không tăng epoch lần hai.
   - _Requirements: 3.2 (Property 11) · design §Reconnect pacing_
 
-- [ ] 8. Endpoint `/overlay` (pure projection) + cưỡng chế cô lập analytics
+- [x] 8. Endpoint `/overlay` (pure projection) + cưỡng chế cô lập analytics
   - `GET /overlay`: HTTP 200 `application/json` `Cache-Control: no-store,no-cache,must-revalidate`; body = pure projection của một committed snapshot + một `serializedAtNs` (tính ages/remaining lease từ 2 input đó, KHÔNG mutate). Trước first result: `rawResult=null`, health INITIALIZING, display rỗng lease 0. Transport failure (timeout/500/malformed) KHÔNG hứa application shape.
   - Import-linter contract MỚI: display DTO/module KHÔNG import analytics input port; toggle stabilizer để raw byte-equivalent (test).
   - Test: shape ổn định (nullable, không fake generation 0); no-store headers; finite box validation (clip/reject non-finite/zero-area + bounded reason counter + sort displayId); analytics isolation.

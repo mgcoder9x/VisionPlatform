@@ -7259,3 +7259,293 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - Bộ spec `web-live-overlay-sync` HOÀN CHỈNH nhưng CHƯA code — phiên sau bắt đầu wave 1 (Task 1 DTO + Task 2 domain) theo TDD.
 
 **Đã verify:** `git show 3201d29 --stat` xác nhận 17 file #377-382 + C9 đã commit+push (tree sạch, porcelain rỗng); end.md viết lại đọc-lại khớp #382. · **Chưa verify:** không có (thuần handoff doc).
+
+### Entry #384 — 2026-07-14 — web-live-overlay-sync WAVE 1 (Task 1+2): DTO+config@kernel + EMA@domain (TDD) — Kiro-Opus
+
+**Bối cảnh:** Thi công wave 1 bộ spec overlay (leaf/pure, additive, CHƯA wire vào web app → zero rủi ro hệ đang chạy). TDD: test pin contract + `vp verify` GREEN.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **TÁI DÙNG `domain.tracking.greedy_associate` cho matching (Property 8)** thay vì viết `match_one_to_one` mới — nó đã: cùng-label, IoU-greedy, tie-break xác định, một-một. `display_smoothing.py` re-export nó (Property 8 = reuse, không trùng thuật toán). Task 2 phần MỚI thật chỉ là EMA.
+- DTO tái dùng `Detection`@kernel + `BBox`@domain (không đẻ RawBox mới). `RawDetectionSnapshot` giữ đủ timestamps (input/start/end/published ns) để endpoint chiếu age (Task 8).
+- `OverlayConfig.experimental=True` mặc định (chưa chốt SLA — Task 0), `requiredCadenceMs>ghostSlaMs` → fail-fast (stable-mode bất khả).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Không đổi bản chất. `InputFrameSnapshot.frame: object` (không import numpy vào kernel — giữ layer thuần; read-only-by-convention).
+
+**3. Trade-off đã cân nhắc:**
+- Viết matching mới (khớp câu chữ tasks) vs reuse greedy_associate → reuse (DRY + đã verify + đúng K-028 index-based). Cái mất: tie-break là `(-iou,new,prev)` thay vì `(-iou,oldDisplayId,new)` design ghi — tương đương về tính xác định (displayId map 1-1 prev), không ảnh hưởng đúng-đắn.
+- DTO validate raise (fail-fast) vs chỉ projection lọc → validate ở DTO (defense-in-depth) + projection sẽ lọc trước khi dựng (Task 8).
+
+**4. Điều bạn nên biết:**
+- Wave 1 CHƯA wire — web app `vision_web_app.py` vẫn dùng `/boxes`+HOLD_MS cũ. Các module mới chưa ai import (additive thuần). Task 3 (stabilizer) sẽ ghép DTO+matching+EMA; Task 4 (store) là authority.
+- Verify-Symbol gắn 3 symbol chính → C8 tự canh (count 12→15).
+
+**Đã verify:** `scripts\vp.cmd verify` = **707 passed/2 skipped** (654→707, +53 test: 20 dtos + 18 config + 15 smoothing) · **lint 5 kept/0 broken** (5 contract import-linter KEPT — domain/kernel layer đúng) · drift PASS. get_diagnostics 6 file mới = 0. · **Chưa verify:** hành vi stabilizer/store/endpoint (Task 3+ chưa làm); trigger flicker runtime (Task 0 chưa đo).
+
+### Entry #385 — 2026-07-14 — web-live-overlay-sync Task 3: DisplayStabilizer @runtime (TDD) — Kiro-Opus
+
+**Bối cảnh:** Thi công Task 3 (wave 2) — "bộ não" ổn định hiển thị. Additive (chưa wire). Dùng lại wave-1: DTO + `greedy_associate` (matching) + `ema_box` (smoothing).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Promotion pass ĐỘC LẬP (bước 6) sau khi cập nhật candidate → xử đúng `minHits=1` (promote ngay result đầu). Design chỉ nói "hitStreak>=minHits → promote"; tôi tách pass riêng để đúng mọi minHits.
+- Thêm field `confidence: float=0.0` vào `DisplayTrack` (additive, default an toàn) — projection Task 8 cần feed vào `NormalizedBox`.
+- `on_tick` no-op khi không xóa gì → KHÔNG tăng revision (Property 4/13: tick lặp không đổi state).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Không đổi bản chất. Input stabilizer = `(label, BBox NORMALIZED, confidence)` (không nhận Detection thẳng — tránh nhầm coordinate space; store/projection chuẩn hoá trước).
+
+**3. Trade-off đã cân nhắc:**
+- Candidate lưu box RAW mới nhất (không EMA) vs EMA candidate → chọn raw (candidate chưa "ổn định", EMA chỉ áp confirmed) — đơn giản + đúng ý đồ smoothing-sau-promote.
+
+**4. Điều bạn nên biết:**
+- **4 test FAIL ban đầu = bug TEST, không phải code** (bằng chứng code đúng): (a) 3 test đặt `displayLeaseMs=10_000` giữ `ghostSlaMs=1500` → `OverlayConfig` fail-fast ĐÚNG (display<=ghost) — sửa test bỏ override thừa; (b) EMA test dùng 2 box IoU=0 (cách xa/khác size) → không match nên không EMA — sửa test dùng box chồng lấn. Đây là giá trị của chạy test thật.
+- Verify-Symbol `DisplayStabilizer` → C8 15→16.
+- CHƯA wire. Task 4 (`OverlayStateStore` authority) sẽ bọc stabilizer + acceptance gate (epoch/token/version) + immutable snapshot.
+
+**Đã verify:** `scripts\vp.cmd verify` = **719 passed/2 skipped** (707→719, +12 test stabilizer) · lint 5 kept/0 broken (import-linter runtime KEPT) · drift PASS. get_diagnostics 2 file = 0. · **Chưa verify:** OverlayStateStore/endpoint (Task 4/8 chưa làm); trigger flicker runtime (Task 0).
+
+### Entry #386 — 2026-07-14 — web-live-overlay-sync Task 4: OverlayStateStore authority (TDD) — Kiro-Opus
+
+**Bối cảnh:** Thi công Task 4 (wave 3) — authority DUY NHẤT check-and-commit. Additive (chưa wire). Bọc `DisplayStabilizer` (Task 3) dưới một lock + acceptance gate.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Gate theo THỨ TỰ: processEpoch → sourceEpoch → token → version (mỗi tầng 1 reason enum bounded); reject = no-op + counter (KHÔNG tăng eventRevision/inferenceGeneration).
+- `begin_inference()` cấp single-flight token đơn điệu; `apply_source_discontinuity` tăng token → completion in-flight cũ bị gate reject (đóng race Property 2).
+- `apply_tick` chỉ commit khi `stab.display_revision` đổi (Property 4: tick lặp no-op).
+- Track `self._display` để `set_health` commit lại view hiện tại không cần chạm stabilizer.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Không đổi bản chất. Quyết định "KHI nào tăng sourceEpoch" (reconnect logic) để Task 7; store chỉ cung cấp primitive `apply_source_discontinuity` nguyên tử.
+
+**3. Trade-off đã cân nhắc:**
+- threading.Lock quanh mọi method vs lock-free → chọn Lock (đơn giản, đúng, đã đủ nhanh; V1 single-flight). Read `snapshot()` cũng dưới lock → trả reference immutable → reader thấy ảnh nhất quán (Property 1). Cái mất: contention nhẹ (chấp nhận cho web UI 1 process).
+
+**4. Điều bạn nên biết:**
+- Verify-Symbol `OverlayStateStore` → C8 16→17.
+- CHƯA wire. Task 5 (ExpiryScheduler phát TimerTick) + Task 6/7 (health/reconnect) rồi Task 8 mới ghép vào `/overlay` (lúc đó thay `HOLD_MS`).
+- Test concurrency: 4 reader `snapshot()` trong lúc 199 commit → 0 lỗi torn/mixed (Property 1 atomic reads).
+
+**Đã verify:** `scripts\vp.cmd verify` = **731 passed/2 skipped** (719→731, +12 test store) · lint 5 kept/0 broken (runtime KEPT) · drift PASS. GREEN lần đầu (không bug test). get_diagnostics 2 file = 0. · **Chưa verify:** ExpiryScheduler/health/reconnect/endpoint (Task 5-8 chưa làm); trigger flicker runtime (Task 0).
+
+### Entry #387 — 2026-07-14 — web-live-overlay-sync Task 5: OverlayExpiryScheduler (TDD) — Kiro-Opus
+
+**Bối cảnh:** Thi công Task 5 (wave 3) — "đồng hồ" phát TimerTick tới store đúng lúc lease hết hạn. Additive (chưa wire). Thêm `next_expiry_ns()` cho stabilizer+store.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Scheduler chờ tới **deadline sớm nhất** (`next_expiry_ns`) thay vì poll cố định → tick đúng giờ, không busy-poll. `idle_poll_ns` khi rỗng + `max_wait_ns` cap (chống ngủ quá lâu nếu deadline xa/đổi).
+- **Exactly-once (Property 13) là do STORE bảo đảm** (`apply_tick` chỉ commit khi state đổi); scheduler chỉ lo "khi nào gõ" → tách trách nhiệm sạch.
+- `serve()` đọc `next_expiry_ns` rồi ngủ NGOÀI lock, sau đó `apply_tick` (tự lock) — không giữ lock lúc chờ (design §low-latency).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không đổi bản chất.
+
+**3. Trade-off đã cân nhắc:**
+- Scheduler tự giữ deadline vs hỏi store mỗi vòng → hỏi store (`next_expiry_ns`) mỗi vòng (đơn giản, luôn đúng sau mỗi commit); cái mất: 1 lock-read/vòng (rẻ).
+
+**4. Điều bạn nên biết:**
+- **2 test FAIL đầu = bug TEST** (lại config invariant): `displayLeaseMs=5000` cần ghost≥5000; `=100` cần candidate≤100 → `OverlayConfig` fail-fast ĐÚNG. Sửa helper `_store_with_track` tự-tính config hợp lệ. Code KHÔNG đổi.
+- Verify-Symbol `OverlayExpiryScheduler` → C8 17→18.
+- CHƯA wire. Task 6 (health/failure) + Task 7 (reconnect) rồi Task 8 wire `/overlay` (thay HOLD_MS).
+
+**Đã verify:** `scripts\vp.cmd verify` = **737 passed/2 skipped** (731→737, +6 test) · lint 5 kept/0 broken · drift PASS. get_diagnostics 2 file = 0. · **Chưa verify:** health/reconnect/endpoint (Task 6-8); trigger flicker runtime (Task 0).
+
+### Entry #388 — 2026-07-14 — web-live-overlay-sync Task 6: derive_health (failure truthfulness, TDD) — Kiro-Opus
+
+**Bối cảnh:** Task 6 (wave 4) — dẫn xuất source/detector state từ nhịp thời gian, phân biệt init/empty/source-degrade/detector-degrade (Property 6). Additive. Thêm ngưỡng health vào OverlayConfig.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- `derive_health` là hàm THUẦN @runtime (không class/state) nhận facts thời gian + config → HealthSnapshot; caller (Task 8) tiêm now_ns + timestamps. Ưu tiên: error tường minh > hung/stale-suy-từ-thời-gian > init > live.
+- 3 ngưỡng vào OverlayConfig (sourceStaleMs/detectorStaleMs/detectorHangMs) — 1 config object, additive default.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không đổi bản chất.
+
+**3. Trade-off đã cân nhắc:**
+- Hàm thuần vs class-monitor giữ state → hàm thuần (dễ test fake-clock, state do store/wiring giữ). Cái mất: caller phải cấp facts mỗi lần (rẻ, rõ ràng).
+
+**4. Điều bạn nên biết:**
+- Property 6 (không bịa empty): detector ERROR/STALE = trạng thái RIÊNG (health), KHÔNG tạo raw EMPTY, KHÔNG refresh display → box cũ sống hết lease rồi thôi (store.set_health chỉ đổi health).
+- Verify-Symbol `derive_health` → C8 18→19.
+- CHƯA wire. Còn Task 7 (reconnect pacing) + Task 8 (wire `/overlay` — BEHAVIOR) + Task 10 (browser client) để webcam-test-được-BẢN-FIX.
+
+**Đã verify:** `scripts\vp.cmd verify` = **744 passed/2 skipped** (737→744, +7 test) · lint 5/0 · drift PASS. GREEN lần đầu. get_diagnostics 2 file = 0. · **Chưa verify:** reconnect/endpoint/browser (Task 7/8/10); trigger flicker runtime (Task 0).
+
+### Entry #389 — 2026-07-14 — web-live-overlay-sync Task 7: reconnect pacing (TDD) — Kiro-Opus
+
+**Bối cảnh:** Task 7 (wave 4) — pacing reconnect + epoch bump-once (Property 11). Additive. Hoàn tất TOÀN BỘ logic server-side overlay (Task 1-7).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- `ReconnectPacer.on_reconnect_attempt()` trả `(should_bump_epoch, sleep_ns)`: bump=True CHỈ attempt đầu episode (`_in_discontinuity` flag); `on_live()` reset → episode sau bump lại. Tách "khi bump epoch" khỏi store (store chỉ có primitive `apply_source_discontinuity`).
+- `clamp_retry_ns`: retry_after None/NaN/Inf/<=0/bool/non-số → dùng `reconnectMinMs` (KHÔNG bao giờ 0 → chống busy-loop, đóng lỗ `_video_loop` K-100#5).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không đổi bản chất.
+
+**3. Trade-off đã cân nhắc:**
+- Pacer generic `on_reconnect_attempt`/`on_live` vs dispatch theo SourceState enum → chọn generic (caller Task 8 quyết trạng thái nào là "đang reconnect") — tách trách nhiệm, dễ test.
+
+**4. Điều bạn nên biết:**
+- Verify-Symbol `ReconnectPacer` → C8 19→20.
+- **TOÀN BỘ logic server-side overlay (Task 1-7) XONG + verify.** Còn: Task 8 (wire `/overlay` — BEHAVIOR, đổi `vision_web_app.py`), Task 9 (test video-independence), Task 10 (browser client), Task 11 (legacy), Task 12 (E2E). Task 8+10 là điều kiện để **webcam-test bản fix**.
+
+**Đã verify:** `scripts\vp.cmd verify` = **756 passed/2 skipped** (744→756, +12 test) · lint 5/0 · drift PASS. GREEN lần đầu. get_diagnostics 2 file = 0. · **Chưa verify:** wire endpoint/browser (Task 8/10); visual flicker (Task 0/E2E).
+
+### Entry #390 — 2026-07-14 — web-live-overlay-sync Task 8 (phần A): project_overlay thuần + contract cô lập analytics (TDD) — Kiro-Opus
+
+**Bối cảnh:** Task 8 chia 2: (A) projection thuần + import-linter Property 10 (verifiable NGAY); (B) wire Flask `/overlay` + scheduler thread + feed detect-loop (tích hợp, test bằng webcam — turn kế). Làm (A).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- `project_overlay(snap, now_ns, ghost_sla_ms)` hàm THUẦN @runtime → dict: pure projection (Property 1) — chụp 1 snapshot + 1 now → tính mọi age/remainingLease, KHÔNG mutate. remainingLeaseMs=clamp(deadline-now,[0,ghost]); toạ độ clip [0,1]; zero-area loại.
+- Contract import-linter MỚI (Property 10): `overlay_view`/`display_stabilizer`/`overlay_state_store`/`overlay_projection` CẤM import `iou_tracker`/`tracking_protocol`/`crossing_event` → display KHÔNG chạy-ngược vào analytics. 5→6 contract, KEPT.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không đổi bản chất.
+
+**3. Trade-off đã cân nhắc:**
+- Chia Task 8 (A verifiable / B tích-hợp) vs làm nguyên khối → chia: (A) xanh bằng `vp verify` ngay, (B) đụng web app + cần webcam nên tách để mỗi bước kiểm chứng được (đúng "chính xác kiểm chứng rồi mới triển khai").
+
+**4. Điều bạn nên biết:**
+- 1 test fail đầu = bug TEST (config `ghost<display` không hợp lệ — với config hợp lệ remaining≤display≤ghost nên upper-clamp không xảy ra qua store; test upper-clamp bằng cách truyền `ghost_sla_ms` nhỏ vào chính projection). Code đúng.
+- Verify-Symbol `project_overlay` → C8 20→21.
+- **Task 8 phần B (Flask wire) CHƯA làm** → chưa webcam-test được. Turn kế: wire `/overlay` vào `vision_web_app.py` (detect-loop feed store + begin_inference token + normalize box; scheduler thread; endpoint no-store) + Task 10 browser client → khởi động webcam.
+
+**Đã verify:** `scripts\vp.cmd verify` = **761 passed/2 skipped** (756→761, +5 test) · **lint 6 kept/0 broken** (contract Property 10 KEPT) · drift PASS. get_diagnostics 2 file = 0. · **Chưa verify:** Flask `/overlay` wired + browser + visual (phần B chưa làm).
+
+### Entry #391 — 2026-07-15 — web-live-overlay-sync Task 8B: wire Flask `/overlay` + scheduler + detect-loop feed → webcam E2E LIVE — Kiro-Opus
+**Bối cảnh:** Task 8 phần B (tích hợp) — viết lại `profiles/vision_web_app.py` để wire toàn bộ logic server-side (Task 1-7) vào web app THẬT: detect-loop feed `OverlayStateStore`, scheduler thread phát TimerTick, endpoint `/overlay` pure-projection no-store, browser JS đọc `/overlay` (per-track lease + epoch rollback), GIỮ `/boxes` legacy. Rồi bật webcam test E2E (user yêu cầu "bật web cam test").
+**1. Quyết định AI tự ra (spec không nói):**
+- `_PROCESS_EPOCH = uuid.uuid4().hex` cố định/phiên → client chống rollback qua restart (processEpoch mới ⇒ clear+accept, epoch cũ retired → bỏ). `source_epoch=1` cố định (webcam 1 phiên, discontinuity/epoch-bump là Task 7 primitive, chưa nối vào WebcamFrameSource loop turn này).
+- `_detect_loop`: chỉ chạy khi `_raw_ver` đổi (bỏ frame trùng) → `begin_inference()` token → `detect` → `_norm_boxes` (pixel→NORMALIZED, clip [0,1], bỏ zero-area) → `apply_completion` (outcome DETECTED/EMPTY). Detector exception → `set_health(detector ERROR)` + KHÔNG bịa empty (Property 6); ≥3 lỗi liên tiếp → reload detector.
+- `_health_states` gọi `derive_health` mỗi completion (source theo `_last_read_ns`, detector theo completion-now).
+- `/overlay` khi `_store=None` (trước main set) → shape `{rawResult:null,display:{boxes:[]}}` an toàn.
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Task 9/10/11 được HIỆN THỰC về CHỨC NĂNG trong wire này (video-thread độc lập; browser lease-guard/epoch-rollback inline; `/boxes` legacy giữ) NHƯNG chưa viết test chuyên biệt (barrier test / JS fixture thuần / snapshot legacy) → 3 task GIỮ `[ ]` cho trung thực; chỉ Task 8 [x] (project_overlay unit-tested + contract KEPT + wire integration-verified qua webcam).
+**3. Trade-off đã cân nhắc:**
+- Browser JS viết INLINE trong `_PAGE` vs tách hàm thuần + JS test-fixture (Task 10 yêu cầu): repo không có hạ tầng test JS (Python-only) → wire inline để E2E chạy được NGAY + verify trực quan; tách-hàm-thuần-test-JS là nợ Task 10 (ghi rõ, không overclaim done).
+- Giữ server chạy sau test (không stop) → user mở browser xác nhận flicker trực quan (verdict thị giác thuộc user, không tự tuyên bố "hết flicker").
+**4. Điều bạn nên biết:**
+- `vision_web_app.py` KHÔNG có unit-test → `vp verify` (761/2) KHÔNG phủ import của nó. Verify THẬT của wire = **chạy module** (webcam server import OK + Flask serving) + curl `/overlay`+`/boxes`+`/stats`.
+- Bằng chứng E2E LIVE (webcam0 + yolov8n.onnx, CPU no-GPU): `/overlay` JSON đúng schema (health source/detector=LIVE, rawResult DETECTED gen=603 frameVer=2738, display boxes có displayId/trackRevision/remainingLeaseMs, person conf 0.9068); `/boxes` legacy trả list cũ (person 0.9201); `/stats` `video=7091 · detect=1687` (video≫detect ⇒ video-independence Property 12 chạy thật).
+- label hiện là index số ("0"=person,"27"=tie) vì không truyền `--labels` (cosmetic, không thuộc fix flicker; như /boxes cũ).
+- Verdict "hết flicker" CHỜ user nhìn browser `http://127.0.0.1:8000/`.
+**Đã verify:** `scripts\vp.cmd verify` = **761 passed/2 skipped · lint 6 kept/0 broken · drift PASS**; get_diagnostics `vision_web_app.py` = 0; webcam server import OK + Flask serving; curl `/overlay`(JSON schema đúng, health LIVE, DETECTED)+`/boxes`(legacy)+`/stats`(video≫detect) THẬT. · **Chưa verify:** verdict thị giác "hết flicker" (thuộc user); test chuyên biệt Task 9 (barrier)/Task 10 (JS fixture)/Task 11 (snapshot)/Task 12 (property E2E).
+
+### Entry #392 — 2026-07-15 — Sau webcam E2E: triage hướng tiếp — GHI backlog hoãn + chốt design-first cho perf/reconnect (KHÔNG code logic) — Kiro-Opus
+**Bối cảnh:** User đánh giá bản wire (#391) + hỏi "tiếp theo làm gì / cải tiến tốc độ / best-practice chưa". Tôi review trung thực (đọc `OnnxDetector` = SessionOptions mặc định; Flask `app.run` dev-server; `source_epoch=1` hard-code chưa wire reconnect; wire không có test). User triage từng mục → turn này CHỈ ghi lại backlog + trình plan thiết kế, KHÔNG code (đúng "thiết kế rõ ràng → valid → mới triển khai").
+**1. Quyết định AI tự ra (spec không nói):**
+- Phân loại 8 mục review thành 2 nhóm theo chỉ đạo user: **HOÃN-ghi-backlog** = {test cho `vision_web_app.py`, production WSGI server, auth, INT8 quantization} ; **CẦN-THIẾT-KẾ-rồi-làm** = {wire reconnect epoch, tách JS thuần, transport WebRTC/WS, input-size cấu-hình-được, session-options/motion-gate/detect-mỗi-N-frame}.
+- Ghi backlog thành K-101 (điều-nên-biết, có lý do hoãn) + D-116 (quyết định triage) thay vì code ngay → tránh làm khi chưa thiết kế.
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không đổi bản chất — chỉ sắp thứ tự ưu tiên theo user.
+**3. Trade-off đã cân nhắc:**
+- Code ngay các mục "cần làm" vs design-first → chọn design-first (user nói "cần thiết kế tối ưu nhất"): perf-config + adaptive-detection có nhiều tương tác (lease/cadence/motion-gate/accuracy) → thiết kế sai = vá ngọn. Ghi backlog rẻ + chống-quên; spec sau khi user chốt scope.
+**4. Điều bạn nên biết:**
+- Fps hiện tại CHƯA đo sạch phiên này (shell nuốt `$`/`&`) → nếu cần benchmark, làm qua script cố định (§3.1), không one-liner.
+- Verdict "hết flicker" vẫn chờ user nhìn browser (server còn chạy background terminalId=2).
+- Nhóm perf hội tụ 1 chủ đề "tăng tốc/điều-tiết detect trên CPU no-GPU" → nên gói thành 1 sub-spec design-first (đề xuất tên `adaptive-detection-perf`).
+**Đã verify:** `scripts\vp.cmd check` PASS sau ghi sổ (dự kiến); KHÔNG đổi code sản phẩm → baseline 761/2 giữ (không chạy lại test vì 0 thay đổi code). · **Chưa verify:** fps hiện tại; hiệu quả từng đòn bẩy perf (cần benchmark sau khi thiết kế).
+
+### Entry #393 — 2026-07-15 — Mở sub-spec `adaptive-detection-perf` design-first (tách deploy-time⊥runtime, verify input-shape empiric) — Kiro-Opus
+**Bối cảnh:** User "duyệt theo khuyến nghị" → bắt đầu Spec A perf design-first. Đọc CODE THẬT trước khi thiết kế: `MotionGateStage` (+domain `changed_ratio`), `DetectorPipeline` (letterbox model_h/w cố định), `_detect_loop`. Re-verify EMPIRIC `describe_onnx('yolov8n.onnx')` = input `[1,3,640,640]` CỐ ĐỊNH (không tin mù K-093).
+**1. Quyết định AI tự ra (spec không nói):**
+- **Tách deploy-time ⊥ runtime** làm xương sống thiết kế: input-size/INT8 = deploy-time (model shape cố định → KHÔNG đổi input-size lúc runtime, feed 416 vào model-640 sẽ crash); motion-gate/detect-cadence = runtime lever an toàn, sẵn-dùng ngay (không cần re-export).
+- **Tái dùng hàm domain thuần** `changed_ratio` trong loop (KHÔNG kéo `MotionGateStage` runtime/stages vào profile — tránh coupling MediaPacket/pipeline).
+- **`should_detect` = hàm THUẦN @domain** (min-interval + every-N, clock tiêm) — tách policy khỏi loop I/O.
+- **Fail-fast model-size** ở `OnnxDetector.setup` (đối chiếu `describe_onnx` input thật) — đóng lỗ an toàn (hiện cấu hình sai chỉ lộ khi crash).
+- **Ràng buộc liên-spec (Property 5):** `detectMinIntervalMs <= displayLeaseMs` (overlay) — detect thưa hơn lease → box hết hạn trước detect kế → giật.
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- User nói "giảm input model 640→416 cấu-hình runtime" — CHỈNH lại (có bằng chứng): với model shape cố định, input-size là DEPLOY-TIME (chọn .onnx), KHÔNG phải nút runtime. Đây là đính chính dựa trên verify empiric, không phải từ chối.
+**3. Trade-off đã cân nhắc:**
+- Gói mọi lever vào 1 spec vs tách nhỏ → gói: các đòn bẩy tương tác (cadence↔lease↔accuracy) nên thiết kế chung mới không mâu thuẫn.
+- Session-options: giữ [chưa kiểm] + benchmark-gated (mặc định onnxruntime đã hết-core+graph-opt-ALL → có thể vô ích) — chỉ giữ nếu Task 0 đo vượt (chống thêm phức tạp vô ích).
+**4. Điều bạn nên biết:**
+- design.md `get_diagnostics=0` (khung Kiro Spec chuẩn: Overview/Architecture/Components/Data Models/Correctness Properties (6 Property có Validates provisional)/Error Handling/Testing Strategy).
+- CHƯA code. Chờ user valid 3 câu (tách deploy⊥runtime? ưu tiên runtime-levers? ràng buộc P5?) → mới requirements→tasks→code. Task 0 đo baseline TRƯỚC khi chốt default.
+**Đã verify:** `describe_onnx` input `[1,3,640,640]` cố định (chạy thật #393); đọc `MotionGateStage`/`DetectorPipeline`/`changed_ratio` (code thật); design.md get_diagnostics=0; `vp check` PASS (dự kiến sau ghi sổ). 0 đổi code sản phẩm → baseline 761/2 giữ. · **Chưa verify:** hiệu quả từng lever (Task 0 đo); default "tối ưu" (chờ số).
+
+### Entry #394 — 2026-07-15 — `adaptive-detection-perf`: tạo requirements.md + tasks.md → BỘ SPEC HOÀN CHỈNH (design-first), CHƯA code — Kiro-Opus
+**Bối cảnh:** User "duyệt theo khuyến nghị từng bước" → tiếp luồng design-first: dẫn xuất `requirements.md` (EARS) + `tasks.md` (TDD) từ `design.md` (#393/D-117). Khép bộ spec Design→Requirements→Tasks trước khi code.
+**1. Quyết định AI tự ra (spec không nói):**
+- `requirements.md`: 4 Requirement EARS — R1 điều-tiết-detect-runtime (1.1 cadence-tiết-kiệm-CPU-đo-được + không-chặn-video · 1.2 motion-gate-không-bỏ-sót · 1.3 P5 cadence<=lease fail-fast) · R2 an-toàn-artifact-deploy-time (2.1 fail-fast-input-size · 2.2 nạp-artifact-khác-không-đổi-code) · R3 nghiệm-thu-bằng-ĐO (3.1 có-số-trước-khi-tuyên-bố · 3.2 lever-không-cải-thiện-thì-bỏ, anti-sunk-cost) · R4 additive (4.1 mặc-định-y-hệt + baseline-761/2 · 4.2 merge CLI>TOML). Số criteria KHỚP `Validates` provisional trong design.
+- `tasks.md`: 8 task/7 waves — Task 0 đo-baseline-CỔNG (chốt default), Task 1 config+`should_detect` thuần, Task 2 motion-gate reuse (KHÔNG kéo Stage), Task 3 fail-fast input-size @adapters, Task 4 wire loop+CLI additive, Task 5 TOML surface, Task 6 INT8 GATED (tách được), Task 7 verify+webcam E2E. Task Dependency Graph wave 0-6.
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không đổi (giữ đúng design; input-size deploy-time đã đính chính ở #393).
+**3. Trade-off đã cân nhắc:**
+- Task 6 INT8 GATED + tách-được vs bắt-buộc-trong-spec → gated: cần ultralytics/calibration (môi trường có thể chặn K-087) + phải đo accuracy → không chặn các task runtime-lever giá-trị-cao.
+- Làm trọn requirements+tasks 1 turn vs từng-file → trọn: cho user valid 1 lần đủ bộ (giống pattern #382 overlay), tiết kiệm vòng chờ.
+**4. Điều bạn nên biết:**
+- Cả `requirements.md` + `tasks.md` get_diagnostics=0. Bộ spec `adaptive-detection-perf` HOÀN CHỈNH (design+requirements+tasks), CHƯA code.
+- Thi công BẮT ĐẦU = Task 0 (đo baseline qua script cố định) → gate chốt default. KHÔNG code behavior trước khi user valid trọn bộ spec.
+**Đã verify:** `requirements.md`/`tasks.md` get_diagnostics=0; số criteria khớp `Validates` design; `vp check` PASS (dự kiến sau ghi sổ). 0 đổi code sản phẩm → baseline 761/2 giữ. · **Chưa verify:** số đo perf (Task 0); giá trị default (chờ số); user valid bộ spec.
+
+### Entry #395 — 2026-07-15 — adaptive-detection-perf Task 0 (một phần): ĐO baseline CPU thật + verify empiric input-size cố định — Kiro-Opus
+**Bối cảnh:** User "duyệt theo khuyến nghị từng bước" → thi công bước đầu bộ spec = Task 0 đo baseline (chỉ ĐO, không đổi behavior). Dừng web server (terminalId=2) để CPU rảnh → đo sạch qua `bench_capacity` (công cụ cố định).
+**1. Quyết định AI tự ra (spec không nói):**
+- Dùng `bench_capacity --mode infer --onnx yolov8n.onnx --imgsz 640` (đường sản phẩm DetectorPipeline+OnnxDetector) làm số baseline `session.run`/s — công cụ sẵn có, không viết mới.
+- Dừng web server trước khi đo (tránh tranh CPU làm sai số). Có thể bật lại sau.
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không.
+**3. Trade-off đã cân nhắc:**
+- Đo baseline TRƯỚC khi build cadence (chicken-egg): phần cadence-comparison cần impl (Task 1/2/4) → tách; baseline + input-size-proof đo được NGAY và đủ để định hướng default (budget detect ~8.5/s, min-interval<=displayLease 600ms là an toàn).
+**4. Điều bạn nên biết (SỐ THẬT máy này #395):**
+- `yolov8n@640` CPU = **8.52 infer/s** · p50 110.9ms · p95 177.5ms · p99 203ms · min 66ms · max 261ms (n=120, bỏ 15 warmup). Thấp hơn #352 (11.72, máy/điều-kiện khác) — dùng số máy này.
+- `bench --imgsz 416` → `onnxruntime InvalidArgument: Got 416 Expected 640` → CHỨNG MINH EMPIRIC input cố định 640 (không đổi runtime) + lỗi tối nghĩa ⇒ nhu cầu Task 3 fail-fast.
+- Ý nghĩa default: budget detect ~8.5/s (p50 111ms). Với overlay `displayLeaseMs=600` → min-interval detect có thể tới ~600ms (≈1.6/s) vẫn KHÔNG giật (Property 5) → dư địa throttle lớn khi cần tiết kiệm CPU.
+- Cập nhật số 8.52 vào design.md + requirements.md (thay 11.72 cũ). Task 0 còn: CPU% + độ-trễ-bắt-vật + bảng cadence (chờ Task 1/2/4).
+**Đã verify:** `bench_capacity` chạy thật → 8.52/s (đọc output); `--imgsz 416` crash InvalidArgument (đọc output); 3 file spec get_diagnostics=0; `vp check` PASS (dự kiến). 0 đổi code sản phẩm → baseline test 761/2 giữ. · **Chưa verify:** hiệu ứng cadence/motion-gate lên CPU (chờ impl Task 1/2/4); CPU% tuyệt đối; độ trễ bắt vật mới.
+
+### Entry #396 — 2026-07-15 — adaptive-detection-perf Task 1: DetectionCadenceConfig @kernel + should_detect @domain (TDD) — Kiro-Opus
+**Bối cảnh:** Task 1 (wave 1) — config điều-tiết detect + policy thuần. TDD: viết `test_detection_cadence.py` (23 test) → RED (module chưa có) → code → GREEN → vp verify.
+**1. Quyết định AI tự ra (spec không nói):**
+- `kernel/detection_cadence.py`: `DetectionCadenceConfig` frozen fail-fast (min-interval>=0, every-n>=1, maxSkip>=0, pixelThr 0..255, minAreaRatio 0..1, roi 4-số w/h>0, reject bool-as-int) + `DetectionConfigError` + **`assert_cadence_fits_lease(cfg, display_lease_ms)`** TÁCH RIÊNG (P5) — gọi lúc wire, không nhét displayLease vào __post_init__ (config self-contained, tránh kernel→overlay coupling).
+- `domain/detect_cadence.py`: `should_detect(*, now_ns, last_detect_ns, frame_version, last_detect_version, min_interval_ns, every_n) -> (bool, reason)` — 2 cổng độc lập (min-interval theo thời gian check TRƯỚC + every-N theo version delta), lần đầu → FIRST, reason ∈ {FIRST,OK,MIN_INTERVAL,EVERY_N}.
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- tasks.md Task 1 viết `should_detect(..., cfg)` (nhận DetectionCadenceConfig). ĐỔI sang nhận PRIMITIVE vì **domain KHÔNG được import kernel** (import-linter "Kernel chỉ phụ thuộc domain" → ngược lại là circular). Caller (profiles Task 4) rút field từ config + convert ms→ns. Đúng layering, giữ domain thuần.
+**3. Trade-off đã cân nhắc:**
+- every-N dùng **delta version** (`frame_version - last_detect_version >= n`) thay vì `version % n` → robust khi loop bỏ frame-version (detect chậm hơn video nên version nhảy nhiều) — modulo có thể trượt mốc.
+- P5 tách hàm `assert_cadence_fits_lease` vs nhét vào config → tách: config đứng độc lập test được, cross-config invariant kiểm tại composition root.
+**4. Điều bạn nên biết:**
+- Verify-Symbol × 2 → C8 21→23.
+- Mặc định (min-interval=0, every-n=1, motion off) = hành vi hiện tại (Property 1/R4.1) — additive.
+- Tiếp Task 2 (motion-gate reuse `changed_ratio` ở tầng loop) + Task 3 (fail-fast input-size @adapters). Wire (Task 4) mới đụng `_detect_loop`.
+**Đã verify:** `scripts\vp.cmd verify` = **784 passed/2 skipped** (761→784, +23 test) · **lint 6 kept/0 broken** (Kernel/Domain contract KEPT — module mới tôn trọng layering) · drift PASS. RED→GREEN thật (thấy ModuleNotFoundError trước khi code). · **Chưa verify:** hiệu ứng CPU thực (chờ wire Task 4 + đo Task 0 phần cadence).
+Verify-Symbol: vision-platform/src/vision_platform/kernel/detection_cadence.py::DetectionCadenceConfig
+Verify-Symbol: vision-platform/src/vision_platform/domain/detect_cadence.py::should_detect
+
+### Entry #397 — 2026-07-15 — adaptive-detection-perf Task 2+3+4: MotionGate@domain + fail-fast input-size@adapters + wire loop/CLI (TDD) — Kiro-Opus
+**Bối cảnh:** Làm liền Task 2/3/4 (user muốn tới lúc chạy web xem). TDD từng task. Phát hiện + sửa GỐC 1 lỗi Task 1 khi valid lại.
+**1. Quyết định AI tự ra (spec không nói):**
+- Task 2 `domain/motion_gate.py::MotionGate` — lõi cổng-chuyển-động tái dùng `changed_ratio`/`roi_mask`, mirror ngữ nghĩa `MotionGateStage` nhưng decouple `MediaPacket` (dùng trong loop bespoke). `decide(frame)->(run,ratio,forced)`.
+- Task 3 `OnnxDetector(expected_input_size=)` + `_assert_input_size` trong setup: model H/W cố định ≠ config → raise RÕ (đóng lỗ `InvalidArgument Got 416 Expected 640` #395); dynamic axis (str/None) → cho qua.
+- Task 4 wire `_detect_loop`: motion-gate + `should_detect` (2 cổng) TRƯỚC detect; skip có-chủ-đích → giữ overlay + set_health detector **LIVE** (không stale-giả, truthful vì detector khỏe chỉ idle). CLI `--detect-min-interval-ms/--detect-every-n/--motion-gate/--motion-*`. `assert_cadence_fits_lease` (P5) fail-fast lúc main() trước thread. Kích hoạt Task 3: `_build_detector` truyền `expected_input_size=args.model_size`.
+**2. Chỗ phải đổi so với yêu cầu ban đầu (SỬA GỐC khi valid lại):**
+- Task 1 lỡ validate `motionRoi` như **pixel int** — SAI: hệ dùng ROI **chuẩn-hoá [0,1]** (`domain.motion.validate_roi`/`roi_mask`). Sửa config dùng `validate_roi` (nguồn sự thật duy nhất) + đổi type Tuple[float×4] + cập nhật test roi sang [0,1]. Nếu không bắt → vỡ lúc wire Task 4 (roi_mask nhận pixel). Bài học: valid chéo với code tái dùng TRƯỚC khi build lớp trên.
+**3. Trade-off đã cân nhắc:**
+- Skip có-chủ-đích set detector LIVE (không để derive_health báo STALE sau detectorStaleMs khi cảnh tĩnh lâu) — truthful (detector khỏe, chỉ gated) vs để STALE (sai, gây hiểu nhầm "lỗi"). Chọn LIVE.
+- Detect = motion-gate AND cadence (2 cổng độc lập) — forced của motion-gate KHÔNG override cadence (giữ trần CPU) — đơn giản, đúng ý "trần CPU".
+**4. Điều bạn nên biết:**
+- `vision_web_app.py` không unit-test (loop) → verify wire = import OK (pytest collect) + webcam E2E (user xem). Mặc định (không set cờ) = hành vi hiện tại (Property 1/R4.1 additive) — đã giữ 797/2.
+- Kích hoạt fail-fast input-size ở đường thật: chạy `--onnx yolov8n.onnx --model-size 416` giờ sẽ báo lỗi RÕ lúc setup (thay vì crash tối nghĩa lúc run).
+- Bước kế: Task 5 (TOML surface) + Task 7 (verify+webcam E2E đo CPU giảm). Task 6 INT8 gated.
+**Đã verify:** `scripts\vp.cmd verify` = **797 passed/2 skipped** (784→797, +13) · **lint 6 kept/0 broken** (Domain/Kernel/tất cả contract KEPT) · drift PASS. get_diagnostics vision_web_app/vision_demo_app=0. RED→GREEN từng task. · **Chưa verify:** hiệu ứng CPU thực khi bật cadence/motion trên webcam (sắp bật cho user xem); độ trễ bắt vật mới.
+Verify-Symbol: vision-platform/src/vision_platform/domain/motion_gate.py::MotionGate
+Verify-Symbol: vision-platform/src/vision_platform/adapters/onnx_detector.py::OnnxDetector
+
+### Entry #398 — 2026-07-15 — Webcam E2E adaptive-detection-perf: verify hành vi 2 lever + phát hiện tradeoff motion-gate↔lease (+K-103) — Kiro-Opus
+**Bối cảnh:** User "khi nào chạy web thì báo xem". Bật webcam server 2 cấu hình để quan sát THẬT (cam0+yolov8n.onnx CPU). Không tin 1 mẫu — lấy nhiều mẫu /overlay (valid nhiều lần).
+**1. Quyết định AI tự ra:** demo 2 cấu hình (motion-gate ON; rồi min-interval 200ms) để đặc tả hành vi khác nhau, chọn min-interval cho demo sạch (box không biến mất).
+**2. Chỗ phải đổi:** không.
+**3. Trade-off:** demo min-interval (box ổn định) thay vì motion-gate (box vật đứng-yên biến mất) — trung thực nêu cả hai cho user.
+**4. Điều bạn nên biết (verify E2E THẬT — SỐ đọc từ /stats,/overlay):**
+- **min-interval 200ms:** `/stats` video=4655·detect=563 → detect ~5/s (vs baseline 8.5/s ⇒ ~40% ít inference). `/overlay` display có box `displayId 1:3` trackRevision 273, lease refresh 366ms, health detector/source=LIVE, box GIỮ ổn định (200ms < displayLease 600ms). ✅ tiết kiệm CPU + không giật + không mất box.
+- **motion-gate ON (max-skip=0):** `/stats` video=1627·detect=5 (cảnh tĩnh → skip gần hết = CPU tiết kiệm CỰC MẠNH). NHƯNG người đứng YÊN → `/overlay` display=[] reason TICK_EXPIRE (box hết lease 600ms vì không detect lại). health vẫn LIVE (fix skip=LIVE truthful đúng).
+- **PHÁT HIỆN (K-103):** motion-gate + lease hữu hạn → vật ĐỨNG YÊN mất box trừ khi ép re-detect TRONG hạn lease. `motionMaxConsecutiveSkip` ép theo FRAME-count, CHƯA bounded theo lease-TIME → chưa đảm bảo. ⇒ motion-gate hợp "motion=sự-kiện" (đếm qua vạch/vào-ra), CẦN tinh chỉnh (force theo thời gian ≤ lease) cho "giữ box vật tồn tại". P5 (min-interval≤lease) CẦN nhưng CHƯA ĐỦ — motion-gate cần ràng buộc time-based riêng.
+**Đã verify:** đọc /stats+/overlay THẬT 2 cấu hình (nhiều mẫu); min-interval box ổn định + detect ~5/s; motion-gate skip mạnh nhưng still-object expire. server min-interval đang chạy cho user xem (terminalId=4). · **Chưa verify:** CPU% tuyệt đối (chưa đo psutil); verdict thị giác (user nhìn); con số accuracy.
+
+### Entry #399 — 2026-07-15 — adaptive-detection-perf: FIX GỐC K-103 = heartbeat max-interval (design-first + TDD) — Kiro-Opus
+**Bối cảnh:** K-103 (#398) lộ gốc: motion-gate/cadence bỏ detect quá lâu → vật đứng-yên hết lease → mất box. Fix BẢN CHẤT (không vá đếm-frame motion-gate): thêm heartbeat ở tầng policy. Cập nhật design+requirements TRƯỚC rồi TDD.
+**1. Quyết định AI tự ra (spec không nói):**
+- Thêm `detectMaxIntervalMs` (HEARTBEAT) vào `DetectionCadenceConfig` + `should_detect` (reason MAX_INTERVAL, ưu tiên CAO NHẤT sau FIRST) → ÉP detect nếu `now-last >= max`, **override motion-gate/every-N/min-interval**. Bao trùm mọi cổng ở 1 chỗ (policy thuần) thay vì sửa từng cổng.
+- Bất biến: `detectMinIntervalMs <= detectMaxIntervalMs` (__post_init__) + `detectMaxIntervalMs <= displayLeaseMs` (assert_cadence_fits_lease) → ĐẢM BẢO detect lại trước khi lease hết → track khớp được refresh → box KHÔNG mất.
+- Wire loop: `reason==MAX_INTERVAL → run=True` (override motion_ok). `max=0` = tắt = hành vi cũ.
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** mở rộng spec (design+requirements +R1.4 heartbeat) — dẫn xuất từ phát hiện E2E K-103, không phải đổi ý user.
+**3. Trade-off đã cân nhắc:**
+- Heartbeat ở POLICY (should_detect) vs sửa `motionMaxConsecutiveSkip` thành time-based: chọn policy — 1 chỗ tổng quát, bao cả every-N + min-interval + motion-gate, test thuần dễ; không rải logic thời-gian vào motion-gate.
+- Heartbeat override min-interval: khi max<=... nhưng min lớn? Bất biến min<=max đảm bảo khi max elapsed thì min cũng elapsed → không mâu thuẫn.
+**4. Điều bạn nên biết:**
+- Cách dùng an toàn cho motion-gate: `--motion-gate --detect-max-interval-ms 500` (500 < lease 600) → tĩnh vẫn giữ box + vẫn tiết kiệm CPU (detect tối đa mỗi 500ms khi tĩnh).
+- 2 test fail lúc verify giữa chừng = flaky K-035 (webcam server chạy đốt CPU → subprocess timing trượt); dừng server + chạy lại isolated → PASS. KHÔNG phải lỗi code (code không đụng supervisor/SHM). Bài học: dừng server nền TRƯỚC khi full verify.
+**Đã verify:** `scripts\vp.cmd verify` (server đã dừng) = **805 passed/2 skipped** (797→805, +8 test heartbeat) · **lint 6 kept/0 broken** · drift PASS. test_fullstack/test_step_05 fail giữa chừng → xác nhận flaky (isolated retry PASS). get_diagnostics 3 file=0. · **Chưa verify:** hành vi heartbeat trên webcam (sắp bật `--motion-gate --detect-max-interval-ms 500` cho user xem vật đứng-yên giữ box).

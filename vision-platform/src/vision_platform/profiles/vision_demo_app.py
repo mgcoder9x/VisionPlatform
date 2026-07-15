@@ -85,7 +85,8 @@ def _build_detector(args):
             def _post(raw):
                 return yolov5_decode(raw, conf_threshold=args.conf, labels=labels)
 
-        inner = OnnxDetector(args.onnx, preprocess_fn=chw_float_normalize, postprocess_fn=_post)
+        inner = OnnxDetector(args.onnx, preprocess_fn=chw_float_normalize, postprocess_fn=_post,
+                             expected_input_size=getattr(args, "model_size", None))
         return DetectorPipeline(inner, model_h=args.model_size, model_w=args.model_size, nms_iou=args.iou)
     # Demo mặc định: model = kích thước frame (letterbox identity → box bám vật chính xác).
     return DetectorPipeline(BrightBlobDetector(threshold=args.threshold),
