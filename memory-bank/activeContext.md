@@ -1,7 +1,12 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-14)
-**Cập nhật lúc:** 2026-07-14T16:00:00+07:00.
+**Cập nhật lúc:** 2026-07-14T17:00:00+07:00.
+**[✅ #383 — Dọn + viết lại end.md handoff chuyển máy (frontier #382), commit + push]**
+- User chuẩn bị chuyển máy. Kiểm git: #377–#382 + C9 ĐÃ commit `3201d29 "update"` + push (tree sạch). end.md trong đó bị dán nhầm transcript chat (+1734 dòng rác) → viết lại TRỌN thành handoff 8 mục sạch (§0 đầu-phiên · #382 state · đã-làm · trọng tâm overlay · parked · chống-drift 9 tầng · file · chặn). Máy này KHÔNG GPU + CÓ Docker.
+- **Ghi sổ:** LOG #383 · INDEX canonical #382→#383 · Σ264 giữ · block này. Commit end.md sạch + push (không rewrite history commit "update").
+- **Bước kế (phiên sau):** đọc end.md → §0 (`vp check` PASS) → thi công `web-live-overlay-sync` wave 1 (Task 1 DTO @kernel + Task 2 matching/EMA @domain) theo TDD. batch-mux/GPU parked (máy no-GPU).
+---
 **[🔵 #382 — web-live-overlay-sync: bộ spec HOÀN CHỈNH (design+requirements+tasks), CHƯA code — chờ user valid]**
 - Audit design bằng CODE THẬT `vision_web_app.py`: **6/6 static-evidence claim ĐÚNG** (`_boxes` publish thiếu `_raw_ver`; `/boxes`=jsonify thiếu meta; `setInterval(tick,80)`+await overlap; `lastSeen` chỉ refresh non-empty→blink/ghost; `_video_loop` bỏ `retry_after_ms` pace=0 busy-spin; state dưới `_lock`→bug semantic không race). Khác C9 (#380 có lỗi lệnh) — design overlay grounded đúng, không phải sửa.
 - Tạo `requirements.md`: 5 Requirement EARS map ĐÚNG 14 Correctness Property (R1 1.1-1.3·R2 2.1-2.6·R3 3.1-3.2·R4 4.1-4.2·R5 5.1). Tạo `tasks.md`: 13 task (0-12)/7 waves TDD, Task 0 diagnostic behind-flag, contract import-linter mới cấm display DTO↮analytics. Cả 2 file `get_diagnostics`=0. Sửa format (H1 chuẩn, Glossary/Overview/Notes, Task Dependency Graph JSON).

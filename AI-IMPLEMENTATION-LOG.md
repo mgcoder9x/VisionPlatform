@@ -7239,3 +7239,23 @@ roadmap scale xong. Baseline mới **379/1**. Additive thuần (không sửa lõ
 - **CHƯA code** — chờ user valid tasks trước khi thi công. Policy default chờ Task 0 đo cadence thật.
 
 **Đã verify:** requirements.md + tasks.md `get_diagnostics` = 0; 14 criteria khớp 14 property Validates; 6/6 static-evidence đối chiếu code thật đúng. · **Chưa verify:** hành vi runtime mọi component (chưa code); trigger flicker cụ thể (chờ Task 0 trace); policy default (chờ cadence đo).
+
+### Entry #383 — 2026-07-14 — Dọn + viết lại end.md thành handoff chuyển máy (frontier #382) — Kiro-Opus
+
+**Bối cảnh:** User chuẩn bị chuyển máy, cần end.md lưu trạng thái để phiên sau tiếp tục chính xác, rồi push. Kiểm git: toàn bộ #377–#382 + C9 ĐÃ commit `3201d29 "update"` + đã push (tree sạch). Nhưng end.md trong commit đó bị dán NHẦM transcript chat (+1734 dòng rác: "Clean State", "Kiro Including Steering", command output, "Thinking completed").
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Viết lại TRỌN end.md thành handoff 8 mục (§0 đầu-phiên · trạng thái #382 · đã-làm #377-382 · trọng tâm overlay spec · parked · chống-drift 9 tầng · file · chặn) — thay vì append (bản cũ là rác, append sẽ giữ rác).
+- KHÔNG rewrite history commit "update" (message xấu nhưng đã push → force-push cấm); chỉ thêm commit end.md sạch lên trên.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- User tưởng cần "lưu + push" → thực tế mọi thứ ĐÃ push ở `3201d29`; việc còn lại chỉ là dọn end.md rác + push lại 1 commit.
+
+**3. Trade-off đã cân nhắc:**
+- Rewrite end.md (mất bản dump) vs giữ → rewrite: dump transcript vô giá trị cho handoff + gây nhiễu; handoff sạch mới giúp phiên sau chính xác.
+
+**4. Điều bạn nên biết:**
+- Commit `3201d29 "update"` do action ngoài hội thoại này tạo (git add-all + push) — gộp cả end.md rác. Máy này KHÔNG GPU + CÓ Docker (user xác nhận) → batch-mux/GPU parked.
+- Bộ spec `web-live-overlay-sync` HOÀN CHỈNH nhưng CHƯA code — phiên sau bắt đầu wave 1 (Task 1 DTO + Task 2 domain) theo TDD.
+
+**Đã verify:** `git show 3201d29 --stat` xác nhận 17 file #377-382 + C9 đã commit+push (tree sạch, porcelain rỗng); end.md viết lại đọc-lại khớp #382. · **Chưa verify:** không có (thuần handoff doc).
