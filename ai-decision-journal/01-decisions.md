@@ -1493,3 +1493,79 @@ Quyết định: nghe `visibilitychange` → visible thì `img.src='/stream?t='+
 - Đổi lại: video tự hồi khi quay lại tab, không cần reload tay.
 - Vì sao (bản chất): MJPEG-trong-`<img>` bị trình duyệt treo/hủy khi tab hidden + không tự resume → phải client chủ động nối lại lúc visible. Đây là hạn chế transport MJPEG; WebRTC/WS là giải pháp triệt để (Non-Goal hiện tại).
 Đóng khi: (wiring ✅) — user xác nhận tab-nền→quay-lại video tự hiện (không reload tay).
+
+### D-132 — 2026-07-17 — Mở spec web-production-hardening design-first (WSGI waitress + Basic Auth), CHƯA code
+Status: 🔵 design-first (design.md 0-diag) · CHỜ USER VALID 4 câu · CHƯA code
+Scope: `.kiro/specs/web-production-hardening/design.md` (thiết kế; sẽ đụng `profiles/vision_web_app.py` + `adapters/wsgi_server.py` + `adapters/auth_middleware.py` + `pyproject.toml` khi code)
+Nguồn: LOG Entry #424 · code đã đọc (`vision_web_app.py:488` app.run werkzeug dev; grep routes 0 auth; pyproject web=flask-only) · tiền lệ secure-by-default metrics-http-endpoint #289/#290
+Links: K-101 (production-hardening backlog), D-079 (secure-default binding metrics), spec metrics-http-endpoint (khuôn adapter+bind-loopback)
+Evidence: get_diagnostics design.md = 0 error. Grounded: `app.run(host,port,threaded=True)` = werkzeug dev-server (tự cảnh báo không-production); 6 route KHÔNG auth (`/stream` MJPEG mở); web extras chỉ `flask>=3.0`. Máy `toann` Windows → gunicorn Unix-only loại, chọn waitress (cross-platform).
+Quyết định: fix 2 lỗ BẢN CHẤT thương mại: (P1) thay serving-layer werkzeug-dev → **waitress** WSGI (adapter `serve_wsgi`, fallback dev, optional-dep); (P2) bọc app bằng **BasicAuthMiddleware** WSGI (leaf, verify tiêm từ env) + secure-by-default bind 127.0.0.1 (non-loopback bắt buộc credential/`--insecure`). KHÔNG đổi hành vi endpoint. Wave 1 (WSGI) → Wave 2 (auth) → Wave 3 GATED (TLS reverse-proxy doc).
+- Cái mất: +2 module adapter + vài CLon (`--server/--threads/--insecure`) + 1 optional-dep (waitress). Basic Auth trần chỉ an toàn SAU TLS (nên secure-default bind loopback + TLS = Wave 3 reverse-proxy).
+- Đổi lại: web deploy production thật (WSGI chịu tải) + đóng lỗ camera-mở-cho-mọi-người.
+- Vì sao (bản chất): serving + access-control là mối lo của composition-root/adapters, KHÔNG rò vào domain/kernel/runtime; WSGI middleware bọc NGOÀI phủ mọi route (kể cả `/stream`) TRƯỚC khi vào Flask — fix tận gốc, không vá từng route.
+Đóng khi: user valid 4 câu (server=waitress? auth=Basic? secure-default? TLS=Wave3?) → requirements → tasks → code TDD Wave 1 → verify (unit + browser MCP Basic-Auth) → Wave 2.
+
+### D-133 — 2026-07-17 — web-production-hardening Wave 1: WSGI serve_wsgi (waitress) thay werkzeug dev-server
+Status: ✅ code (verify 843/2 · lint 6/0 · drift PASS · waitress phục vụ thật)
+Scope: `adapters/wsgi_server.py::serve_wsgi` (mới) + `profiles/vision_web_app.py` (import + CLI `--server/--threads` + thay `app.run`→`serve_wsgi`) + `pyproject.toml` (optional-extra `web-prod=["waitress>=3.0"]`)
+Nguồn: LOG Entry #425 · spec web-production-hardening (design D-132 valid #424, Wave 1) · tasks 1.1-1.5
+Links: D-132 (design), K-101 (production-hardening backlog), D-079 (secure-default binding tiền lệ), tasks.md Wave 1
+Verify-Symbol: vision-platform/src/vision_platform/adapters/wsgi_server.py::serve_wsgi
+Evidence: `vp verify` = **843 passed/2 skipped** (837→843, +6 test wsgi_server) · import-linter **6 kept/0 broken** (adapters vẫn leaf — wsgi_server chỉ import stdlib+waitress-optional) · drift PASS. Chạy thật `--server waitress` port 8020 → `GET /stats` **200** + header **`Server: waitress`** (werkzeug-dev sẽ là `Server: Werkzeug/...`) = bằng chứng empiric waitress phục vụ, KHÔNG rơi về dev. get_diagnostics 0.
+Quyết định: adapter `serve_wsgi(app, host, port, threads=8, server="auto")` — 3 chế độ: `waitress` (fail-fast ImportError nếu thiếu), `auto` (waitress nếu import được, else werkzeug dev + LOG cảnh báo), `dev` (ép werkzeug). Import waitress BÊN TRONG nhánh (optional-dep). Wire: CLI `--server`/`--threads`, thay `app.run(...)` dòng 488.
+- Cái mất: +1 module adapter + 1 optional-dep (waitress ~cài venv). Auth vẫn CHƯA có (Wave 2).
+- Đổi lại: web phục vụ bằng WSGI production-grade (chịu tải/nhiều viewer) thay dev-server; đường lui `--server dev` giữ tương thích; default `auto` = additive (waitress cài rồi nên auto→waitress; nếu gỡ → dev + cảnh báo).
+- Vì sao (bản chất): serving là mối lo composition-root/adapters, tách khỏi app Flask (adapter chỉ nhận WSGI callable) → test nhánh chọn server bằng module giả không cần chạy server; app không biết mình được phục vụ bởi ai. Fix tận gốc lớp phục vụ, không đụng route/logic.
+Đóng khi: (✅ Wave 1) — verify 843/2 + Server:waitress. CÒN Wave 2 (Basic Auth + secure-default) → Wave 3 GATED (TLS reverse-proxy doc).
+
+### D-134 — 2026-07-17 — web-production-hardening Wave 2: BasicAuthMiddleware (WSGI) + secure-default binding
+Status: ✅ code+verify (unit 14 + browser E2E P7 · 857/2 · lint 6/0 · drift PASS)
+Scope: `adapters/auth_middleware.py` (mới: `BasicAuthMiddleware`, `make_env_verifier`, `_parse_basic`) + `profiles/vision_web_app.py` (wire `app.wsgi_app=BasicAuthMiddleware` khi có credential + secure-default non-loopback + CLI `--insecure` + reuse `is_loopback`)
+Nguồn: LOG Entry #426 · spec web-production-hardening Wave 2 (tasks 2.1-2.6) · design D-132 P2/P4/P7
+Links: D-132 (design), D-133 (Wave 1 WSGI), D-079/is_loopback (secure-default tiền lệ), K-116 (flaky kill-recovery gặp lúc verify)
+Verify-Symbol: vision-platform/src/vision_platform/adapters/auth_middleware.py::BasicAuthMiddleware
+Verify-Symbol: vision-platform/src/vision_platform/adapters/auth_middleware.py::make_env_verifier
+Evidence: `vp verify` = **857 passed/2 skipped** · import-linter **6 kept/0 broken** (adapters leaf — auth_middleware chỉ stdlib + verify tiêm) · drift PASS. Unit 14 test (WSGI env giả). Empiric secure-default: `--host 0.0.0.0` no-cred → EXIT=1 "TỪ CHỐI" (không bind). **Browser MCP P7 (đóng [chưa kiểm]):** unauth `GET /overlay` → **401** + `WWW-Authenticate: Basic realm="VisionPlatform"`; sau xác thực (creds) → `<img>` MJPEG stream load (naturalWidth=768) + `/overlay`/`/stats` **200** + **0 console error**. get_diagnostics 0.
+Quyết định: `BasicAuthMiddleware(app, verify, *, realm, exempt_paths=("/healthz",))` WSGI bọc NGOÀI (`app.wsgi_app`) → phủ MỌI route gồm `/stream` (áp cho cả waitress `serve(app)` lẫn dev `app.run`, vì Flask.__call__→wsgi_app). `make_env_verifier` đọc `VP_WEB_USER/PASS`, `hmac.compare_digest` cả user+pass (bitwise & → constant-time, không short-circuit). Secure-default: non-loopback + no-cred + no-`--insecure` → SystemExit (fail-fast); `--insecure` → cho phép + cảnh báo to.
+- Cái mất: +1 module adapter; Basic Auth trần = base64 (KHÔNG mã hoá) → chỉ an toàn SAU TLS (Wave 3 reverse-proxy). 401 không phân biệt user-sai/pass-sai (chủ đích, chống user-enumeration).
+- Đổi lại: đóng lỗ "camera mở cho mọi người"; phủ mọi endpoint (kể cả /stream MJPEG) tại 1 lớp; secure-by-default chống vô tình phơi mạng.
+- Vì sao (bản chất): middleware bọc-ngoài phủ mọi route TRƯỚC Flask (không sót /stream generator dài) + test cô lập bằng WSGI env; verify tiêm (adapters leaf giữ). Fix tận gốc lớp truy cập, không rải @before_request từng route.
+Đóng khi: (✅ Wave 2) — 857/2 + browser P7. CÒN Wave 3 GATED (TLS reverse-proxy doc — chỉ khi deploy mạng không tin cậy).
+
+### D-135 — 2026-07-17 — web-production-hardening Wave 3: SecurityHeadersMiddleware + tài liệu TLS reverse-proxy
+Status: ✅ code+verify (unit 3 + browser/urllib E2E header · 860/2 · lint 6/0 · drift PASS)
+Scope: `adapters/security_headers.py::SecurityHeadersMiddleware` (mới) + `profiles/vision_web_app.py` (wire NGOÀI CÙNG) + `deploy/README-tls-reverse-proxy.md` (mới, tài liệu)
+Nguồn: LOG Entry #428 · spec web-production-hardening Wave 3 (tasks 3.1-3.2) · design D-132 (Wave 3 GATED → làm phần headers+doc)
+Links: D-132 (design), D-133 (Wave 1 WSGI), D-134 (Wave 2 auth), deploy/README-tls-reverse-proxy.md
+Verify-Symbol: vision-platform/src/vision_platform/adapters/security_headers.py::SecurityHeadersMiddleware
+Evidence: `vp verify` = **860 passed/2 skipped** (857→860, +3 test security_headers) · import-linter **6 kept/0 broken** (adapters leaf) · drift PASS. E2E (urllib qua waitress port 8024): response **200 (auth)** VÀ **401 (no-auth)** đều có `X-Frame-Options: DENY` + `X-Content-Type-Options: nosniff` + `Referrer-Policy: no-referrer` (SecurityHeaders bọc ngoài cùng phủ cả 401). get_diagnostics 0.
+Quyết định: `SecurityHeadersMiddleware(app, headers=None)` WSGI bọc NGOÀI CÙNG (ngoài auth) → wrap start_response chèn 3 header an toàn nếu app chưa đặt (không đè). Wire `app.wsgi_app = SecurityHeadersMiddleware(app.wsgi_app)` SAU auth-wrap → outermost. Tài liệu TLS: `deploy/README-tls-reverse-proxy.md` (Caddy tự-cert / nginx `proxy_buffering off` cho MJPEG LIVE + app bind loopback + HSTS + checklist).
+- Cái mất: +1 middleware nhỏ. KHÔNG thêm CSP (app dùng inline <script> _PAGE → CSP cần nonce, dễ vỡ) + KHÔNG HSTS trong app (thuộc TLS proxy) — chủ đích, ghi rõ trong doc.
+- Đổi lại: chống clickjacking (nhúng feed camera vào iframe) + MIME-sniffing + rò referrer — hardening chuẩn thương mại, verify được qua response header.
+- Vì sao (bản chất): security headers là chính-sách áp cho MỌI response → middleware bọc-ngoài-cùng (kể cả 401 auth) là đúng chỗ, không rải từng route. TLS KHÔNG nhúng app (waitress không tự TLS; reverse-proxy termination là chuẩn) → single-responsibility, đổi cert không sửa app.
+Đóng khi: (✅ Wave 3 headers+doc) — 860/2 + E2E header. CÒN 3.3 GATED (rate-limit proxy / WebRTC — spec riêng nếu cần). Spec web-production-hardening: Wave 1+2+3 XONG phần triển khai được.
+
+### D-136 — 2026-07-17 — Fix GỐC flaky K-116 (test-only): event-driven wait_until thay assert quarantine 1-phát
+Status: ✅ code+verify (12/12 lặp PASS · full 860/2 · lint 6/0 · drift PASS)
+Scope: `tests/test_hardening_kill_recovery.py::test_direct_quarantine_on_killed_owner` (test-only — KHÔNG đổi production)
+Nguồn: LOG Entry #430 · đọc code thật (`quarantine_poisoned_slot` + `_process_identity.owner_liveness` + `_lock_holder_worker`)
+Links: K-116 (flaky), D-077/#288 (tiền lệ wait_until event-driven), _wait_helpers.wait_until
+Evidence: chạy lặp test 12/12 PASS (trước flaky ~1/3 fail isolation); `vp verify` 860/2·lint 6/0·drift PASS.
+Quyết định (ĐÍNH CHÍNH suy đoán #429): đọc code → `owner_liveness(pid, create_time_ns)` **ĐÃ pid-reuse-safe** (so create_time + is_running) → suy đoán #429/#426 "liveness chưa guard PID-reuse" là SAI. Gốc THẬT: worker set lease đã-hết (monotonic_ns-1ms) nên lease KHÔNG phải nguyên nhân; `quarantine_poisoned_slot` trả False khi liveness không-DEAD; ngay sau `proc.kill()+join()` psutil có thể còn báo owner chưa-DEAD 1 nhịp (OS reap-lag / parent giữ handle Popen) → assert 1-phát race. Production KHÔNG lỗi (quarantine gọi LẠI mỗi acquire-timeout → self-heal; test `test_writer_recovers...` chứng minh). FIX = `wait_until(lambda: ring.quarantine_poisoned_slot(1) is True, deadline_s=10)` — poll tới khi liveness DEAD → quarantine thành công, KHỚP ngữ nghĩa production retry-until-dead.
+- Cái mất: không (test rõ hơn + xác định).
+- Đổi lại: test hết flaky, phản ánh đúng invariant "owner DEAD ⇒ quarantine eventually succeeds".
+- Vì sao (bản chất): test cũ mã hoá GIẢ ĐỊNH SAI "kill+join ⇒ psutil DEAD tức thì". Property thật cần chứng minh là "khi owner dead, quarantine THÀNH CÔNG" → thiết lập điều-kiện (poll tới DEAD) rồi assert = đúng bản chất, không phải vá triệu chứng (KHÔNG bump timeout mù / KHÔNG skip). Fix ở test vì production vốn đúng (đọc code xác nhận).
+Đóng khi: (✅) — 12/12 lặp + full 860/2. K-116 đóng.
+
+### D-137 — 2026-07-17 — HOÃN Wave C (hợp nhất tracker) — YAGNI: 2 tracker ở 2 path riêng, chưa có nghiệp vụ cần chung
+Status: 🔵 quyết định-hoãn (grounded, KHÔNG code) — chờ nghiệp vụ cụ thể mới mở Wave C
+Scope: quyết định kiến trúc (không đổi code) — liên quan spec overlay-tracking-refactor Wave C + analytics (object-tracking-count/line-crossing) + display (web-live-overlay-sync)
+Nguồn: LOG Entry #431 · đọc code thật (`runtime/iou_tracker.py`, `kernel/ports/tracker.py`, grep entry-points)
+Links: overlay-tracking-refactor design.md (Wave C, câu hỏi valid #3), D-128/D-129 (Wave A/B đã xong), K-042 (camera-affinity tracker), tiền lệ #286 (YAGNI defer)
+Evidence (grounded, không suy đoán): grep xác nhận `IouTracker` CHỈ dùng ở `pipeline_factory._stage_track`→`vision_slice_app` (analytics headless, cờ `--track`); `DisplayStabilizer` CHỈ dùng ở `vision_web_app` (web overlay). Web app KHÔNG import IouTracker; slice app KHÔNG dùng DisplayStabilizer → **2 tracker ở 2 entry-point RIÊNG, không cùng process lúc runtime → KHÔNG xung đột hiện tại**.
+Quyết định: HOÃN Wave C (hợp nhất `domain/tracker` làm 1 nguồn cho analytics+display). KHÔNG refactor bây giờ.
+- Vì sao (bản chất): (1) không có bug/xung đột runtime hiện tại (2 path tách biệt, mỗi cái verified đúng mục đích); (2) giá trị hợp nhất CHỈ hiện thực khi 1 nghiệp vụ cần analytics+display CÙNG path (vd "đếm người/vạch hiện NGAY trên web view") — CHƯA được yêu cầu; (3) refactor 2 hệ verified = blast-radius lớn, lợi ích chức năng hiện tại = 0 → premature/YAGNI; (4) interface tracker-chung nên do nghiệp vụ thật (Wave D) định hình, không đoán trước.
+- Cái mất (chấp nhận): tạm còn 2 tracker phân kỳ (nợ bảo trì đã ghi) — vô hại khi 2 path riêng.
+- Đổi lại: không đưa rủi ro vào hệ đã verify; giữ sức cho việc có giá trị thật.
+Đóng khi: user nêu nghiệp vụ cụ thể cần track chung trên 1 path (đếm/vạch/zone/tốc-độ trên web overlay) → MỞ Wave C design-first (interface shaped by nghiệp vụ đó) → TDD giữ analytics+display xanh từng bước. Cho tới đó: KHÔNG tự ý refactor.

@@ -1,7 +1,103 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
-## Trạng thái hiện tại (2026-07-16)
-**Cập nhật lúc:** 2026-07-17T09:30:00+07:00.
+## Trạng thái hiện tại (2026-07-18)
+**Cập nhật lúc:** 2026-07-18T05:00:00+07:00.
+**[✅ #432 — VERIFY thread-safety đa-client web app dưới waitress (static + empiric) + tool probe]**
+- "Mở web phát hiện lỗi" tầng CHƯA kiểm: Wave 1 waitress threads=8 → nhiều client đồng thời truy cập global `_jpeg/_store/_lock`. Review + verify (không suy đoán).
+- **Static (đọc code):** shared state (`_jpeg/_raw/_raw_ver/_legacy_boxes/_vframes/_dframes/_last_read_ns`) đều dưới global `_lock` (writer 2 loop + reader /stream,/stats,/boxes). `/overlay` đọc `OverlayStateStore.snapshot()` = **dưới `self._lock`, trả reference immutable đã commit**; mọi mutation dưới cùng lock + `_commit`→`_build` thay snapshot immutable MỚI → **lock + immutable-snapshot-swap** → reader song song luôn thấy snapshot hoàn chỉnh (không torn). `_store` gán 1 lần trước serve.
+- **Empiric (`tools/web_concurrent_probe.py` mới, read-only §3.1):** waitress+auth+video, **12 thread × 5s → 2844/2844 request 200** (/overlay+/stats), 0 non-200, ~564 req/s, server không crash.
+- **KẾT LUẬN:** web app thread-safe đa-client → Wave 1 (waitress) đạt mục đích multi-viewer thương mại (đóng lo ngại #420/K-101). Không lỗi mới.
+- **Ghi sổ:** LOG #432 · +K-118 (✅) · INDEX #431→#432 · Σ312→313 (K118) · tool mới `tools/web_concurrent_probe.py`. Baseline 860/2 giữ (chỉ thêm tools/, ngoài src+tests). **§3.1 đề nghị Trusted Command:** `python -m tools.web_concurrent_probe *`.
+- **CẦN USER (2 đường tiến thật):** (A) bật Allow-LAN trong VPN → verify RTSP camera `.106` thật; HOẶC (B) nêu nghiệp vụ cụ thể (đếm người/vạch/zone trên web view) → mở Wave C/D design-first. Còn lại chỉ là việc speculative (đi ngược nguyên tắc).
+---
+**[🔵 #431 — Quyết định HOÃN Wave C (hợp nhất tracker) — YAGNI grounded, chờ nghiệp vụ]**
+- Còn lại item lớn = Wave C (hợp nhất `domain/tracker` cho analytics+display). Đọc code thật + grep để ra khuyến nghị chính xác (không suy đoán).
+- **Grounded:** `IouTracker` CHỈ ở `pipeline_factory._stage_track`→`vision_slice_app` (analytics headless, `--track`); `DisplayStabilizer` CHỈ ở `vision_web_app` (web overlay). Web app KHÔNG dùng IouTracker; slice app KHÔNG dùng DisplayStabilizer → **2 tracker ở 2 entry-point RIÊNG, không cùng process → KHÔNG xung đột runtime hiện tại**.
+- **KHUYẾN NGHỊ (D-137): HOÃN Wave C.** Lý do: (1) không bug/xung đột hiện tại; (2) giá trị hợp nhất chỉ hiện thực khi nghiệp vụ cần analytics+display CÙNG path (đếm/vạch/zone/tốc-độ hiện NGAY trên web view) — CHƯA yêu cầu; (3) refactor 2 hệ verified = blast-radius lớn/lợi ích chức năng hiện tại = 0 = premature/YAGNI (tiền lệ #286); (4) interface tracker-chung nên do nghiệp vụ định hình, không đoán. KHÔNG tự ý mở Wave C.
+- **Ghi sổ:** LOG #431 · +D-137 (🔵 defer) · INDEX #430→#431 · Σ311→312 (D137). 0 đổi code → baseline 860/2 giữ.
+- **TỔNG KẾT trạng thái (nền thương mại đã vững, không còn việc non-gated đáng làm mà không cần input):**
+  - web-production-hardening: Wave 1 (WSGI waitress) + Wave 2 (Basic Auth + secure-default) + Wave 3 (security headers + TLS doc) — XONG + verify.
+  - Reliability: flaky K-116 đóng; drift-check `vp check` xanh xuyên suốt (Σ312).
+  - RTSP (K-117): chờ user bật "Allow LAN" trong VPN (AI KHÔNG đụng VPN).
+  - Wave C: HOÃN (chờ nghiệp vụ cụ thể).
+- **CẦN USER QUYẾT (2 đường đi thật sự tiến được):** (A) bật Allow-LAN trong VPN → tôi verify camera RTSP `.106` thật end-to-end; HOẶC (B) nêu 1 NGHIỆP VỤ cụ thể (vd "đếm người qua vạch hiện trên web view") → tôi mở Wave C/Wave D design-first driven-by-nghiệp-vụ. Không có input, việc còn lại chỉ là refactor speculative (đi ngược nguyên tắc của bạn).
+---
+**[✅ #430 — Fix GỐC flaky K-116 (test-only, event-driven) + ĐÍNH CHÍNH suy đoán #429]**
+- RTSP chờ VPN (K-117). Bước không-gated: đóng flaky K-116. **ĐỌC CODE THẬT trước khi fix** (không lặp lỗi suy đoán #429).
+- **Gốc thật (grounded):** (1) worker set lease đã-hết (monotonic_ns-1ms) → lease KHÔNG phải nguyên nhân; (2) `owner_liveness(pid, create_time_ns)` **ĐÃ pid-reuse-safe** (so create_time + is_running) → **suy đoán #429/#426 "liveness chưa guard PID-reuse" là SAI, đã đính chính**; (3) `quarantine_poisoned_slot` trả False khi liveness không-DEAD — ngay sau `proc.kill()+join()` psutil đôi khi báo owner chưa-DEAD 1 nhịp (OS reap-lag / parent giữ handle Popen) → assert 1-phát race. Production KHÔNG lỗi (quarantine gọi lại mỗi acquire-timeout → self-heal; `test_writer_recovers...` chứng minh).
+- **Fix (test-only, khớp production retry-until-dead):** thay `assert quarantine is True` bằng `wait_until(lambda: ring.quarantine_poisoned_slot(1) is True, deadline_s=10)` (event-driven, tiền lệ #288). KHÔNG bump timeout mù/skip, KHÔNG đổi production (production đúng sẵn).
+- **VERIFY:** chạy LẶP test **12/12 PASS** (trước ~1/3 fail); `vp verify` **860/2**·lint 6/0·drift PASS; get_diagnostics 0.
+- **Ghi sổ:** LOG #430 · +D-136 (✅) · K-116 Status 🟡→✅ ĐÓNG · INDEX #429→#430 · Σ310→311 (D136) · gộp dòng K-116 trùng.
+- **Bài học phương pháp:** #429 tôi gắn [suy đoán có căn cứ] đúng quy tắc; #430 đọc code SỬA lại — minh hoạ "không để suy đoán thành sự thật + fix bản chất (đọc code xác nhận production đúng, fix đúng chỗ = test)".
+- **Bước kế (chờ user):** (a) RTSP thật khi user bật Allow-LAN trong VPN (K-117); (b) Wave C hợp-nhất-tracker (nền nghiệp vụ đếm/vạch/zone — GATED, refactor lớn đụng analytics, chờ user duyệt rõ). Production-hardening + reliability nền đã vững.
+---
+**[🟡 #429 — Chẩn đoán: camera .106 không tới = VPN chặn LAN (KHÔNG phải lỗi code); AI KHÔNG tắt VPN]**
+- User: "ping không được, cần bật VPN, có phải lỗi không; KHÔNG được tắt VPN". Chẩn đoán CHỈ-ĐỌC (không đụng VPN/route/firewall).
+- **Đo (grounded):** máy IP LAN **192.168.120.104** (cùng /24 với camera .106) + adapter VPN **ProTUN** (10.2.0.2) Up. `Find-NetRoute .106` → source .104, interface Ethernet, NextHop 0.0.0.0 (**on-link, route ĐÚNG — VPN KHÔNG hijack route**). arp .106 → MAC `0c-ef-15-6c-a8-8e`. NHƯNG ping gateway **.1=False**, .106=False, chỉ self **.104=True**; mọi TCP .106 (80/554/8000/88/37777)=False.
+- **KẾT LUẬN:** máy KHÔNG tới cả gateway LAN lẫn camera dù route on-link → **VPN (ProTUN) chặn TOÀN BỘ traffic LAN** (kill-switch/WFP drop gói dù route local). **KHÔNG phải lỗi camera/code/web app.** (+K-117)
+- **Fix (user quyết, AI KHÔNG đụng VPN):** bật "Allow LAN / local network access" trong app VPN (GIỮ VPN bật) → camera .106 tới được → re-test `Test-NetConnection .106 -Port 554/80`. **Ràng buộc tuyệt đối: AI KHÔNG được tắt/đổi VPN của user.**
+- **Ghi sổ:** LOG #429 · +K-117 (🟡) · INDEX #428→#429 · Σ309→310 (K117). 0 đổi code → baseline 860/2 giữ.
+- **Bước kế:** (a) sau khi user bật Allow-LAN → tôi verify RTSP camera .106 end-to-end qua stack production (waitress+auth+security-headers vừa dựng); (b) nếu chưa có LAN → dùng video file demo tiếp; (c) K-116 fix gốc liveness / Wave C nghiệp vụ.
+---
+**[✅ #428 — web-production-hardening Wave 3: security headers + tài liệu TLS reverse-proxy → SPEC XONG (Wave 1+2+3)]**
+- Wave 3 hardening cuối. Đóng 2 lỗ an toàn verify-được: clickjacking (nhúng iframe feed camera) + MIME-sniff.
+- **Code:** `adapters/security_headers.py::SecurityHeadersMiddleware` WSGI bọc NGOÀI CÙNG (ngoài auth → phủ cả 401): `X-Content-Type-Options: nosniff` + `X-Frame-Options: DENY` + `Referrer-Policy: no-referrer`; không đè header app đã đặt. Wire `app.wsgi_app = SecurityHeadersMiddleware(app.wsgi_app)` outermost. KHÔNG CSP (inline <script> _PAGE cần nonce) / KHÔNG HSTS-in-app (thuộc TLS proxy) — chủ đích.
+- **Tài liệu:** `deploy/README-tls-reverse-proxy.md` — Caddy (tự-cert) / nginx (`proxy_buffering off` để MJPEG LIVE) + app bind loopback + HSTS + checklist an toàn production. Lý do: waitress không tự TLS → reverse-proxy termination là chuẩn.
+- **VERIFY:** `vp verify` **860/2** (+3 test security_headers)·import-linter **6 kept/0 broken**·drift PASS; E2E urllib qua waitress: response **200 (auth) VÀ 401 (no-auth)** đều có `X-Frame-Options: DENY`+`X-Content-Type-Options: nosniff`+`Referrer-Policy: no-referrer`. get_diagnostics 0.
+- **Ghi sổ:** LOG #428 · +D-135 (✅, Verify-Symbol SecurityHeadersMiddleware → C8 32→33) · INDEX #427→#428 · Σ308→309 (D135) · tasks 3.1-3.2 [x].
+- **BÀI HỌC vận hành (browser + Basic Auth):** điều khiển browser bằng Playwright MCP tới trang có Basic Auth → dialog "Sign in" gốc của Chrome CHẶN automation (đơ). Cách né: verify header bằng urllib/Invoke-WebRequest gửi thẳng `Authorization: Basic ...` (không bật dialog); hoặc navigate URL nhúng credential cho top-level. KHÔNG phải lỗi web app.
+- **SPEC web-production-hardening: XONG phần triển khai được (Wave 1 WSGI + Wave 2 auth + Wave 3 headers+TLS-doc).** Web app giờ đạt mức deploy thương mại: production WSGI · access-control mọi route · secure-default · security headers · hướng dẫn TLS. CÒN GATED: rate-limit (proxy) / WebRTC / multi-user RBAC — spec riêng nếu cần.
+- **Bước kế (chờ user chốt):** (a) RTSP thật (user mở `http://192.168.120.106` lấy URL) → verify camera IP end-to-end; (b) K-116 fix gốc liveness PID-reuse (spec riêng); (c) Wave C hợp-nhất-tracker (nền nghiệp vụ đếm/vạch/zone).
+---
+**[✅ #427 — VERIFY production stack browser (waitress+auth): MJPEG LIVE dưới waitress, KHÔNG regression]**
+- Sau Wave 1+2, verify sâu RỦI RO production thật (không suy đoán): waitress có buffer stream `multipart/x-mixed-replace` làm MJPEG đứng hình sau frame đầu không? → đo bằng browser MCP config thương mại (waitress+auth+people-detection.mp4, port 8023).
+- **Kết quả (đo, đóng rủi ro):** `streamLive=true` (frameHash 2 mốc KHÁC nhau → stream cập nhật liên tục — **waitress KHÔNG buffer MJPEG**) · overlay eventRevision 185→191 advancing · health LIVE · **50/50 request 200** (auth+waitress phục vụ mọi endpoint sạch) · DOM 12 ổn định · heap 1.69→1.66 MB (không leak) · **0 lỗi console**.
+- **KẾT LUẬN:** production stack (WSGI waitress #425 + Basic Auth #426) chạy đúng end-to-end, KHÔNG regression live-streaming. Không lỗi mới.
+- **Ghi sổ:** LOG #427 (verification, KHÔNG +D/C/T/K — tiền lệ #420/#423) · INDEX #426→#427 · Σ308 giữ. 0 đổi code → baseline 857/2 giữ.
+- **Bước kế (chờ user chốt):** (a) **Wave 3** — tài liệu deploy TLS reverse-proxy (nginx/caddy) + hardening checklist (chốt trọn production story; Basic Auth trần cần TLS trước khi phơi mạng); (b) RTSP thật (user cấp URL cam .106); (c) K-116 fix gốc liveness PID-reuse (spec riêng); (d) Wave C hợp-nhất-tracker (nền nghiệp vụ đếm/vạch/zone).
+---
+**[✅ #426 — web-production-hardening Wave 2: Basic Auth + secure-default (đóng lỗ camera-mở, verify browser P7)]**
+- Wave 2 access-control theo tasks 2.1-2.6. Đóng lỗ "mọi endpoint mở, /stream camera ai cũng xem".
+- **Code:** `adapters/auth_middleware.py` — `BasicAuthMiddleware(app, verify, *, realm, exempt_paths=("/healthz",))` WSGI bọc NGOÀI (`app.wsgi_app`) phủ MỌI route gồm /stream (áp cả waitress lẫn dev) + `make_env_verifier` (env `VP_WEB_USER/PASS`, `hmac.compare_digest` cả user+pass bitwise & = constant-time) + `_parse_basic`. Wire profiles: wrap khi có credential; secure-default non-loopback+no-cred+no-`--insecure`→SystemExit; `--insecure` opt-in+cảnh báo. Reuse `is_loopback` (DRY).
+- **VERIFY:** `vp verify` **857/2**·import-linter **6 kept/0 broken**·drift PASS; 14 test auth_middleware GREEN; empiric `--host 0.0.0.0` no-cred → EXIT=1 TỪ CHỐI (không bind). **Browser MCP P7 (đóng [chưa kiểm]):** unauth `GET /overlay` → **401** + `WWW-Authenticate: Basic realm="VisionPlatform"`; sau xác thực (creds) → `<img>` MJPEG stream load (naturalWidth=768) + `/overlay`/`/stats` **200** + **0 console error**. Screenshot `wave2-basicauth-425.jpg`.
+- **Ghi sổ:** LOG #426 · +D-134 (✅, Verify-Symbol BasicAuthMiddleware+make_env_verifier → C8 30→32) · +K-116 (🟡 flaky kill-recovery CÓ SẴN) · INDEX #425→#426 · Σ306→308 (D134·K116) · tasks 2.1-2.6 [x].
+- **Flaky K-116 (trung thực):** `test_direct_quarantine_on_killed_owner` fail 1 lần lúc verify (retry PASS 857/2); cô lập 2pass/1fail → PID-reuse/liveness race sau kill (Windows). KHÔNG do Wave 2 (adapters không đụng runtime/ipc). KHÔNG vá speculative.
+- **Trạng thái spec web-production-hardening:** Wave 1 (WSGI waitress ✅) + Wave 2 (Basic Auth + secure-default ✅) XONG. Web app giờ: production WSGI + access-control mọi route + secure-by-default. Basic Auth trần cần TLS trước khi phơi mạng thật.
+- **Bước kế — Wave 3 GATED (chờ user):** tài liệu TLS qua reverse-proxy (nginx/caddy termination) — KHÔNG nhúng TLS vào app. CHỈ làm khi user xác nhận deploy qua mạng không tin cậy. Hoặc: (a) RTSP thật (user cấp URL cam .106); (b) hướng khác (Wave C hợp-nhất-tracker cho nghiệp vụ đếm/vạch/zone; hysteresis default).
+---
+**[✅ #425 — web-production-hardening Wave 1: WSGI serve_wsgi (waitress) thay werkzeug dev-server]**
+- User duyệt thiết kế #424 ("code Wave 1 trước"). Thi công Wave 1 TDD, additive, không đổi hành vi endpoint.
+- **Code:** `adapters/wsgi_server.py::serve_wsgi(app, host, port, *, threads=8, server="auto")` — 3 chế độ: `waitress` (fail-fast ImportError nếu thiếu) · `auto` (waitress nếu import được, else werkzeug dev + LOG cảnh báo) · `dev` (ép werkzeug). Import waitress BÊN TRONG nhánh (optional-dep → adapters leaf giữ). Wire `profiles/vision_web_app.py`: CLI `--server {auto,waitress,dev}` + `--threads 8`, thay `app.run(...)` dòng 488. `pyproject.toml` +optional-extra `web-prod=["waitress>=3.0"]` (cài venv).
+- **VERIFY:** `vp verify` **843/2** (837→843, +6 test wsgi_server GREEN)·import-linter **6 kept/0 broken** (adapters leaf)·drift PASS. Chạy THẬT `--server waitress` port 8020 → `GET /stats` **200** + header **`Server: waitress`** (werkzeug-dev sẽ là `Server: Werkzeug/...`) ⇒ bằng chứng empiric waitress phục vụ, KHÔNG rơi về dev. get_diagnostics 0.
+- **Ghi sổ:** LOG #425 · +D-133 (✅, Verify-Symbol `serve_wsgi` → C8 29→30) · INDEX #424→#425 · Σ305→306 (D133) · tasks 1.1-1.5 [x] · block này.
+- **Trung thực:** auth vẫn CHƯA có (Wave 2) — hiện an toàn dựa bind loopback + mạng nội bộ tin cậy. waitress cài rồi ở máy này; máy khác cần `pip install ...[web-prod]` (else auto→dev+cảnh báo).
+- **Bước kế — Wave 2 (access-control):** `adapters/auth_middleware.py::BasicAuthMiddleware` (WSGI bọc ngoài, phủ mọi route gồm /stream) + `make_env_verifier` (env `VP_WEB_USER/PASS`, hmac.compare_digest) + secure-default (non-loopback+no-cred → SystemExit trừ `--insecure`) → verify unit + **browser MCP Basic Auth (Property 7)**. Rồi Wave 3 GATED (TLS reverse-proxy doc).
+---
+**[🔵 #424 — Mở spec web-production-hardening design-first (WSGI waitress + Basic Auth), CHƯA code]**
+- User: "xử lý hệ thống cực tốt và an toàn, hướng thương mại, duyệt theo khuyến nghị + nói lý do chính xác". → Chọn hướng **(B) production-hardening K-101** (đã ghi backlog từ #392). Lý do có bằng chứng CODE (không suy đoán).
+- **Grounded (đọc code thật):** `vision_web_app.py:488` = `app.run(host,port,threaded=True)` → **werkzeug DEV-server** (tự cảnh báo không-production); grep 6 route (`/`,`/stream`,`/overlay`,`/boxes`,`/stats`,`/favicon.ico`) → **0 auth** (`/stream` MJPEG camera mở cho bất kỳ ai tới host:port); `pyproject.toml:25` web=`flask>=3.0` (waitress/gunicorn CHƯA có).
+- **Thiết kế (design.md 0-diag):** fix 2 lỗ BẢN CHẤT không-vá-ngọn: (P1) thay serving-layer werkzeug-dev → **waitress** WSGI (adapter `serve_wsgi`, fallback dev, optional-dep) — chọn waitress vì máy Windows, **gunicorn Unix-only KHÔNG chạy** (fact); (P2) bọc app bằng **BasicAuthMiddleware** WSGI (leaf, verify tiêm từ env `VP_WEB_USER/PASS`) phủ MỌI route gồm /stream + secure-default bind 127.0.0.1 (non-loopback ⇒ bắt buộc credential/`--insecure`). KHÔNG đổi hành vi endpoint (bảo toàn overlay #415-423).
+- **Wave:** 1 WSGI (rủi ro thấp, deploy được ngay) → 2 auth (verify browser MCP P7) → 3 GATED TLS reverse-proxy (doc, KHÔNG nhúng TLS vào app).
+- **Ghi sổ:** LOG #424 · +D-132 (🔵) · INDEX #423→#424 · Σ304→305 (D132) · block này. 0 đổi code → baseline 837/2 giữ.
+- **[chưa kiểm] cần đo lúc code:** Basic Auth + MJPEG `<img>` + `fetch('/overlay',{credentials:'same-origin'})` phải verify browser MCP (Property 7); waitress trên máy này (chưa cài — Wave 1 thêm optional-extra `web-prod`).
+- **CHỜ USER VALID 4 câu (cuối design.md):** (1) WSGI=waitress ok (hay để ngỏ gunicorn cho Linux)? (2) auth=Basic Auth đủ (hay cần login-form/multi-user)? (3) secure-default bind loopback + bắt buộc credential khi phơi mạng — chặt vậy ok? (4) TLS để Wave 3 (reverse-proxy doc) hay cần HTTPS ngay trong lõi? → rồi requirements → tasks → code TDD Wave 1.
+---
+**[✅ #423 — VERIFY browser 24/7-stability overlay (leak/errors/network) — KHÔNG bug mới]**
+- User lặp "mở web browser tìm lỗi" + hướng thương mại. Overlay đã sạch (#415-422) → soi tầng CHƯA kiểm = **ổn định chạy-LÂU** (leak/tích-luỹ bộ nhớ), quan trọng cho deploy 24/7. Verification thuần (0 đổi code).
+- **Số ĐO THẬT (browser MCP, video sạch people-detection.mp4, config thương mại #422 `--overlay-motion --overlay-display-lease-ms 350 --overlay-create-conf 0.45 --overlay-sustain-conf 0.30 --coco-labels`, port 8012):**
+  - JS heap `performance.memory`: **2.34 → 1.72 MB** (giảm sau GC → KHÔNG rò rỉ; poll self-rescheduling #415 + render rAF #416 không tích luỹ closure/listener).
+  - DOM node: **12 ổn định** (client tái dùng box element, không append vô hạn).
+  - Console: **0 lỗi** (pile-up #415 đã triệt để).
+  - Network: **783/783 request 200 OK** (0 fail — không cạn connection pool khi chạy lâu).
+- **KẾT LUẬN:** overlay client ỔN ĐỊNH cho deploy chạy-lâu 24/7 (không leak, không lỗi tích luỹ). KHÔNG tìm thấy bug mới pass này (trung thực). Đây là verification thuần → Σ giữ.
+- **Ghi sổ:** LOG #423 (verification, KHÔNG +D/C/T/K, tiền lệ #420) · INDEX canonical #422→#423 · Σ304 giữ. 0 đổi code → baseline 837/2 giữ.
+- **RTSP:** cam LAN `.106` chỉ HTTP:80 (port 554 chưa mở); chờ user mở `http://192.168.120.106` bật/tìm RTSP URL.
+- **Bước kế — tầng LỚN cho SẢN PHẨM THƯƠNG MẠI (đều commit lớn, chờ user chốt hướng):**
+  - **(B) Production-hardening K-101** — Flask dev-server → WSGI (waitress) + auth. Gap best-practice RÕ NHẤT cho deploy thật (Flask dev-server KHÔNG dùng production). **Khuyến nghị trước nếu sắp deploy.**
+  - **(A) Wave C GATED** — hợp nhất `domain/tracker` (1 nguồn track analytics+display) = NỀN nghiệp vụ đếm/vạch/zone. Refactor lớn đụng analytics → chờ duyệt rõ.
+  - **(C) hysteresis #421 thành DEFAULT** (OverlayConfig default) — cân trade-off recall K-110.
+  - RTSP thật (user cấp URL) + tuỳ chọn bật GPU (onnxruntime-gpu sẵn, K-109).
+---
 **[✅ #422 — ĐO tuning intra_op_num_threads (câu hỏi "còn nhanh hơn không") → default GẦN TỐI ƯU, KHÔNG đổi code (+K-115)]**
 - User: "có vẻ ổn, tiếp theo nên làm gì? còn cải tiến tốc độ không? best-practice/perform chưa?". Chạy nốt probe TASK 3 (dở phiên trước).
 - **Số ĐO THẬT (probe process-riêng · 120 iter · median-of-3, yolov8n@640 CPU 16-core):** default(no SessionOptions)=**30.61 fps** · intra=1→13.41 · 2→21.45 · 4→28.22 · 6→28.82 · 8→**32.85** · 16→14.02. → default ≈ best (intra=8 hơn ~7% NẰM TRONG NHIỄU); intra=1/16 rõ ràng tệ.

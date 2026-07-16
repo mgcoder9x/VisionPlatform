@@ -9,7 +9,9 @@ KIẾN TRÚC (decouple transport ⊥ analytics):
 FIX FLICKER (spec web-live-overlay-sync #378-390, D-106..114): thay `HOLD_MS` mù bằng OverlayStateStore
 (authority check-and-commit) + per-track lease + epoch rollback client. `/boxes` GIỮ legacy (best-effort, cũ).
 
-⚠️ Flask dev-server + không auth — chỉ demo/nội bộ (bảo mật hoãn).
+SERVING (spec web-production-hardening): `--server waitress` = WSGI production (Wave 1). XÁC THỰC (Wave 2):
+đặt env `VP_WEB_USER`/`VP_WEB_PASS` → Basic Auth phủ mọi route; secure-default = bind 127.0.0.1, phơi mạng bắt
+buộc có credential (hoặc `--insecure`). TLS = reverse-proxy (Wave 3, chưa nhúng vào app → Basic Auth chỉ an toàn sau TLS).
 """
 from __future__ import annotations
 
@@ -27,6 +29,10 @@ from vision_platform.profiles.vision_demo_app import moving_square_frame, _build
 from vision_platform.adapters.video_file_frame_source import VideoFileFrameSource
 from vision_platform.adapters.rtsp_frame_source import RtspFrameSource, mask_rtsp
 from vision_platform.adapters.webcam_frame_source import WebcamFrameSource
+from vision_platform.adapters.wsgi_server import serve_wsgi
+from vision_platform.adapters.auth_middleware import BasicAuthMiddleware, make_env_verifier
+from vision_platform.adapters.security_headers import SecurityHeadersMiddleware
+from vision_platform.adapters.metrics_http_server import is_loopback
 from vision_platform.kernel.read_result import ReadStatus
 from vision_platform.domain.bbox import BBox, CoordinateSpace
 from vision_platform.kernel.overlay_config import OverlayConfig
@@ -377,6 +383,14 @@ def main() -> int:
     p = argparse.ArgumentParser(prog="vision_platform.profiles.vision_web_app")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
+    # --- serving production (spec web-production-hardening Wave 1) ---
+    p.add_argument("--server", default="auto", choices=["auto", "waitress", "dev"],
+                   help="WSGI server: auto (waitress nếu cài, else dev+cảnh báo) | waitress (production, fail-fast) "
+                        "| dev (werkzeug dev-server, chỉ local). Mặc định auto.")
+    p.add_argument("--threads", type=int, default=8, help="số thread của waitress (chỉ khi --server waitress/auto).")
+    p.add_argument("--insecure", action="store_true",
+                   help="CHO PHÉP bind non-loopback KHÔNG xác thực (rủi ro: ai cũng xem được camera). "
+                        "Mặc định: phơi mạng bắt buộc đặt VP_WEB_USER/VP_WEB_PASS.")
     p.add_argument("--height", type=int, default=240)
     p.add_argument("--width", type=int, default=320)
     p.add_argument("--pace", type=float, default=0.0)
@@ -485,7 +499,24 @@ def main() -> int:
     threading.Thread(target=_video_loop, args=(args,), daemon=True).start()
     threading.Thread(target=_detect_loop, args=(args,), daemon=True).start()
     threading.Thread(target=lambda: OverlayExpiryScheduler(_store).serve(_stop), daemon=True).start()
-    app.run(host=args.host, port=args.port, threaded=True)
+
+    # --- access-control (Wave 2): Basic Auth bọc NGOÀI (phủ mọi route gồm /stream) + secure-default binding ---
+    verify = make_env_verifier()                       # None nếu chưa đặt VP_WEB_USER/VP_WEB_PASS
+    if verify is not None:
+        app.wsgi_app = BasicAuthMiddleware(app.wsgi_app, verify)   # áp cho cả waitress lẫn dev (Flask.__call__→wsgi_app)
+        print("[web] xác thực: Basic Auth BẬT (credential từ VP_WEB_USER/VP_WEB_PASS)")
+    elif not is_loopback(args.host) and not args.insecure:
+        raise SystemExit(
+            f"[web] TỪ CHỐI khởi động: bind non-loopback ({args.host}) nhưng CHƯA đặt VP_WEB_USER/VP_WEB_PASS "
+            f"→ web sẽ MỞ cho mọi người trong mạng. Đặt credential (khuyến nghị), hoặc --insecure để chấp nhận rủi ro.")
+    elif not is_loopback(args.host):                   # args.insecure = True
+        print(f"[web] ⚠️  CẢNH BÁO: phơi {args.host} KHÔNG xác thực (--insecure). "
+              f"Ai truy cập host:port đều xem được camera. Chỉ dùng mạng nội bộ tin cậy + nên có TLS reverse-proxy.")
+
+    # security headers NGOÀI CÙNG (Wave 3): phủ mọi response gồm 401 auth (chống clickjacking/MIME-sniff)
+    app.wsgi_app = SecurityHeadersMiddleware(app.wsgi_app)
+
+    serve_wsgi(app, args.host, args.port, threads=args.threads, server=args.server)   # WSGI production (Wave 1)
     return 0
 
 

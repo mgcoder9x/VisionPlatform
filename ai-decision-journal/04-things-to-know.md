@@ -1157,3 +1157,36 @@ Nội dung (chống đoán — số đo):
 - **BẪY ĐO (bài học phương pháp):** probe cũ tạo 7 `InferenceSession` TUẦN TỰ trong 1 process (không teardown) + cửa sổ 60 iter → variance 2-3× (run1 intra=4 tốt, run2 intra=8 tốt) = NHIỄU, kết luận sai. Đo throughput onnxruntime PHẢI: 1 session/process riêng + warmup + cửa sổ đủ dài + median nhiều vòng. Số ~30fps là session.run THUẦN (cao hơn pipeline thật ~16.5/s có pre/letterbox+post/NMS).
 - **Nhanh hơn NỮA cần deploy-time (không phải runtime tuning):** input 416 re-export (~2×) / INT8 quant / GPU (máy này KHÔNG có). Overlay ĐÃ mượt bất kể detect-rate nhờ client extrapolation (#416) → detect-rate KHÔNG còn nút thắt UX.
 Đóng khi: (không cần đóng — kết luận âm tính). Mở tiếp nếu muốn đo live-throughput-under-contention theo thread-count (khác đo cô lập này — [chưa kiểm]).
+
+### K-116 — 2026-07-17 — Flaky `test_direct_quarantine_on_killed_owner` (kill-recovery, PID-reuse/liveness race) — CÓ SẴN, không do Wave 2
+Status: 🟡 flaky pre-existing (KHÔNG chặn Wave 2 — retry PASS)
+Nguồn: LOG Entry #426 · gặp lúc `vp verify` sau khi code web-production-hardening Wave 2
+Nội dung (grounded, không suy đoán):
+- **Hiện tượng:** `tests/test_hardening_kill_recovery.py::test_direct_quarantine_on_killed_owner` fail ngắt quãng: `ring.quarantine_poisoned_slot(1)` trả **False** (kỳ vọng True). Cô lập chạy lặp = **2 pass / 1 fail** (~1/3) → test TỰ nó flaky, KHÔNG phải full-suite contention thuần.
+- **BẢN CHẤT (đọc test):** test `proc.kill()` + `proc.join()` rồi kỳ vọng owner bị phát hiện DEAD (psutil liveness) → quarantine True. Trên Windows sau kill có race: OS chưa cập nhật liveness / **PID-reuse** (PID worker chết bị process khác tái dùng) → liveness báo "còn sống" → quarantine từ chối (False). Test có capture `worker_ct` (creation-time) nhưng đường quarantine trực tiếp dường như chưa dùng creation-time để loại PID-reuse.
+- **KHÔNG do Wave 2:** code Wave 2 (adapters `auth_middleware`/`wsgi_server` + wiring profiles) KHÔNG import runtime/ipc/`ShmRingBuffer`; import-linter 6 kept/0 broken. Cùng `vp verify` retry → **857/2 GREEN** (flaky biến mất) → transient, không phải regression.
+- **Liên hệ K-035:** cùng họ flaky cross-process/timing (đã ghi K-035 supervisor). Đây là mảnh riêng ở tầng SHM liveness.
+Đóng khi: (nếu muốn fix GỐC — spec riêng) quarantine dùng **(pid, creation_time)** thay pid trần để chống PID-reuse (liveness PID-reuse-safe). NGOÀI phạm vi web-production-hardening — KHÔNG vá speculative (tiền lệ #293/#294). Ghi để theo dõi.
+
+> **CẬP NHẬT #430 (D-136) — K-116 ĐÓNG + ĐÍNH CHÍNH:** đọc code thật → `owner_liveness` ĐÃ pid-reuse-safe (so create_time). Suy đoán "PID-reuse chưa guard" ở trên SAI. Gốc thật: psutil báo owner chưa-DEAD 1 nhịp sau kill+join (OS reap-lag/handle Popen) → assert 1-phát race; production tự lành (quarantine retried). Fix test = `wait_until(quarantine==True)` (event-driven, #288) → 12/12 lặp PASS. K-116 Status → ✅ đóng.
+
+### K-117 — 2026-07-17 — RTSP camera .106 không tới được = VPN chặn LAN (KHÔNG phải lỗi code/camera)
+Status: 🟡 chặn ngoại cảnh (VPN LAN-block) — chờ user bật "Allow LAN" trong VPN (KHÔNG tắt VPN)
+Nguồn: LOG Entry #429 · chẩn đoán mạng chỉ-đọc (Get-NetIPAddress/Find-NetRoute/Test-NetConnection/arp) máy `toann`
+Nội dung (grounded — số đo, không suy đoán):
+- Máy có IP LAN **192.168.120.104** (cùng /24 với camera .106) + adapter VPN **ProTUN** (10.2.0.2) đang Up.
+- `Find-NetRoute 192.168.120.106` → source .104, interface **Ethernet**, NextHop 0.0.0.0 (on-link) → **route ĐÚNG, VPN KHÔNG hijack route LAN**.
+- ARP có .106 → MAC `0c-ef-15-6c-a8-8e` (L2 từng thấy thiết bị).
+- NHƯNG: ping .106=**False**, mọi TCP .106 (80/554/8000/88/37777)=**False**, **ping gateway LAN .1 cũng =False**, chỉ ping chính máy .104=True.
+- **KẾT LUẬN:** máy chỉ tới được chính nó, KHÔNG tới cả gateway .1 lẫn .106 dù route on-link đúng → **VPN (ProTUN) chặn TOÀN BỘ traffic LAN** (kill-switch / block-local-network qua WFP filter, drop gói dù route local). KHÔNG phải lỗi camera/code/web app.
+Đóng khi: user bật **"Allow LAN / local network access"** trong app VPN (GIỮ VPN bật — tuyệt đối KHÔNG tắt VPN theo yêu cầu user) → re-test `Test-NetConnection 192.168.120.106 -Port 554` (RTSP) / 80 (web config). Nếu VPN không cho phép LAN → không dùng được camera LAN khi VPN bật (quyết định của user). Ràng buộc tuyệt đối: **AI KHÔNG được tắt/đổi VPN của user.**
+
+### K-118 — 2026-07-17 — Web app THREAD-SAFE đa-client dưới waitress (static proof + empiric 2844/2844)
+Status: ✅ (verify tĩnh + empiric) — đóng lo ngại multi-viewer từ #420/K-101
+Nguồn: LOG Entry #432 · đọc code (`vision_web_app.py` globals + `OverlayStateStore.snapshot`) + `tools/web_concurrent_probe.py`
+Nội dung (grounded):
+- **Static (đọc code):** mọi shared mutable state có khoá: `_jpeg/_raw/_raw_ver/_legacy_boxes/_vframes/_dframes/_last_read_ns` truy cập dưới global `_lock` (writer `_video_loop`/`_detect_loop` + reader `/stream _mjpeg`,`/stats`,`/boxes`). `/overlay` đọc `OverlayStateStore.snapshot()` = **dưới `self._lock` trả reference immutable đã commit**; mọi mutation dưới cùng lock + `_commit`→`_build` thay snapshot immutable MỚI → mẫu **lock + immutable-snapshot-swap** = reader song song luôn thấy 1 snapshot hoàn chỉnh (không torn). `_store`/`_PROCESS_EPOCH` gán 1 lần trong main() trước serve → đọc-only.
+- **Empiric (`tools/web_concurrent_probe.py`, waitress threads=8 + Basic Auth + video+detect chạy):** 12 thread song song × 5s → **2844/2844 request 200** (/overlay+/stats), 0 non-200, ~564 req/s, server không crash.
+- ⇒ Wave 1 (waitress) đạt mục đích thương mại: phục vụ NHIỀU client đồng thời an toàn (werkzeug dev-server không đảm bảo điều này).
+- **§3.1 — Trusted Command đề nghị (read-only, tái dùng cho load/soak):** `python -m tools.web_concurrent_probe *`.
+Đóng khi: (✅) — không cần thêm. Soak nhiều-giờ / >12 client / nhiều-máy = mở rộng nếu cần (dùng lại probe).

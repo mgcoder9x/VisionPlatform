@@ -19,6 +19,7 @@ from vision_platform.runtime.ipc.shm_frame_ring import (
     ShmRingBuffer, ShmFrameWriter, _write_header, SlotState,
 )
 from vision_platform.runtime.ipc._process_identity import current_identity
+from tests._wait_helpers import wait_until
 
 
 def _lock_holder_worker(ring_name, n_slots, h, w, c, slot_locks, slot_idx, queue):
@@ -87,7 +88,11 @@ def test_direct_quarantine_on_killed_owner():
         proc.join(timeout=15)
         assert proc.exitcode is not None
 
-        assert ring.quarantine_poisoned_slot(1) is True
+        # GỐC flaky K-116: kill()+join() KHÔNG đảm bảo psutil phản ánh owner DEAD TỨC THÌ (OS reap-lag /
+        # parent còn giữ handle Popen → is_running có thể còn True 1 nhịp). Quarantine chỉ True khi liveness DEAD.
+        # Production quarantine được gọi LẠI mỗi acquire-timeout tới khi DEAD (self-heal) → test poll cho khớp
+        # ngữ nghĩa đó (event-driven, tiền lệ #288) thay vì assert 1-phát (race). Deadline generous chỉ chặn treo.
+        assert wait_until(lambda: ring.quarantine_poisoned_slot(1) is True, deadline_s=10.0)
         assert ring.peek_state(1) == SlotState.QUARANTINED
     finally:
         if proc.is_alive():

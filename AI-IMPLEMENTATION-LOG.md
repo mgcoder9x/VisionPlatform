@@ -7864,3 +7864,209 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Probe cũ `_probe_threads.py` (scratch) đã XOÁ sau đo.
 
 **Đã verify:** probe process-riêng median-of-3 chạy thật, đọc output (default 30.61 vs intra=8 32.85 vs intra=16 14.02 — số thật). Variance probe-cũ (accumulating session) 2-3× → đã loại bằng process-riêng. 0 đổi code → baseline 837/2 giữ. · **Chưa verify:** live-throughput-under-contention theo thread-count (không đo pass này — cần chạy full server + đo detect/s, là thí nghiệm riêng); pre/post-processing chiếm bao nhiêu % pipeline (suy từ chênh 30fps thuần vs 16.5/s pipeline, [chưa kiểm] con số).
+
+### Entry #423 — 2026-07-17 — VERIFY browser 24/7-stability overlay (leak/errors/network) — KHÔNG bug mới — Kiro-Opus
+**Bối cảnh:** User lặp "mở web browser tìm lỗi" + hướng thương mại. Overlay đã sạch (#415-422); soi tầng CHƯA kiểm = ổn định chạy-LÂU (leak/tích-luỹ), quan trọng cho deploy 24/7. Verification thuần (0 đổi code). RTSP còn chờ URL (cam .106 HTTP-only, 554 chưa mở).
+**1. Quyết định AI tự ra:** đo leak bằng browser MCP (performance.memory + DOM node + console + network) trên video sạch people-detection.mp4, config thương mại #422, port 8012.
+**2. Chỗ phải đổi:** không. **3. Trade-off:** không (verification).
+**4. Điều bạn nên biết (VERIFY THẬT, browser MCP):**
+- JS heap: baseline 2.34 MB → sau ~28s render rAF liên tục = **1.72 MB** (GIẢM = đã GC → KHÔNG rò rỉ). DOM **12 node ổn định** (không phình — boxes Map/retired Set không leak DOM). **0 lỗi console.** **783/783 request /overlay+/stats = 200 OK** (không lỗi tích luỹ, poll self-rescheduling #415 bền).
+- ⇒ Overlay client VỮNG cho chạy 24/7 (không leak, không lỗi tích luỹ). KHÔNG tìm thấy bug mới pass này (trung thực).
+- Nút thắt thương mại còn lại KHÔNG ở overlay client mà ở SERVER: Flask dev-server (K-101 — cần WSGI+auth) — đó là gap best-practice thật cho deploy.
+**Đã verify:** browser MCP đọc thật (heap 2.34→1.72MB, DOM 12 ổn định, 0 console error, 783/783 200 OK). · **Chưa verify:** soak RẤT dài (giờ/ngày — chỉ đo ~30s); leak phía SERVER (Flask, chưa đo); RTSP cam thật (chờ URL).
+
+### Entry #424 — 2026-07-17 — Mở spec web-production-hardening design-first (WSGI waitress + Basic Auth) — Kiro-Opus
+
+**Bối cảnh:** User "xử lý hệ thống cực tốt và an toàn, hướng thương mại, duyệt theo khuyến nghị". Overlay đã sạch+ổn định (#415–423). Khuyến nghị (B) production-hardening K-101 = gap best-practice rõ nhất cho deploy. Spec `web-production-hardening` đã có `.config.kiro` (design-first/feature) nhưng chưa có design.md → soạn design-first (đúng flow user: thiết kế rõ → valid → mới code).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Chọn hướng (B) production-hardening trước (A Wave C / C hysteresis-default) — vì đây là 2 lỗ BẢN CHẤT có bằng chứng code cứng (không suy đoán), chặn deploy thương mại thật.
+- WSGI server = **waitress** — vì máy `toann` Windows, gunicorn Unix-only KHÔNG chạy (fact). waitress thuần-Python cross-platform.
+- Auth = **HTTP Basic Auth** (WSGI middleware bọc ngoài, credential từ env) — phủ được `<img src=/stream>` MJPEG, zero-dep. Bọc NGOÀI app (không @before_request) để phủ MỌI route + test cô lập.
+- Secure-by-default: bind 127.0.0.1; non-loopback bắt buộc credential hoặc `--insecure` tường minh (tái dùng khuôn #289/#290).
+- Chia Wave 1 (WSGI) → Wave 2 (auth) → Wave 3 GATED (TLS reverse-proxy doc, KHÔNG nhúng TLS vào app).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Không có (đây là mở spec mới cho backlog K-101 đã ghi từ #392). Tái dùng spec `web-production-hardening` đã tồn tại thay vì tạo mới.
+
+**3. Trade-off đã cân nhắc:**
+- waitress vs gunicorn/uWSGI → waitress (chạy Windows máy này; gunicorn Unix-only loại) — mất: khi deploy Linux có thể muốn gunicorn (để ngỏ qua `--server`).
+- Basic Auth vs session-login/token-query → Basic (phủ MJPEG, zero-dep) — mất: Basic trần chỉ an toàn sau TLS + không multi-user/RBAC (cân Wave 3/sub-spec nếu cần).
+- Middleware WSGI bọc-ngoài vs Flask before_request → middleware (phủ mọi route gồm /stream + test cô lập) — mất: thêm 1 lớp abstraction.
+
+**4. Điều bạn nên biết:**
+- Design-first: CHƯA code, get_diagnostics design.md = 0. CHỜ user valid 4 câu cuối design.md rồi mới requirements → tasks → code TDD.
+- **[chưa kiểm] then-chốt:** Basic Auth + `fetch('/overlay')` cần `credentials:'same-origin'`; hiệu lực với MJPEG `<img>` + fetch phải VERIFY bằng browser MCP lúc triển khai (Property 7) — KHÔNG khẳng định trước khi đo.
+- Basic Auth over HTTP = credential base64 KHÔNG mã hoá → an toàn thật chỉ sau TLS (Wave 3 reverse-proxy). Secure-default bind loopback là lớp giảm-thiểu tạm.
+- waitress CHƯA khai báo trong pyproject (chỉ `flask>=3.0`) → Wave 1 sẽ thêm optional-extra `web-prod=["waitress>=3.0"]`.
+
+**Đã verify:** đọc code thật (`vision_web_app.py:488` app.run werkzeug; grep 6 route 0 auth; pyproject web=flask-only); get_diagnostics design.md = 0 error. 0 đổi code sản phẩm → baseline 837/2 giữ. · **Chưa verify:** hiệu lực Basic Auth với MJPEG/fetch trên browser (Property 7, đo lúc code Wave 2); hành vi waitress trên máy này (chưa cài — Wave 1).
+
+### Entry #425 — 2026-07-17 — web-production-hardening Wave 1: WSGI serve_wsgi (waitress) — Kiro-Opus
+
+**Bối cảnh:** User duyệt thiết kế #424 ("code Wave 1 trước"). Thi công Wave 1 (WSGI production serving) theo tasks.md — TDD, additive, không đổi hành vi endpoint.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Adapter `serve_wsgi(app, host, port, *, threads=8, server="auto")` 3 chế độ (waitress fail-fast / auto fallback+cảnh báo / dev) — import waitress BÊN TRONG nhánh (optional-dep, không top-import → base install không cần waitress).
+- Default CLI `--server auto` + `--threads 8` — auto = additive (waitress cài→dùng; gỡ→dev+cảnh báo).
+- Verify-Symbol `serve_wsgi` (bind doc↔code C8 29→30).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Không có. Đúng thiết kế Wave 1 đã valid.
+
+**3. Trade-off đã cân nhắc:**
+- Test nhánh chọn server bằng tiêm module waitress giả (sys.modules) + app.run spy vs chạy server thật → chọn tiêm giả (xác định, nhanh, không cần cổng) + 1 lần verify server THẬT (Server:waitress) để đóng [chưa kiểm].
+- serve tách adapter vs gọi waitress.serve thẳng trong profiles → tách adapter (test được nhánh + giữ 1 chỗ chọn serving) — mất: +1 file nhỏ.
+
+**4. Điều bạn nên biết:**
+- Auth vẫn CHƯA có (Wave 2) — hiện an toàn dựa bind loopback + mạng nội bộ tin cậy. Đã sửa docstring web app cho trung thực.
+- waitress đã cài vào venv (`pip install waitress>=3.0`) + khai báo optional-extra `web-prod` trong pyproject. Máy khác phải cài extra này để `--server waitress` chạy (else auto→dev+cảnh báo).
+- Basic Auth + MJPEG/fetch verify để Wave 2 (Property 7, browser MCP).
+
+**Đã verify:** `scripts\vp.cmd verify` = **843 passed/2 skipped** (+6)·import-linter **6 kept/0 broken** (adapters leaf giữ)·drift PASS; 6 test wsgi_server GREEN; chạy thật `--server waitress` port 8020 → `GET /stats` **200** + header `Server: waitress` (bằng chứng empiric, không rơi dev); get_diagnostics 0. · **Chưa verify:** Basic Auth end-to-end (Wave 2); hành vi waitress dưới tải nhiều-viewer thật (chưa đo soak).
+
+### Entry #426 — 2026-07-17 — web-production-hardening Wave 2: Basic Auth + secure-default — Kiro-Opus
+
+**Bối cảnh:** User "cực sâu tiếp tục". Wave 1 (WSGI waitress) xong #425. Thi công Wave 2 (access-control) theo tasks 2.1-2.6 — đóng lỗ "camera mở cho mọi người".
+
+**1. Quyết định AI tự ra (spec không nói):**
+- `BasicAuthMiddleware` WSGI bọc NGOÀI (`app.wsgi_app`) — phủ mọi route gồm /stream; áp cho cả waitress lẫn dev (Flask.__call__→wsgi_app).
+- `make_env_verifier` đọc env `VP_WEB_USER/PASS`, `hmac.compare_digest` cả user+pass, bitwise `&` (constant-time, không short-circuit lộ user-match).
+- Secure-default: non-loopback + no-cred + no-`--insecure` → SystemExit; `--insecure` opt-in + cảnh báo. Reuse `is_loopback` (DRY, từ metrics adapter).
+- `exempt_paths=("/healthz",)` cho health-check qua (reverse-proxy/monitor).
+- 2 Verify-Symbol (BasicAuthMiddleware, make_env_verifier) → C8 30→32.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Không có. Đúng thiết kế Wave 2 đã valid.
+
+**3. Trade-off đã cân nhắc:**
+- Basic Auth vs token/session → Basic (phủ MJPEG `<img>` tự nhiên; verify browser đóng P7) — mất: base64 trần chỉ an toàn sau TLS (Wave 3).
+- 401 không phân biệt user-sai/pass-sai → chống user-enumeration (chủ đích).
+- Middleware bọc-ngoài vs Flask before_request → bọc-ngoài (phủ mọi route + test cô lập WSGI env).
+
+**4. Điều bạn nên biết:**
+- Basic Auth base64 KHÔNG mã hoá → PHẢI có TLS (reverse-proxy, Wave 3) trước khi phơi mạng thật. Secure-default bind loopback là lớp giảm-thiểu.
+- **Flaky K-116 (CÓ SẴN, không do Wave 2):** `test_direct_quarantine_on_killed_owner` fail 1 lần trong `vp verify` (rồi retry PASS 857/2); cô lập chạy lặp 2pass/1fail → flaky PID-reuse/liveness race sau kill trên Windows. Code Wave 2 KHÔNG đụng runtime/ipc (import-linter 6/0). KHÔNG vá speculative (tiền lệ #293/#294).
+
+**Đã verify:** `scripts\vp.cmd verify` = **857 passed/2 skipped** (retry sau flaky K-116)·import-linter **6 kept/0 broken**·drift PASS; 14 test auth_middleware GREEN; empiric `--host 0.0.0.0` no-cred → EXIT=1 TỪ CHỐI (không bind); **browser MCP P7: unauth /overlay 401+WWW-Authenticate; auth → img naturalWidth=768 (MJPEG load) + /overlay+/stats 200 + 0 console error**; get_diagnostics 0. · **Chưa verify:** TLS (Wave 3, reverse-proxy — chưa làm); tải nhiều-viewer thật (chưa soak); K-116 fix gốc (spec riêng, PID-reuse-safe liveness).
+
+### Entry #427 — 2026-07-17 — VERIFY production stack browser (waitress+auth): MJPEG LIVE dưới waitress, không regression — Kiro-Opus
+
+**Bối cảnh:** User "cực sâu tiếp tục" + "mở web browser phát hiện lỗi". Sau Wave 1 (waitress) + Wave 2 (auth), có RỦI RO production thật chưa verify đủ: waitress có thể buffer response `multipart/x-mixed-replace` → MJPEG `/stream` đứng hình sau frame đầu (khác werkzeug). Verify sâu config thương mại thật (waitress+auth+video người-thật). Verification thuần (0 đổi code).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Đo MJPEG liveness bằng hash pixel canvas 2 thời điểm (không chỉ naturalWidth) → phân biệt "1 frame load" vs "stream LIVE liên tục".
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không có.
+
+**3. Trade-off đã cân nhắc:** verify MJPEG-under-waitress bằng frame-hash (chắc chắn) vs chỉ đọc header (không đủ) → frame-hash.
+
+**4. Điều bạn nên biết:**
+- **waitress KHÔNG buffer MJPEG stream** → an tâm dùng waitress cho live video (rủi ro đã bác bỏ bằng đo, không suy đoán). Đây là điều quan trọng cho deploy thương mại.
+- Không tìm thấy lỗi mới pass này → Wave 1+2 không gây regression.
+
+**Đã verify:** browser MCP (waitress+auth+people-detection.mp4, port 8023, config thương mại): **MJPEG LIVE** (frameHash 2 mốc khác nhau → stream cập nhật liên tục dưới waitress, KHÔNG đứng hình) · overlay `eventRevision` 185→191 advancing · health detector/source=LIVE · **50/50 request 200** (0 non-200 — auth+waitress phục vụ mọi endpoint) · DOM 12 ổn định · JS heap 1.69→1.66 MB (không leak) · **0 lỗi console**. 0 đổi code → baseline 857/2 giữ. · **Chưa verify:** soak nhiều-giờ + nhiều-viewer đồng thời (thread pool waitress); TLS (Wave 3).
+
+### Entry #428 — 2026-07-17 — web-production-hardening Wave 3: security headers + tài liệu TLS reverse-proxy — Kiro-Opus
+
+**Bối cảnh:** User "duyệt theo khuyến nghị từng bước". Wave 1+2 xong. Wave 3 (hardening cuối): đóng 2 lỗ an toàn bản chất verify-được (clickjacking, MIME-sniff) + tài liệu deploy TLS.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- `SecurityHeadersMiddleware` WSGI bọc NGOÀI CÙNG (phủ cả 401 auth) — 3 header: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` (chống nhúng iframe feed camera), `Referrer-Policy: no-referrer`. Không đè header app đã đặt.
+- KHÔNG CSP (inline <script> _PAGE cần nonce → dễ vỡ) + KHÔNG HSTS trong app (thuộc TLS proxy) — ghi rõ lý do.
+- Tài liệu `deploy/README-tls-reverse-proxy.md`: Caddy (tự-cert) + nginx (`proxy_buffering off` để MJPEG LIVE) + bind loopback + HSTS + checklist an toàn.
+- Verify-Symbol SecurityHeadersMiddleware → C8 32→33.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Design Wave 3 ban đầu GATED "chỉ TLS doc + tuỳ headers"; tôi làm phần headers (code verify-được) + TLS doc, hoãn rate-limit/WebRTC (3.3 GATED) — mở rộng trong phạm vi "(tuỳ) security headers" của design.
+
+**3. Trade-off đã cân nhắc:**
+- Security headers WSGI middleware vs Flask after_request → middleware bọc-ngoài (phủ mọi response gồm 401 + test cô lập WSGI).
+- TLS nhúng app vs reverse-proxy → reverse-proxy (waitress không tự TLS; chuẩn; đổi cert không sửa app) — mất: cần cấu hình proxy ngoài (đã cho ví dụ Caddy/nginx).
+
+**4. Điều bạn nên biết:**
+- MJPEG qua nginx CẦN `proxy_buffering off` (nếu không, nginx gom buffer → video đứng) — đã ghi trong doc. waitress đã verify không buffer (#427); nginx là mắt xích riêng.
+- Basic Auth + security headers vẫn CẦN TLS (proxy) trước khi phơi mạng thật — doc nêu rõ + checklist.
+
+**Đã verify:** `scripts\vp.cmd verify` = **860 passed/2 skipped** (+3 test security_headers)·import-linter **6 kept/0 broken**·drift PASS; E2E urllib qua waitress: response **200 (auth) VÀ 401 (no-auth)** đều có `X-Frame-Options: DENY`+`X-Content-Type-Options: nosniff`+`Referrer-Policy: no-referrer`; get_diagnostics 0. · **Chưa verify:** cấu hình proxy Caddy/nginx thật (tài liệu — cần môi trường có domain/cert để chạy); rate-limit brute-force (3.3 GATED).
+
+### Entry #429 — 2026-07-17 — Chẩn đoán mạng: camera .106 không tới được = VPN chặn LAN (chỉ-đọc, KHÔNG đụng VPN) — Kiro-Opus
+
+**Bối cảnh:** User: "ping không được, cần bật VPN, không biết có phải lỗi không; KHÔNG được tắt VPN". Chẩn đoán chỉ-đọc để trả lời, tuyệt đối không đụng VPN.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Chẩn đoán bằng lệnh CHỈ-ĐỌC (Get-NetIPAddress, Find-NetRoute, Test-NetConnection, arp) — không sửa route/firewall/VPN.
+- Test gateway LAN .1 + self .104 để de-confound "VPN chặn cả LAN" vs "chỉ .106 off".
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không có (chẩn đoán, không code).
+
+**3. Trade-off đã cân nhắc:**
+- Có thể `arp -d` + re-ping để phân biệt stale-ARP vs blocked → KHÔNG làm (cần elevation + sửa cache); thay bằng test gateway .1 (không xâm lấn) → đủ kết luận.
+
+**4. Điều bạn nên biết (K-117):**
+- **Camera .106 KHÔNG tới được là do VPN (ProTUN) chặn LAN, KHÔNG phải lỗi code/camera.** Bằng chứng: route on-link đúng nhưng ping gateway .1 + .106 đều False, chỉ self .104 True.
+- Fix = user bật "Allow LAN" trong VPN (giữ VPN bật). AI KHÔNG được tắt/đổi VPN (ràng buộc tuyệt đối user đặt).
+- RTSP end-to-end (hướng tiếp) BỊ CHẶN cho tới khi LAN tới được camera.
+
+**Đã verify:** lệnh chỉ-đọc: máy IP 192.168.120.104 (cùng /24 .106) + ProTUN VPN Up; Find-NetRoute .106 → Ethernet on-link NextHop 0.0.0.0 (route đúng); arp .106 → MAC 0c-ef-15-6c-a8-8e; ping .1=False .104=True .106=False; TCP .106 80/554/8000/88/37777 đều False. 0 đổi code → baseline 860/2 giữ. · **Chưa verify:** xác nhận tuyệt đối là WFP-filter của VPN (không dump `netsh wfp` — nặng); test định-đoạt = user bật Allow-LAN rồi re-test (chưa làm được, thuộc user).
+
+### Entry #430 — 2026-07-17 — Fix GỐC flaky K-116 (test-only, event-driven wait) + đính chính suy đoán #429 — Kiro-Opus
+
+**Bối cảnh:** User "duyệt theo khuyến nghị từng bước". RTSP chờ VPN (K-117). Bước không-gated giá-trị-cao = đóng flaky K-116. ĐỌC CODE THẬT trước khi fix (không suy đoán như #429).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Fix ở TEST (không production) vì đọc code xác nhận production đúng: `owner_liveness` đã pid-reuse-safe + quarantine self-heal (retried mỗi acquire-timeout).
+- Dùng `wait_until` (tiền lệ #288) poll quarantine tới khi True — khớp ngữ nghĩa production retry-until-dead.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- ĐÍNH CHÍNH #429/#426: suy đoán "liveness chưa guard PID-reuse" là SAI (code đã guard bằng create_time). Gốc thật = OS reap-lag/handle Popen → psutil báo chưa-DEAD 1 nhịp → assert 1-phát race. Bài học: #429 tôi đã gắn [suy đoán có căn cứ] đúng quy tắc, và giờ đọc code SỬA lại — không để suy đoán thành "sự thật".
+
+**3. Trade-off đã cân nhắc:**
+- Fix test (wait_until) vs sửa production liveness → fix test, vì production ĐÚNG (đọc code + test_writer_recovers chứng minh self-heal). Sửa production = fix nhầm chỗ (cái ngọn).
+- bump timeout mù / skip test → TỪ CHỐI (vá triệu chứng). wait_until event-driven = đúng bản chất.
+- Chỉ fix test đang-flaky (`test_direct_quarantine...`); test sibling `test_writer_recovers...` dùng write() self-heal (đã pass ổn định) → KHÔNG đụng (không sửa cái không hỏng); ghi nhận nó có latent race tương tự nếu sau flaky.
+
+**4. Điều bạn nên biết:**
+- K-116 ĐÓNG (test xác định). Production SHM crash-recovery vốn đúng — không đổi 1 dòng production.
+- Nếu sau này `test_writer_recovers_from_killed_owner_holding_lock` flaky → cùng gốc (reap-lag), áp cùng cách (wait_until quanh write+peek).
+
+**Đã verify:** chạy LẶP `test_direct_quarantine_on_killed_owner` **12/12 PASS** (trước ~1/3 fail); `scripts\vp.cmd verify` = **860 passed/2 skipped**·import-linter 6 kept/0 broken·drift PASS; get_diagnostics 0. · **Chưa verify:** test sibling dưới tải cực đại nhiều-giờ (chưa soak; không đổi).
+
+### Entry #431 — 2026-07-17 — Quyết định HOÃN Wave C (hợp nhất tracker) — YAGNI grounded, chờ nghiệp vụ — Kiro-Opus
+
+**Bối cảnh:** User "duyệt theo khuyến nghị từng bước". Production-hardening (Wave 1+2+3) + reliability (K-116) xong; RTSP chờ VPN (K-117). Còn lại item lớn = Wave C (hợp nhất tracker). Đọc code thật để ra khuyến nghị chính xác (không suy đoán).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- HOÃN Wave C — KHÔNG refactor bây giờ. Đọc `iou_tracker.py` + `ports/tracker.py` + grep entry-points → xác nhận 2 tracker ở 2 path RIÊNG.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- overlay-tracking-refactor design.md để ngỏ Wave C (câu hỏi valid #3 "làm ngay hay để khi nghiệp vụ cần"). Chốt: ĐỂ KHI NGHIỆP VỤ CẦN (defer), có căn cứ code.
+
+**3. Trade-off đã cân nhắc:**
+- Làm Wave C ngay (1 nguồn track, đẹp kiến trúc) vs hoãn → HOÃN, vì blast-radius lớn (2 hệ verified) mà lợi ích chức năng hiện tại = 0 (2 path không cùng process); interface nên do nghiệp vụ định hình. Đây là YAGNI đúng chỗ (tiền lệ #286), KHÔNG phải lười.
+
+**4. Điều bạn nên biết:**
+- Grounded: `IouTracker` chỉ ở `pipeline_factory`/`vision_slice_app` (analytics headless); `DisplayStabilizer` chỉ ở `vision_web_app` (web). Không cùng process → không xung đột hiện tại. Wave C đáng làm KHI có nghiệp vụ cần analytics+display cùng path (đếm/vạch trên web view).
+- Tôi KHÔNG tự ý mở Wave C. Chờ user nêu nghiệp vụ cụ thể → design-first → TDD.
+
+**Đã verify:** grep entry-points (IouTracker↔pipeline_factory/vision_slice_app; DisplayStabilizer↔vision_web_app) — 0 giao nhau; đọc iou_tracker.py + ports/tracker.py đầy đủ. 0 đổi code → baseline 860/2 giữ. · **Chưa verify:** không có gì để chạy (quyết định + phân tích, không code).
+
+### Entry #432 — 2026-07-17 — VERIFY thread-safety đa-client web app dưới waitress (static + empiric) + tool probe — Kiro-Opus
+
+**Bối cảnh:** User "mở web phát hiện lỗi, cực sâu". Wave 1 chuyển waitress (threads=8) → nhiều client đồng thời truy cập global `_jpeg/_store/_lock`. Mối lo bản chất chưa kiểm (#420 ghi "MCP không giữ 2 tab"; K-101). Review + verify thread-safety (không suy đoán).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Đọc code đánh giá thread-safety (không chỉ chạy thử) → xác nhận mẫu lock + immutable-snapshot.
+- Tạo `tools/web_concurrent_probe.py` (script CỐ ĐỊNH read-only §3.1, tái dùng) thay vì one-liner ad-hoc để đo tải song song.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không có (verification + thêm tool đo).
+
+**3. Trade-off đã cân nhắc:**
+- Chỉ static-proof vs +empiric → làm CẢ HAI (static kết luận chắc; empiric xác nhận + tool tái dùng). MCP Playwright rớt kết nối giữa chừng → dùng probe urllib-threads thay (ghi file rồi đọc, né lỗi echo terminal).
+
+**4. Điều bạn nên biết (K-118):**
+- Web app THREAD-SAFE đa-client: shared state dưới `_lock`; `/overlay` qua `OverlayStateStore.snapshot()` (lock + immutable-snapshot-swap). Empiric 2844/2844 200 @12 thread.
+- Tool mới `tools/web_concurrent_probe.py` (read-only) → §3.1 đề nghị Trusted Command `python -m tools.web_concurrent_probe *`.
+- Chỉ thêm file tools/ (ngoài src + tests) → baseline test/lint KHÔNG đổi.
+
+**Đã verify:** đọc `OverlayStateStore.snapshot` (dưới `self._lock`, trả immutable) + `vision_web_app` globals (dưới `_lock`); empiric `tools.web_concurrent_probe --threads 12 --duration 5` port 8025 (waitress+auth+video) → **2844/2844 request 200, 0 non-200, ~564 req/s, không crash**; get_diagnostics tool = 0. Baseline 860/2 giữ (chỉ thêm tools/). · **Chưa verify:** soak nhiều-giờ / >12 client / đa-máy (dùng lại probe khi cần).
