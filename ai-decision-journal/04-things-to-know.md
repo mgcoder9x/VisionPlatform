@@ -1117,3 +1117,43 @@ Bug #410 (đã fix): `_predict_box` (D-125) dựng `BBox(NORMALIZED)` với to�
 Quan sát A.mp4 (~5 người, browser MCP): detect person conf 0.46-0.91 OK; false-positive nhãn lạ frisbee×7/potted-plant×1 (nâng conf 0.5 nếu phiền); **displayID churn cao (88 distinct/25 mẫu, 0 ổn định)**.
 LƯU Ý QUAN TRỌNG (chống hiểu sai metric): **displayID churn VÔ HÌNH với user** — họ thấy BOX có/mất, KHÔNG thấy ID. Box coverage ~5.4/khung (phủ người khá liên tục). ID mới ở CÙNG vị trí = KHÔNG nhấp nháy nhìn thấy. ⇒ đánh giá đúng phải là **visual box-continuity**, không phải đếm displayID. Nếu user nhìn thấy nhấp nháy THẬT → mới cần nâng association (center-distance/Hungarian/Kalman). Đo đúng: box có phủ liên tục mỗi người không, không phải ID có đổi không.
 Links: D-125 (_predict_box), K-106/107 (flicker), K-110 (conf).
+
+### K-112 — 2026-07-16 — Nguồn synthetic moving-square KHÔNG đủ đánh giá tracking (bệnh lý testbed) + S1 root verify browser
+Status: 🟡 (điều nên biết khi verify overlay/tracking không có video/RTSP thật)
+Nguồn: LOG Entry #414 · browser MCP (Playwright) đo /overlay THẬT frontier #412
+Nội dung (chống kết-luận-sai — đã verify browser):
+- **XÁC NHẬN S1 root:** `/overlay` display box KHÔNG có `vx/vy/updatedAtMs` → client không có gì để ngoại suy → vẽ vị trí báo-cuối (tĩnh). Wave A cần server phơi vận tốc trước.
+- **Bệnh lý synthetic moving-square (`moving_square_frame`):** (a) `x=(i*step)%(max_x+1)` → TELEPORT-wraparound khi tới mép phải (gián đoạn thật → đổi ID đúng, không phải bug); (b) video-loop unthrottled chạy ~15× detect → ô nhảy ~120px/detect (> box 80px) → IoU association fail → churn giả; (c) BrightBlob conf 0.0833 THẤP → `--overlay-motion` (hysteresis create-threshold) lọc hết → display 0/20 (không phải bug tracking).
+- **De-confound bằng `--pace 0.06`** (detect kịp video): box present **20/20**, x tiến mượt, chỉ đổi ID sau teleport → **tracking/display CHẠY ĐÚNG khi detect kịp chuyển động**.
+- **Hệ quả:** churn/flicker xuất hiện khi detect-rate << tốc-độ-vật (CPU thật). Fix: (Wave A) client ngoại suy vận tốc để bù lag giữa detect + (association tốt hơn khi vật nhanh). Đánh giá per-object flicker/ghost SẠCH cần **video/RTSP THẬT** (không có ở máy này — video toann gitignored/vắng; cân nhắc tải people-detection.mp4 nếu có mạng, hoặc chờ RTSP user).
+Đóng khi: có nguồn thật (RTSP/video) đo per-object với/không Wave A; hoặc thêm nguồn synthetic "bounce smooth throttled" làm testbed hợp lệ cho tracking.
+
+### K-113 — 2026-07-16 — removal-timeout = displayLeaseMs (đừng thêm maxAgeMs trùng cơ chế)
+Status: ✅ (verify code + empiric browser #417)
+Nguồn: LOG Entry #417 · đọc display_stabilizer + browser MCP webcam
+Nội dung (chống thêm phức tạp vô ích — R3.2):
+- `DisplayStabilizer`: `st.lease_deadline_ns = now + displayLeaseMs` refresh MỖI khớp; on_tick xoá khi `lease_deadline <= now` → track bị xoá tại **`last_match + displayLeaseMs`**. Vậy `displayLeaseMs` CHÍNH LÀ "time-since-update removal timeout".
+- Design D-126 đề xuất `maxAgeMs` (removal theo time_since_update) = **TRÙNG hoàn toàn** displayLeaseMs → KHÔNG thêm (đẻ config trùng = phức tạp vô ích + 2 nguồn điều-khiển 1 hành vi).
+- **S2 "tắt chậm" fix = giảm displayLeaseMs** (expose CLI `--overlay-display-lease-ms`). Ràng buộc: lease phải > detect-gap để không flicker vật hiện diện. Empiric webcam: lease 350 (> gap CPU ~80-200ms) → box present 25/25 KHÔNG flicker, max_remainingLeaseMs 335<350 (chứng minh lease=timeout). Mặc định giữ 600 (additive); tune per-camera theo cadence.
+- Bài học rộng: TRƯỚC khi thêm config/cơ-chế mới, đọc code xem cơ-chế-sẵn-có đã làm điều đó chưa (valid design bằng code thật) → tránh trùng lặp.
+Đóng khi: (bài học — tham chiếu khi thiết kế removal/lease).
+
+### K-114 — 2026-07-16 — Churn "mất bbox nhiều" GỐC = spurious conf thấp → fix hysteresis; churn↔clear tension theo sustain
+Status: ✅ (đo thật browser MCP webcam #421; fix verify)
+Nguồn: LOG Entry #421 · browser MCP đo /overlay webcam THẬT
+Nội dung (chống đoán — số đo):
+- **Churn GỐC (đo):** detection thứ-3+ chập chờn conf **0.25–0.33** (avg 0.275, chỉ nhỉnh hơn decode-conf mặc định 0.25) → mỗi lần xuất hiện lại tạo displayId MỚI (counter leo nhanh) → box "mất rồi hiện" = flicker. 2 người thật conf 0.37–0.93 + raw jitter cực nhỏ (dx_avg 0.0005) → detector KHÔNG nhiễu cho vật rõ; churn CHỈ ở detection yếu.
+- **FIX (verify 5+→2 ID, ổn định 50/50):** confidence hysteresis (D-123) `--overlay-create-conf 0.45 --overlay-sustain-conf 0.30` — spurious < 0.45 KHÔNG tạo track; người thật conf tụt vẫn nuôi (≥0.30). Tốt hơn `--conf` đơn (không rớt người thật quanh 0.37).
+- **Removal-latency (đo):** track xoá khi remainingLeaseMs còn ~180-225ms (bằng MISS, không đợi hết lease) → server clear ~350ms/nhanh hơn. "~1s user thấy" ≈ detector còn bắt người lúc đang rời khung (conf≥sustain) + 350ms.
+- **TENSION churn↔clear (bản chất):** sustain THẤP → ít churn NHƯNG giữ box người-đang-rời lâu (clear chậm); sustain CAO → clear nhanh NHƯNG churn. off-frame-evict (D-124) xoá tức thì khi rời qua mép (giảm clear-latency lối-ra-mép, không hại churn). Không có 1 ngưỡng đúng mọi cảnh → tune per-camera; cân nhắc hysteresis làm default thương mại.
+Đóng khi: user xác nhận thị giác hết churn + clear chấp nhận được; hoặc chốt default thương mại.
+
+### K-115 — 2026-07-16 — Tuning `intra_op_num_threads` onnxruntime KHÔNG là lever (default gần tối ưu + portable)
+Status: ✅ (đo thật, kết luận âm tính — 0 đổi code)
+Nguồn: LOG Entry #422 · probe process-riêng · 120 iter · median-of-3 (yolov8n@640 CPU, máy 16 core)
+Nội dung (chống đoán — số đo):
+- **Số THẬT:** default(no SessionOptions)=**30.61 fps** · intra=1→13.41 · 2→21.45 · 4→28.22 · 6→28.82 · 8→**32.85** · 16→14.02. → default ≈ best (intra=8 hơn ~7% NẰM TRONG NHIỄU: default raw lên 35.2 trùng dải intra=8); intra=1/16 rõ ràng tệ.
+- **KẾT LUẬN:** onnxruntime tự chọn thread-count gần tối ưu → **KHÔNG thêm `SessionOptions(intra_op_num_threads=)`**. Hard-code hại tính di động (máy 4 core ép 8/16 = oversubscription như intra=16→14fps << 30.6). Premature-opt + đổi hệ đã verify cho cái lợi trong-nhiễu = vi phạm chống-phức-tạp (R3.2).
+- **BẪY ĐO (bài học phương pháp):** probe cũ tạo 7 `InferenceSession` TUẦN TỰ trong 1 process (không teardown) + cửa sổ 60 iter → variance 2-3× (run1 intra=4 tốt, run2 intra=8 tốt) = NHIỄU, kết luận sai. Đo throughput onnxruntime PHẢI: 1 session/process riêng + warmup + cửa sổ đủ dài + median nhiều vòng. Số ~30fps là session.run THUẦN (cao hơn pipeline thật ~16.5/s có pre/letterbox+post/NMS).
+- **Nhanh hơn NỮA cần deploy-time (không phải runtime tuning):** input 416 re-export (~2×) / INT8 quant / GPU (máy này KHÔNG có). Overlay ĐÃ mượt bất kể detect-rate nhờ client extrapolation (#416) → detect-rate KHÔNG còn nút thắt UX.
+Đóng khi: (không cần đóng — kết luận âm tính). Mở tiếp nếu muốn đo live-throughput-under-contention theo thread-count (khác đo cô lập này — [chưa kiểm]).

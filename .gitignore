@@ -58,3 +58,10 @@ out/
 *.mov
 sample_videos/
 **/sample_videos/
+
+# Playwright MCP scratch (console log + page snapshot sinh khi AI xem web) — KHONG commit
+.playwright-mcp/
+
+# Screenshot scratch AI chup khi verify browser (wave-*.jpg/png) — KHONG commit
+wave-*.jpg
+wave-*.png

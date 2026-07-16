@@ -7712,3 +7712,155 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - **Chẩn đoán kiến trúc:** `DisplayStabilizer` GỘP tracking+display+lifecycle; CÓ 2 tracker phân kỳ (analytics `iou_tracker` vs display `DisplayStabilizer`). Nghiệp vụ tương lai cần track ổn định = CÙNG display cần → phải HỢP NHẤT 1 tracker domain.
 - **Đề xuất:** tách `domain/tracker` (motion+association+lifecycle, dùng chung analytics+display) ⊥ `client render bù chuyển động` (rAF ngoại suy pos+vel*dt → box bám sát mượt, fix S1) ⊥ `removal evidence-based` (time_since_update, fix S2). Wave A (client)→B (removal)→C (hợp nhất tracker)→D (nghiệp vụ). 4 câu hỏi valid ở cuối design.md.
 **Đã verify:** đọc 5 nguồn code thật (cite trong design.md); design.md get_diagnostics = 0 error (1 warning format nhỏ). · **Chưa verify:** chưa code — chờ user valid 4 câu hỏi kiến trúc; hiệu quả client-render (Wave A) chưa đo.
+
+### Entry #413 — 2026-07-16 — overlay-tracking-refactor: requirements.md + tasks.md → BỘ SPEC HOÀN CHỈNH (design-first) + re-sync frontier #412 (máy k.nguyen.manh.toan, no-GPU/Docker) — Kiro-Opus
+**Bối cảnh:** Phiên mới máy `k.nguyen.manh.toan` (Docker, KHÔNG GPU). §0 chống-drift: `end.md` bị dán transcript máy `toann` tới #412 (KHÔNG tin = trạng thái, K-064). Chạy `git status`+`git log`+`vp check` → repo THẬT ở **#412/Σ295 (D126·C23·T35·K111)**, HEAD=origin=`61560b8`, drift PASS. Máy `toann` đã tiếp #400→#412 TRÊN work heartbeat/cadence của tôi (D-120 có trong banner) rồi sync về → KHÔNG mất việc; context #399 của tôi CŨ. Làm việc ở frontier #412 thật (bài học K-098).
+**1. Quyết định AI tự ra (spec không nói):**
+- Tiếp luồng design-first của D-126 (`overlay-tracking-refactor/design.md` chờ valid): tạo `requirements.md` (5 EARS R1-R5 map P1-P5) + `tasks.md` (7 task/4 waves) — khép bộ spec Design→Requirements→Tasks TRƯỚC khi code (đúng "valid thiết kế rồi mới triển khai").
+- **Wave C (hợp nhất tracker đụng analytics) đánh dấu GATED** (R3.3) — chỉ code khi user duyệt rõ; trước đó chỉ Wave A (client ngoại suy) + Wave B (removal). Wave A rủi ro thấp (chỉ display).
+- Verify no-GPU: chốt dùng **browser MCP + nguồn synthetic moving-square** (`vision_web_app` không source → `moving_square_frame`+BrightBlob) — KHÔNG cần webcam/RTSP/model/GPU (video toann gitignored, không có ở máy này).
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (dẫn xuất trung thành design; input-size/GPU của #407 là máy toann, không áp máy này).
+**3. Trade-off đã cân nhắc:**
+- Hoàn tất requirements+tasks (docs, verifiable 0-diag) vs nhảy vào code Wave A ngay → chọn hoàn tất spec: design D-126 chờ valid + Wave C là refactor lớn → khép spec + GATE Wave C an toàn hơn, verifiable ngay, không cần E2E.
+- Re-verify tiền đề S1 bằng đọc `overlay_projection.py` #412 (KHÔNG gửi vx/vy) → design vững trước khi xây tiếp.
+**4. Điều bạn nên biết:**
+- Cả requirements.md + tasks.md get_diagnostics=0. Bộ spec overlay-tracking-refactor HOÀN CHỈNH, CHƯA code.
+- Frontier #412 gồm: mini-tracker display D-123/124/125 (hysteresis/off-frame-evict/predict-match) + conf tuning K-110 + bug-clamp fix K-111 + heartbeat/cadence (work tôi #396-399, đã merge). GPU note #407 CHỈ đúng máy toann.
+- Bước thi công đầu = Wave A Task 1 (server phơi vx/vy/updatedAtMs, Python TDD — verifiable máy này) → Task 2 (client rAF ngoại suy, verify browser MCP synthetic). Wave C chờ user duyệt.
+**Đã verify:** `git status`/`git log`/`vp check` → frontier #412 drift PASS (đọc output THẬT); `overlay_projection.py` #412 không gửi vận tốc (đọc code); requirements.md+tasks.md get_diagnostics=0. 0 đổi code sản phẩm → baseline giữ (không chạy lại vì 0 thay đổi code). · **Chưa verify:** Wave A/B hiệu quả visual (chờ code + browser MCP synthetic); per-object trên video/RTSP thật (không có nguồn ở máy này).
+
+### Entry #414 — 2026-07-16 — REVIEW browser (Playwright MCP) frontier #412: verify GỐC S1 + de-confound testbed synthetic (+K-112) — Kiro-Opus
+**Bối cảnh:** User: "mở web browser phát hiện cực nhiều lỗi". Máy no-GPU/không video thật → dùng nguồn synthetic moving-square + browser MCP. Verify-first TRƯỚC khi code Wave A (đúng "kiểm chứng rồi mới triển khai").
+**1. Quyết định AI tự ra (spec không nói):**
+- Dùng browser MCP đo empiric thay vì đoán: poll /overlay nhiều mẫu, đọc keys, present/20, distinct IDs, x-progression, health, rawResult.
+- Test 3 cấu hình để tách nhiễu: (a) default, (b) --overlay-motion, (c) --pace 0.06 (throttle video).
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (review, chưa code).
+**3. Trade-off đã cân nhắc:** synthetic moving-square vs video thật — synthetic tự-chứa (no GPU/model/webcam) nhưng có bệnh lý (wraparound + unthrottled video + BrightBlob conf thấp) → phải de-confound bằng --pace; kết luận testbed synthetic KHÔNG đủ đánh giá sạch tracking, cần video/RTSP thật cho per-object.
+**4. Điều bạn nên biết (verify browser THẬT — số đọc từ /overlay):**
+- **XÁC NHẬN S1 root:** /overlay display box keys = [confidence,displayId,height,label,remainingLeaseMs,trackRevision,width,x,y] — KHÔNG có vx/vy/updatedAtMs → client không có gì để ngoại suy (đúng design D-126).
+- **De-confound (K-112):** default unthrottled → box present 1/8 (churn); `--overlay-motion` → 0/20 (BrightBlob conf 0.0833 < ngưỡng hysteresis create của --overlay-motion → lọc hết, KHÔNG phải bug tracking); **`--pace 0.06` (detect kịp) → 20/20 present, 2 ID (đổi ID sau teleport-wraparound là ĐÚNG), x tiến mượt.** ⇒ tracking CHẠY ĐÚNG khi detect kịp; churn = artifact video-loop nhanh 15× detect (ô nhảy 120px > IoU).
+- **S1 gốc thật:** trên CPU detect thưa + vật di chuyển → client vẽ vị trí CŨ (không ngoại suy) → box tụt sau. Wave A (client extrapolate pos+vel*dt) là fix đúng — CẦN server phơi vx/vy trước (Task 1).
+- Testbed synthetic không đủ cho per-object flicker/ghost thật (bệnh lý) → cần video/RTSP thật (máy này không có; video toann gitignored/vắng).
+**Đã verify:** browser MCP đọc /overlay 3 cấu hình THẬT (keys thiếu vận tốc; present 1/8·0/20·20/20; x-progression mượt khi pace); rawResult conf 0.0833 giải thích 0/20. 0 đổi code → baseline giữ. · **Chưa verify:** hiệu quả Wave A extrapolation visual (chờ code + testbed hợp lệ); per-object trên video/RTSP thật.
+
+### Entry #415 — 2026-07-16 — FIX GỐC "cực nhiều lỗi" browser: pile-up polling → poll self-rescheduling + render rAF (webcam THẬT, D-127) — Kiro-Opus
+**Bối cảnh:** Máy CÓ webcam → mở web THẬT (cam0+yolov8n) bằng Playwright MCP. Console lộ **193 lỗi** `ERR_INSUFFICIENT_RESOURCES` + `ERR_CONNECTION_REFUSED` trên `/overlay`,`/stats` — ĐÂY là "cực nhiều lỗi" user báo. Verify-first tìm gốc, không đoán.
+**1. Quyết định AI tự ra (spec không nói):**
+- Chẩn đoán GỐC (đọc code `_PAGE`): `setInterval(tick,80)` bắn fetch `/overlay` mỗi 80ms BẤT KỂ fetch trước xong chưa → khi `/overlay` chậm >80ms (CPU tải YOLO) → fetch chồng chất → cạn pool ~6 kết-nối/host Chrome (+ MJPEG `/stream` giữ 1 vĩnh viễn) → ERR_INSUFFICIENT_RESOURCES; đôi lúc CONNECTION_REFUSED (Flask dev-server backlog).
+- FIX BẢN CHẤT (không vá ngọn): TÁCH **poll (dữ liệu) ⊥ render (vẽ)**: `poll()` SELF-RESCHEDULING (`setTimeout(poll,80)` trong `finally` → tối đa 1 fetch in-flight → KHÔNG pile-up) chỉ cập nhật state; `render()` qua `requestAnimationFrame` vẽ mượt decouple network; `statsLoop()` cũng self-reschedule. Giữ epoch-rollback + per-track lease.
+- Sẵn khung **ngoại suy vx/vy** trong render (Wave A): `clamp01(x+vx*dt)` nếu server gửi vx/vy (hiện chưa → `hasV=false` → vẽ tĩnh, no-op forward-compatible cho Task 1).
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (fix bug lộ ra khi mở web thật).
+**3. Trade-off đã cân nhắc:**
+- self-reschedule setTimeout vs setInterval+AbortController: chọn self-reschedule (đơn giản, đảm bảo 1 in-flight, reschedule cả khi lỗi). rAF render vs vẽ-trong-poll: tách để render mượt 60fps + là nền ngoại suy Wave A.
+- Đây là fix client-JS (trong string Python) → KHÔNG unit-test được → verify bằng browser MCP (đúng "kiểm chứng rồi mới xong").
+**4. Điều bạn nên biết:**
+- Verify browser THẬT: sau fix, **0 lỗi console/15s** (trước 193); probe 10/10 /overlay OK; stats live (video=4307·detect=2068); health LIVE; display 4 box "person" id `1:1` (track gốc bền, không churn); screenshot `wave-a-pollfix-415.jpg`.
+- Đây là **Wave A Task 2 (cấu trúc client)** phần render-loop; còn Task 1 (server phơi vx/vy/updatedAtMs) để bật ngoại suy thật (fix S1 "box không sát" mượt). Chưa gửi vx → render vẫn tĩnh (không giật thêm, chỉ hết pile-up).
+- baseline Python 835/2 KHÔNG đổi (sửa trong JS-string, không đụng test).
+**Đã verify:** `scripts\vp.cmd verify` = **835 passed/2 skipped · lint 6 kept/0 broken · drift PASS**; get_diagnostics vision_web_app=0; browser MCP: 193→**0 lỗi console**, probe 10/10 OK, box live (đọc THẬT, screenshot). · **Chưa verify:** ngoại suy vx/vy (chờ Task 1 server); "box sát mượt hơn" khi di chuyển (cần Task 1 + user nhìn).
+
+### Entry #416 — 2026-07-16 — Wave A Task 1: server phơi vx/vy ra /overlay → bật ngoại suy client (fix S1, TDD + webcam) — Kiro-Opus
+**Bối cảnh:** #415 đã wire client render ngoại suy (no-op vì /overlay chưa gửi vận tốc). Task 1 = server phơi vx/vy để bật thật. Đọc code: `DisplayStabilizer._Confirmed.vel_x/vel_y` (đơn-vị chuẩn-hoá/NANOsecond, LUÔN cập nhật khi ≥2 khớp, không phụ thuộc flag) — có sẵn, chỉ cần phơi.
+**1. Quyết định AI tự ra (spec không nói):**
+- `DisplayTrack` DTO +`vx,vy` (default 0.0, finite-validate, additive cuối field) — chuẩn-hoá/GIÂY. `_view()` convert per-ns→per-giây (×1e9). `project_overlay` thêm `vx,vy` (round 6) vào display box JSON.
+**2. Chỗ phải đổi so với yêu cầu ban đầu (đính chính design C2 — có lý do):**
+- Design C2 nói gửi `updatedAtMs` → **BỎ**: server dùng `monotonic_ns`, client dùng `performance.now()` = 2 ĐỒNG HỒ KHÁC NHAU → client trừ `updatedAtMs` server sẽ SAI. Client ngoại suy từ **thời-điểm-NHẬN của chính nó** (render #415 đã đúng). Chỉ gửi vx/vy. (Bắt lỗi clock-mismatch khi valid design → fix gốc.)
+**3. Trade-off đã cân nhắc:**
+- Ngoại suy từ receive-time (client) vs detection-time (server): receive-time đơn giản + không lệ thuộc clock-sync; hơi thiếu phần trễ server→client (under-predict nhẹ) — chấp nhận V1 (design v2 Kalman refine). Đúng "sát hơn" so vẽ tĩnh.
+- vx/vy per-giây (không per-frame): đơn vị vật-lý ổn định, client dt giây trực tiếp.
+**4. Điều bạn nên biết:**
+- Chuỗi S1 fix HOÀN CHỈNH: server tính+gửi vận tốc (Task 1) + client rAF ngoại suy pos+vx*dt (Task 2 #415). Vật đứng-yên vx≈0 → tĩnh (không giật); vật di chuyển vx≠0 → box bám tới trước → "sát hơn".
+- Verify webcam: /overlay `has_vx=true`, vx bám motion thật (person dịch → vx dương), track 1:104 bền revision 884.
+- Còn Wave B (removal evidence-based, S2 "tắt chậm") + Wave C GATED (hợp nhất tracker).
+**Đã verify:** `scripts\vp.cmd verify` = **837 passed/2 skipped** (835→837, +2 test velocity) · lint 6 kept/0 broken · drift PASS; browser MCP webcam THẬT: /overlay có vx/vy, giá trị bám chuyển động (đọc số thật 6 mẫu). 51 test overlay-liên-quan GREEN. · **Chưa verify:** "box sát mượt hơn khi di chuyển NHANH" bằng mắt (user nhìn webcam — vx nhỏ khi đứng yên); Wave B/C.
+
+### Entry #417 — 2026-07-16 — Wave B (fix S2 "tắt chậm"): PHÁT HIỆN maxAgeMs TRÙNG displayLeaseMs → fix = tune lease (không thêm config) — Kiro-Opus
+**Bối cảnh:** Wave B design (D-126 C4) đề xuất config MỚI `maxAgeMs` (removal theo time_since_update). Trước khi code, VALID design bằng đọc code thật (nguyên tắc "fix bản chất, không thêm phức tạp vô ích", R3.2 anti-sunk-cost).
+**1. Quyết định AI tự ra (spec không nói):**
+- **KHÔNG thêm `maxAgeMs`.** Đọc `display_stabilizer`: `st.lease_deadline_ns = now + displayLeaseMs` refresh MỖI khớp (dòng 143) + on_tick xoá khi `lease_deadline <= now` (dòng 227) → removal xảy ra tại `last_match + displayLeaseMs` = ĐÚNG "time_since_update timeout". `maxAgeMs` riêng = TRÙNG hoàn toàn cơ chế.
+- **S2 fix = giảm `displayLeaseMs`** (600 quá dài so nhịp detect CPU 80-200ms → ghost lâu). Expose CLI `--overlay-display-lease-ms` (+`--overlay-candidate-lease-ms` giữ ordering candidate<=display<=ghost), mặc định None → giữ 600 (additive). + off-frame-evict (D-124 đã có) cho rời-qua-mép.
+**2. Chỗ phải đổi so với yêu cầu ban đầu (đính chính design):** Wave B design C4 (maxAgeMs) → REVISED: bỏ maxAgeMs (trùng), dùng lease tuning. Cập nhật design.md C4 + tasks.md Task 3.
+**3. Trade-off đã cân nhắc:**
+- lease ngắn (xoá ghost nhanh) ↔ lease phải > detect-gap (không flicker vật hiện diện). Verify: lease 350 > gap thực → box 25/25 present KHÔNG flicker. Nếu detect quá thưa (heartbeat lớn) thì cần lease lớn hơn — tune theo cadence.
+- Không đổi default 600 (giữ additive/tương thích hệ đã verify) — expose knob để deploy chọn.
+**4. Điều bạn nên biết (verify webcam THẬT #417):**
+- `--overlay-display-lease-ms 350 --overlay-motion`: box **present 25/25** (không flicker), distinct_ids=2 (bền), **0 lỗi**, `max_remainingLeaseMs=335 < 350` → CHỨNG MINH empiric displayLeaseMs = removal timeout (không phải 600). Removal khi rời = last_match+350 (nhanh hơn 600ms mù).
+- Chưa đo trực tiếp "box biến mất sau 350ms khi rời" (cần user rời khung); nhưng cơ chế đã chứng minh (last_match+lease).
+- K-113: đừng thêm knob trùng cơ-chế; xem removal-timeout = displayLeaseMs.
+**Đã verify:** `scripts\vp.cmd verify` = **837 passed/2 skipped · lint 6 kept/0 broken · drift PASS** (additive CLI, không đổi test); get_diagnostics vision_web_app=0; browser MCP webcam: lease 350 → present 25/25, max_rem 335, 0 lỗi (đọc số thật). · **Chưa verify:** thời-gian-biến-mất chính xác khi user rời khung (cần user); giá trị lease tối ưu per-camera.
+
+### Entry #418 — 2026-07-16 — REVIEW browser SÂU: fix lệch 1px canvas↔video (border-box) + xác nhận 0 lỗi mạng — Kiro-Opus
+**Bối cảnh:** User "mở web phát hiện lỗi" (tiếp). Đã fix pile-up/S1/S2. Soi lớp CHƯA kiểm: căn canvas↔video + network (Playwright MCP, webcam thật).
+**1. Quyết định AI tự ra (spec không nói):**
+- Đo `getBoundingClientRect` img vs canvas → phát hiện **lệch 1px**: `#v` có `border:1px solid` → border-box img (492×370) ≠ canvas (490×368) đặt ở gốc border-box, mà nội dung video bắt đầu sau border 1px → box vẽ lệch chéo ~1px. Fix: chuyển `border` sang `#wrap` + `font-size:0` (khử whitespace inline-block) → canvas & img cùng gốc trong border → căn khớp.
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (fix defect lộ ra khi soi browser).
+**3. Trade-off đã cân nhắc:** border trên #v (đẹp, nhưng lệch canvas) vs trên #wrap (khớp canvas, viền bao cả img+overlay) → chọn #wrap: căn khớp tuyệt đối, viền vẫn còn.
+**4. Điều bạn nên biết (verify browser THẬT):**
+- Network: **748 request /overlay+/stats TOÀN BỘ 200 OK** (0 fail) → pile-up fix (#415) bền, luồng đều.
+- Sau fix: `img_rect == canvas_rect [11,92,490,368]` → **aligned=true** (trước lệch 1px). 0 lỗi console.
+- 1px nhỏ về thị giác nhưng là defect căn-chỉnh thật (một dạng "không sát" hệ thống) — đã đóng.
+- Lưu ý vận hành: stop→start server nhanh trên CÙNG port 8000 gặp `socket forbidden` (Windows TIME_WAIT) → đổi port (8010) hoặc chờ; không phải bug app.
+**Đã verify:** `scripts\vp.cmd verify` = **837 passed/2 skipped · lint 6 kept/0 broken · drift PASS** (đổi CSS trong _PAGE string, không đụng Python/test); browser MCP: aligned=true + 748/748 request 200 OK + 0 lỗi console (số thật). · **Chưa verify:** cảm nhận thị giác khớp box (user nhìn).
+
+### Entry #419 — 2026-07-16 — FIX video đen khi tab chạy nền (MJPEG stream stall) → auto-reconnect on visible (browser MCP) — Kiro-Opus
+**Bối cảnh:** User gửi ảnh: video ĐEN nhưng box vẫn vẽ (person 0.91/0.89), "tab xuống bị vậy reload sẽ hết". Bug THẬT khi tab chạy nền.
+**1. Quyết định AI tự ra (spec không nói):**
+- Chẩn đoán: `<img src=/stream>` MJPEG — trình duyệt treo/hủy stream khi tab HIDDEN (background throttling) + KHÔNG tự nối lại khi tab visible → video đen tới khi reload tay. (rAF render cũng pause ở nền nhưng tự hồi; MJPEG không tự hồi.)
+- Fix: nghe `visibilitychange` → khi `visibilityState==='visible'` gọi `reloadStream()` = `img.src='/stream?t='+Date.now()` (ép kết nối MỚI) + `img.onerror`→reconnect sau 500ms (phủ cả drop stream).
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (bug user báo qua ảnh).
+**3. Trade-off đã cân nhắc:**
+- reload stream mỗi lần visible (kết nối mới, bỏ frame cũ đen) vs cố resume stream cũ (không điều khiển được từ client) → reload đơn giản + chắc chắn. `?t=` cache-bust ép server mở stream mới.
+- Chỉ reload khi 'visible' (không khi 'hidden' — vô ích) → đúng logic.
+**4. Điều bạn nên biết (verify browser MCP):**
+- Foreground: img nạp OK (complete, 640×480). Dispatch `visibilitychange` (visible) → img.src `/stream`→`/stream?t=1784...` (reconnect_changed_src=true), img nạp lại complete=true → **stream nối lại thành công**. 0 lỗi console.
+- Hạn chế verify: background-throttling THẬT (tab ẩn) khó mô phỏng qua Playwright (visibilityState='visible' khi automation) → verify wiring + reconnect-effect; hồi-phục-thực-tế-khi-tab-ẩn CHỜ user xác nhận (đây là kịch bản user báo).
+- Kiến trúc: đây là điểm yếu bản chất của MJPEG-in-<img> (transport polling/stream, không phải WebRTC) — auto-reconnect là mitigation đúng; WebRTC/WebSocket (spec overlay-tracking-refactor Non-Goal) là giải pháp triệt để tương lai.
+**Đã verify:** `scripts\vp.cmd verify` = **837 passed/2 skipped · lint 6 kept/0 broken · drift PASS** (JS trong _PAGE string, không đụng Python/test); browser MCP: visibilitychange→reconnect src đổi + img reload complete, foreground video OK, 0 lỗi console. · **Chưa verify:** hồi-phục thực tế khi tab ẩn lâu rồi quay lại (user xác nhận — không mô phỏng được background-throttling qua MCP).
+
+### Entry #420 — 2026-07-16 — VERIFY robustness browser (resize responsive + reconnect-stress) — KHÔNG bug mới — Kiro-Opus
+**Bối cảnh:** User "mở web soi tiếp, hướng thương mại". Đã fix 5 bug overlay (#415-419). Pass này kiểm robustness các kịch bản thương mại CHƯA soi (verification thuần, KHÔNG đổi code).
+**1. Quyết định AI tự ra:** kiểm 2 kịch bản: (a) resize cửa sổ (responsive), (b) reconnect-stress (chuyển tab liên tục = dispatch visibilitychange nhiều lần).
+**2. Chỗ phải đổi:** không.
+**3. Trade-off:** không (verify).
+**4. Điều bạn nên biết (verify browser MCP THẬT):**
+- **Resize:** viewport 520 → `img_client=canvas_attr=[510,382]`, **aligned=true** → render() gọi resize() mỗi frame nên canvas tự khớp img khi đổi kích thước (responsive OK, không lệch box).
+- **Reconnect-stress:** 8 lần visibilitychange liên tiếp → img.complete=true, naturalW=640 (phục hồi), distinct_src=8 (mỗi lần ?t= mới), **0 lỗi console**, **0 lỗi server** (không broken-pipe/thread-leak nhìn thấy) → fix #419 robust dưới stress.
+- KHÔNG tìm thấy bug mới pass này (trung thực: verify robustness, không bịa lỗi).
+- Còn lại cho "thương mại" = tầng LỚN (không phải bug client): (a) Wave C hợp nhất tracker (nền nghiệp vụ, GATED); (b) production-hardening K-101 (WSGI thay Flask dev-server + auth). Cả 2 cần user chốt hướng.
+**Đã verify:** browser MCP: resize aligned=true@520; 8 reconnect → img phục hồi + 0 lỗi console + server log sạch (số thật). 0 đổi code → baseline 837/2 giữ. · **Chưa verify:** soak dài (rò rỉ bộ nhớ nhiều giờ); nhiều-người crowded (tracking quality = Wave C); background-throttling thực tế (user).
+
+### Entry #421 — 2026-07-16 — Đo kỹ churn "mất bbox nhiều" (webcam) → GỐC = spurious conf 0.25-0.33 → FIX hysteresis (verify 5→2 ID) + đo removal-latency — Kiro-Opus
+**Bối cảnh:** User báo 2 triệu chứng visual: "mất bbox rất nhiều" + "vật rời hình ~1s bbox mới clear". Đo KỸ bằng browser MCP (webcam thật, không đoán).
+**1. Quyết định AI tự ra (spec không nói):** đo định lượng: distinct displayId/5s, raw box jitter, confidence phân bố, removal-latency (bắt lúc track biến mất + remainingLeaseMs).
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (chẩn đoán + tuning bằng lever sẵn có).
+**3. Trade-off đã cân nhắc:**
+- sustain thấp (0.30) → giảm churn (không rớt track khi conf dao động) NHƯNG giữ box người-đang-rời-khung lâu hơn (chậm clear). churn↔clear là 2 đầu 1 tension của ngưỡng sustain + maxMisses. off-frame-evict (D-124, trong --overlay-motion) xoá tức thì khi rời qua mép — giảm clear-latency cho lối-ra-mép.
+- Dùng hysteresis (2 ngưỡng) thay --conf đơn: chặn spurious-tạo-track mà không rớt người thật lúc conf tụt.
+**4. Điều bạn nên biết (số ĐO THẬT):**
+- **Churn GỐC:** box thứ-3+ (thừa) conf **0.25–0.33** (avg 0.275, spurious chỉ nhỉnh hơn decode-conf mặc định 0.25); 2 người thật conf 0.37–0.93. raw box chính jitter cực nhỏ (dx_avg 0.0005) → detector KHÔNG nhiễu cho người thật; churn CHỈ từ detection yếu chập chờn (n_raw 2↔3↔4) mỗi lần sinh displayId mới (counter leo 1940→2023).
+- **FIX verify:** bật `--overlay-create-conf 0.45 --overlay-sustain-conf 0.30` → distinct ID **5+→2** (`1:2,1:5`), id-set ổn định 50/50 mẫu. Hết churn.
+- **Removal-latency (đo):** track biến mất khi remainingLeaseMs còn ~180-225ms (xoá bằng MISS, không đợi hết lease) → server clear ~350ms hoặc nhanh hơn. ~1s user thấy ≈ detector còn bắt người lúc đang rời (conf≥sustain) + 350ms; KHÔNG phải lag server-side.
+- **Config thương mại khuyến nghị (đã chạy 8012):** `--overlay-motion --overlay-create-conf 0.45 --overlay-sustain-conf 0.30 --overlay-display-lease-ms 350`. Cân nhắc đưa hysteresis thành DEFAULT (quyết định riêng — đổi hệ đã verify).
+**Đã verify:** browser MCP webcam THẬT: churn 5+→2 ID (với hysteresis), conf spurious 0.25-0.33 vs thật 0.37-0.93, removal tracks lastRem~200ms (miss-based), raw jitter 0.0005 (số thật đọc từ /overlay). 0 đổi code (tuning lever sẵn có) → baseline 837/2 giữ. · **Chưa verify:** cảm nhận thị giác sau bật hysteresis (user nhìn 8012); clear-latency chính xác khi user rời khung (cần user re-test build mới).
+
+### Entry #422 — 2026-07-16 — ĐO tuning intra_op_num_threads onnxruntime (câu hỏi "còn nhanh hơn không") → default GẦN TỐI ƯU, KHÔNG đổi code (+K-115) — Kiro-Opus
+
+**Bối cảnh:** User: "có vẻ ổn, tiếp theo nên làm gì? còn cải tiến tốc độ không? đây best-practice/perform chưa?". Tiếp TASK 3 dở (probe thread chưa chạy). Đo throughput yolov8n@640 CPU theo `intra_op_num_threads` để trả lời có-căn-cứ.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Viết lại probe thăm-dò: MỖI thread-config chạy trong **PROCESS RIÊNG** (session không tích luỹ) + cửa sổ 120 iter + median-of-3 — vì probe cũ (7 session tuần tự trong 1 process) cho variance 2-3× = nhiễu, KHÔNG kết luận được.
+- **KHÔNG thêm `SessionOptions(intra_op_num_threads=...)` vào OnnxDetector** — vì đo cho thấy default gần tối ưu + hard-code hại tính di động (xem mục 4). Đây là kết luận "điều tra âm tính": không đổi code là câu trả lời đúng, không phải bỏ sót.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (điều tra + kết luận, 0 đổi code sản phẩm).
+
+**3. Trade-off đã cân nhắc:**
+- Hard-code thread-count (đôi khi +7% inference cô lập trên máy 16-core) vs giữ default (portable) → **giữ default**: cái được (7%) nằm trong nhiễu run-to-run; cái mất khi hard-code = máy ít core (4) bị oversubscription (đo: intra=16 trên máy này = 14fps << default 30.6) → hại đa số deploy. Premature optimization + đổi hệ đã verify vì cái lợi không chắc = vi phạm R3.2.
+- Đo inference cô lập vs đo live-under-contention → probe này đo CÔ LẬP; gap live (10.3/s) vs inference (~16.5/s pipeline) là CONTENTION serving, chưa đo theo thread-count (để [chưa kiểm], không claim).
+
+**4. Điều bạn nên biết (số ĐO THẬT, process riêng · 120 iter · median-of-3):**
+- default(no SessionOptions)=**30.61 fps** · intra=1→13.41 · 2→21.45 · 4→28.22 · 6→28.82 · 8→**32.85** · 16→14.02. → default ≈ best (intra=8 hơn ~7% nằm trong nhiễu: default raw lên 35.2 trùng dải intra=8). intra=1 và 16 rõ ràng tệ (thiếu/thừa thread).
+- **onnxruntime tự chọn thread-count gần tối ưu** cho model này trên máy này (16 core) → không cần can thiệp. Số ~30fps là **session.run THUẦN** (frame random), CAO hơn pipeline thật (~16.5/s có pre/letterbox + post/NMS) → pre/post chiếm ~1/2 thời gian là hướng tối ưu tiềm năng NHƯNG chưa đo cụ thể ([chưa kiểm]).
+- **Ceiling tốc độ CPU yolov8n@640 KHÔNG dời được nhiều bằng tuning runtime.** Muốn nhanh hơn NỮA = deploy-time: input 416 (re-export, ~2×) / INT8 quant / GPU (máy này KHÔNG có). Overlay ĐÃ mượt bất kể detect-rate nhờ client extrapolation (#416) → tốc-độ-detect KHÔNG còn là nút thắt trải nghiệm.
+- Probe cũ `_probe_threads.py` (scratch) đã XOÁ sau đo.
+
+**Đã verify:** probe process-riêng median-of-3 chạy thật, đọc output (default 30.61 vs intra=8 32.85 vs intra=16 14.02 — số thật). Variance probe-cũ (accumulating session) 2-3× → đã loại bằng process-riêng. 0 đổi code → baseline 837/2 giữ. · **Chưa verify:** live-throughput-under-contention theo thread-count (không đo pass này — cần chạy full server + đo detect/s, là thí nghiệm riêng); pre/post-processing chiếm bao nhiêu % pipeline (suy từ chênh 30fps thuần vs 16.5/s pipeline, [chưa kiểm] con số).

@@ -29,7 +29,7 @@ User nhìn thấy 2 lỗi VISUAL trên video thật (#411): **S1 — bbox KHÔNG
 - **C1 `domain` Tracker (nguồn track duy nhất):** motion model mỗi track (v1 vận tốc tuyến tính; v2 Kalman); association IoU+dự-đoán (v2 center-distance/size-aware/Hungarian); lifecycle `tentative→confirmed→lost` theo `time_since_update` (THỜI GIAN). Thuần, fake-clock test. Dùng chung analytics + display.
 - **C2 `runtime/overlay_projection`:** thêm `vx,vy` (chuẩn-hoá/giây) + `updatedAtMs` mỗi track → client ngoại suy.
 - **C3 client render bù chuyển động (fix S1):** `requestAnimationFrame` vẽ tại `pos + vel*(now-updatedAt)` → bám sát mượt giữa detect thưa; giảm/bỏ EMA server (mượt chuyển sang client).
-- **C4 removal evidence-based (fix S2):** "lost" khi `time_since_update > maxAgeMs` NHỎ HOẶC dự đoán rời khung — thay giữ tới hết lease 600ms.
+- **C4 removal evidence-based (fix S2):** ~~"lost" khi `time_since_update > maxAgeMs`~~ **[REVISED #417/D-129]** — verify code: `lease_deadline = last_match + displayLeaseMs` (refresh mỗi khớp) → `displayLeaseMs` ĐÃ LÀ time-since-update timeout; `maxAgeMs` riêng = TRÙNG → BỎ. Fix S2 = **giảm `displayLeaseMs`** (expose CLI) + off-frame-evict (D-124). Đã verify lease 350 giữ box 25/25 không flicker (empiric).
 
 ## Data Models
 - **Track (domain):** `{id:int, box:BBox, vx:float, vy:float, age:int, hits:int, time_since_update:int, label:str, conf:float, state:tentative|confirmed|lost}`.

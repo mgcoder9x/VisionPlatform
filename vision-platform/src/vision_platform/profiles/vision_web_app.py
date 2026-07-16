@@ -59,59 +59,79 @@ _cadence_cfg = DetectionCadenceConfig()   # mặc định = hành vi hiện tạ
 
 _PAGE = """<!doctype html><html><head><meta charset="utf-8"><title>Vision Platform — Live</title>
 <style>body{background:#111;color:#eee;font-family:sans-serif;text-align:center;margin:0;padding:10px}
-#wrap{position:relative;display:inline-block}#v{max-width:98vw;display:block;border:1px solid #444}
+#wrap{position:relative;display:inline-block;border:1px solid #444;font-size:0}#v{max-width:98vw;display:block}
 #c{position:absolute;left:0;top:0;pointer-events:none}#s{font:12px monospace;color:#9f9}</style></head>
 <body><h3>Vision Platform — video + overlay (freshness/lease, fix flicker)</h3>
 <div id="wrap"><img id="v" src="/stream"><canvas id="c"></canvas></div>
 <p id="s"></p>
 <script>
 const img=document.getElementById('v'),cv=document.getElementById('c'),ctx=cv.getContext('2d');
-// FIX FLICKER: đọc /overlay (epoch/per-track lease). KHÔNG giữ box mù theo thời-gian-poll.
-// Mỗi box có deadline RIÊNG (từ remainingLeaseMs server + trừ RTT); chỉ gia hạn khi trackRevision của
-// CHÍNH box tăng; vắng trong list → xóa; hết hạn → xóa. Epoch rollback: reject epoch cũ/retired.
+// KIẾN TRÚC: TÁCH poll (dữ liệu) ⊥ render (vẽ). poll SELF-RESCHEDULING (tối đa 1 fetch in-flight →
+// KHÔNG pile-up → hết ERR_INSUFFICIENT_RESOURCES khi /overlay chậm lúc CPU tải, #415). render qua
+// requestAnimationFrame (mượt, decouple network) + ngoại suy vị trí theo vận tốc vx/vy nếu server gửi
+// (forward-compatible Wave A — hiện /overlay chưa gửi → vẽ tĩnh, no-op). Giữ epoch-rollback + per-track lease.
 let procEpoch=null, srcEpoch=null; const retired=new Set();
-const boxes=new Map();  // displayId -> {rev, deadline(perf.now ms), b}
+const boxes=new Map();  // displayId -> {rev, deadline(perf.now ms), b, updatedAt(perf.now ms)}
 function resize(){ if(cv.width!==img.clientWidth||cv.height!==img.clientHeight){cv.width=img.clientWidth;cv.height=img.clientHeight;} }
-async function tick(){
-  const t0=performance.now(); let o=null;
-  try{o=await(await fetch('/overlay',{cache:'no-store'})).json();}catch(e){o=null;}
-  const rtt=performance.now()-t0, now=performance.now();
-  if(o&&o.processEpoch){
-    // process epoch anti-rollback
-    if(procEpoch===null){procEpoch=o.processEpoch;}
-    else if(o.processEpoch!==procEpoch){
-      if(!retired.has(o.processEpoch)){retired.add(procEpoch);procEpoch=o.processEpoch;srcEpoch=null;boxes.clear();}
-      else{o=null;} // epoch đã retired → bỏ qua
-    }
-    if(o&&o.processEpoch===procEpoch){
-      if(srcEpoch===null){srcEpoch=o.sourceEpoch;}
-      else if(o.sourceEpoch<srcEpoch){o=null;}            // rollback → bỏ
-      else if(o.sourceEpoch>srcEpoch){srcEpoch=o.sourceEpoch;boxes.clear();}  // epoch mới → clear
-    }
-    if(o&&o.display&&o.sourceEpoch===srcEpoch){
-      const present=new Set();
-      for(const b of o.display.boxes){
-        present.add(b.displayId);
-        const prev=boxes.get(b.displayId);
-        if(!prev||b.trackRevision>prev.rev){        // CHỈ gia hạn khi revision CHÍNH box tăng
-          const rem=Math.max(0,b.remainingLeaseMs-rtt);
-          boxes.set(b.displayId,{rev:b.trackRevision,deadline:now+rem,b:b});
-        }else{prev.b=b;}                            // same rev: cập nhật toạ độ, GIỮ deadline (không kéo dài)
+const clamp01=(v)=>v<0?0:(v>1?1:v);
+// ---- POLL: cập nhật STATE (không vẽ), tự hẹn lần kế SAU khi xong → 1 in-flight ----
+async function poll(){
+  try{
+    const t0=performance.now(); let o=null;
+    try{o=await(await fetch('/overlay',{cache:'no-store'})).json();}catch(e){o=null;}
+    const rtt=performance.now()-t0, now=performance.now();
+    if(o&&o.processEpoch){
+      if(procEpoch===null){procEpoch=o.processEpoch;}
+      else if(o.processEpoch!==procEpoch){
+        if(!retired.has(o.processEpoch)){retired.add(procEpoch);procEpoch=o.processEpoch;srcEpoch=null;boxes.clear();}
+        else{o=null;}
       }
-      for(const id of [...boxes.keys()]) if(!present.has(id)) boxes.delete(id);  // vắng → xóa
+      if(o&&o.processEpoch===procEpoch){
+        if(srcEpoch===null){srcEpoch=o.sourceEpoch;}
+        else if(o.sourceEpoch<srcEpoch){o=null;}
+        else if(o.sourceEpoch>srcEpoch){srcEpoch=o.sourceEpoch;boxes.clear();}
+      }
+      if(o&&o.display&&o.sourceEpoch===srcEpoch){
+        const present=new Set();
+        for(const b of o.display.boxes){
+          present.add(b.displayId);
+          const prev=boxes.get(b.displayId);
+          if(!prev||b.trackRevision>prev.rev){
+            const rem=Math.max(0,b.remainingLeaseMs-rtt);
+            boxes.set(b.displayId,{rev:b.trackRevision,deadline:now+rem,b:b,updatedAt:now});
+          }else{prev.b=b;prev.updatedAt=now;}   // same rev: cập nhật toạ độ + mốc (GIỮ deadline)
+        }
+        for(const id of [...boxes.keys()]) if(!present.has(id)) boxes.delete(id);
+      }
     }
-  }
-  // clear + draw SÁT nhau (không await ở giữa). Hết hạn → xóa trước khi vẽ (bounded ghost).
+  }finally{ setTimeout(poll,80); }   // reschedule DÙ lỗi → không bao giờ chồng >1 fetch
+}
+// ---- RENDER: vẽ mỗi animation-frame; ngoại suy pos+vel*dt nếu có vx/vy (Wave A); hết hạn → xóa ----
+function render(){
+  const now=performance.now();
   resize(); ctx.clearRect(0,0,cv.width,cv.height);
   ctx.strokeStyle='#00ff66';ctx.lineWidth=2;ctx.font='14px sans-serif';ctx.fillStyle='#00ff66';
   for(const [id,e] of [...boxes]){
     if(e.deadline<=now){boxes.delete(id);continue;}
-    const b=e.b, x=b.x*cv.width, y=b.y*cv.height, w=b.width*cv.width, h=b.height*cv.height;
+    const b=e.b, hasV=(typeof b.vx==='number'&&typeof b.vy==='number');
+    const dt=hasV?(now-e.updatedAt)/1000:0;
+    const bx=hasV?clamp01(b.x+b.vx*dt):b.x, by=hasV?clamp01(b.y+b.vy*dt):b.y;
+    const x=bx*cv.width, y=by*cv.height, w=b.width*cv.width, h=b.height*cv.height;
     ctx.strokeRect(x,y,w,h); ctx.fillText(b.label+' '+b.confidence.toFixed(2),x,Math.max(12,y-4));
   }
+  requestAnimationFrame(render);
 }
-setInterval(tick,80);
-setInterval(async()=>{try{document.getElementById('s').innerText=await(await fetch('/stats',{cache:'no-store'})).text()}catch(e){}},1000);
+// ---- STATS: self-rescheduling (1 in-flight) ----
+async function statsLoop(){
+  try{document.getElementById('s').innerText=await(await fetch('/stats',{cache:'no-store'})).text();}catch(e){}
+  finally{setTimeout(statsLoop,1000);}
+}
+// ---- MJPEG resilience: tab nền → trình duyệt treo/hủy stream <img> + KHÔNG tự nối lại (video đen tới khi
+// reload). Nối lại khi tab HIỆN lại (visibilitychange) + tự reconnect khi stream lỗi. ?t= ép kết nối mới. ----
+function reloadStream(){ img.src='/stream?t='+Date.now(); }
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') reloadStream(); });
+img.addEventListener('error',()=>{ setTimeout(reloadStream,500); });
+poll(); requestAnimationFrame(render); statsLoop();
 </script></body></html>"""
 
 
@@ -401,6 +421,12 @@ def main() -> int:
                    help="motion: khi track bị miss, dự đoán tâm theo vận tốc — ra ngoài khung → xoá NGAY (chống ghost người đã đi qua).")
     p.add_argument("--overlay-motion", action="store_true",
                    help="BẬT motion model đầy đủ (mini-tracker): match theo vị trí DỰ ĐOÁN (chống flicker vật di chuyển) + off-frame evict (chống ghost). = predict-match + evict-offframe.")
+    # --- S2 "tắt chậm" (Wave B): giảm displayLeaseMs = removal evidence-based (lease refresh từ lần khớp cuối
+    # → lease CHÍNH LÀ time-since-update; maxAgeMs riêng = TRÙNG, không thêm). Mặc định None → giữ 600 (additive).
+    p.add_argument("--overlay-display-lease-ms", type=int, default=None,
+                   help="hạn giữ box sau lần khớp cuối (mặc định 600). Giảm (vd 350) → box tắt nhanh khi người rời (S2). Phải >= candidate-lease.")
+    p.add_argument("--overlay-candidate-lease-ms", type=int, default=None,
+                   help="hạn giữ candidate (mặc định 300). Hạ cùng khi display-lease < 300 (giữ candidate<=display).")
     p.add_argument("--coco-labels", action="store_true",
                    help="dùng 80 nhãn COCO (person/car/... thay chỉ số) — chỉ đúng cho model train COCO (vd yolov8n).")
     args = p.parse_args()
@@ -420,6 +446,10 @@ def main() -> int:
         _cfg_kwargs["evictPredictedOffFrame"] = True
     if args.overlay_motion:
         _cfg_kwargs["matchUsePrediction"] = True
+    if args.overlay_display_lease_ms is not None:      # S2 (Wave B): removal nhanh hơn = lease ngắn hơn
+        _cfg_kwargs["displayLeaseMs"] = args.overlay_display_lease_ms
+    if args.overlay_candidate_lease_ms is not None:
+        _cfg_kwargs["candidateLeaseMs"] = args.overlay_candidate_lease_ms
     if _cfg_kwargs:
         _cfg = OverlayConfig(**_cfg_kwargs)
 

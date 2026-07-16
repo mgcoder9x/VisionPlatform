@@ -151,6 +151,10 @@ class DisplayTrack:
     leaseDeadlineNs: int
     missCount: int
     confidence: float = 0.0
+    # Vận tốc tâm (chuẩn-hoá / GIÂY) — cho client ngoại suy pos+vel*dt (Wave A, spec overlay-tracking-refactor).
+    # Default 0 = chưa đủ dữ liệu vận tốc → client vẽ tĩnh (không ngoại suy sai). Có dấu (âm=trái/lên).
+    vx: float = 0.0
+    vy: float = 0.0
 
     def __post_init__(self) -> None:
         if self.box.space.name != "NORMALIZED":
@@ -159,6 +163,8 @@ class DisplayTrack:
             raise ValueError("trackRevision/missCount >= 0")
         if not (0.0 <= _finite("confidence", self.confidence) <= 1.0):
             raise ValueError(f"confidence ∈ [0,1], got {self.confidence}")
+        _finite("vx", self.vx)
+        _finite("vy", self.vy)
 
 
 @dataclass(frozen=True)

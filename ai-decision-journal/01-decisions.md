@@ -1431,3 +1431,65 @@ Chẩn đoán gốc (grounded code #412): S1 chủ yếu do **client vẽ tĩnh 
 Cái giá: Wave C refactor lớn (đụng analytics) → tách spec + TDD từng bước; hoặc hoãn tới khi nghiệp vụ cần.
 Đóng khi: user valid 4 câu hỏi → tạo requirements/tasks → code TDD theo wave.
 Links: K-106/107/108/111 (triệu chứng flicker/ghost/bug), D-123/124/125 (các vá trước), object-tracking-count D-059 (tracker analytics cần hợp nhất).
+
+### D-127 — 2026-07-16 — FIX pile-up polling client: poll self-rescheduling + render rAF (đóng ERR_INSUFFICIENT_RESOURCES)
+Status: ✅ code+verify (browser MCP)
+Scope: `profiles/vision_web_app.py::_PAGE` (client JS) — Wave A Task 2 (render-loop)
+Nguồn: LOG Entry #415 · browser MCP console (193 lỗi) + đọc `_PAGE`
+Links: D-126 (design overlay-tracking-refactor, Wave A), K-112 (S1 root), spec overlay-tracking-refactor Task 2
+Evidence: browser MCP THẬT — trước 193 lỗi ERR_INSUFFICIENT_RESOURCES; sau fix 0 lỗi/15s, probe /overlay 10/10 OK, box live id 1:1, screenshot wave-a-pollfix-415.jpg; `vp verify` 835/2·lint 6/0·drift PASS.
+Quyết định: TÁCH poll(dữ liệu, self-rescheduling `setTimeout` trong `finally` → tối đa 1 fetch in-flight) ⊥ render(`requestAnimationFrame`, decouple network, sẵn ngoại suy vx/vy). statsLoop cũng self-reschedule. Giữ epoch-rollback + per-track lease.
+- Cái mất: client-JS không unit-test được (verify bằng browser MCP).
+- Đổi lại: hết pile-up (gốc: `setInterval(80)` fire-and-forget chồng fetch khi /overlay chậm → cạn pool 6 kết-nối Chrome); render mượt 60fps; nền cho ngoại suy Wave A.
+- Vì sao (bản chất): lỗi là do POLLING KHÔNG chờ hoàn tất (nhịp cố định > thời gian phản hồi), không phải do server → fix ở nhịp client (1 in-flight) là đúng gốc; tách render/poll đúng kiến trúc (data ⊥ view).
+Đóng khi: (đã ✅ pile-up) — Wave A Task 1 (server phơi vx/vy/updatedAtMs) để bật ngoại suy thật fix S1; verify browser lại (box sát mượt khi di chuyển).
+
+### D-128 — 2026-07-16 — Wave A Task 1: server phơi vx/vy ra /overlay (bật ngoại suy client, fix S1)
+Status: ✅ code+verify (unit + browser MCP webcam)
+Scope: `kernel/overlay_view.py` (DisplayTrack +vx/vy) + `runtime/display_stabilizer.py` (_view phơi, per-ns→per-giây) + `runtime/overlay_projection.py` (JSON +vx/vy) + `tests/test_overlay_projection.py` (+2) — spec overlay-tracking-refactor Task 1
+Nguồn: LOG Entry #416 · design C1/C2 · requirements 1.1 · đọc `_Confirmed.vel_x/vel_y`
+Links: D-127 (client render Task 2), D-126 (design), D-124 (motion model nguồn vận tốc)
+Evidence: `vp verify` 837/2 (+2)·lint 6/0·drift PASS; browser MCP webcam: /overlay `has_vx=true`, vx bám motion thật, track bền.
+Quyết định: phơi vận tốc tâm (từ motion-model D-124 sẵn có) qua DisplayTrack.vx/vy (chuẩn-hoá/giây) → project_overlay → client ngoại suy pos+vel*dt.
+- **Đính chính design C2 (BỎ updatedAtMs):** server `monotonic_ns` ≠ client `performance.now()` (2 clock) → không gửi updatedAtMs (client trừ sẽ sai); client dùng thời-điểm-NHẬN của chính nó (đúng, D-127 đã làm).
+- Cái mất: ngoại suy từ receive-time thiếu phần trễ server→client (under-predict nhẹ) — V1 chấp nhận.
+- Đổi lại: đơn giản + không lệ thuộc clock-sync + additive (vx/vy default 0 → track chưa đủ vận tốc vẽ tĩnh).
+- Vì sao (bản chất): S1 "box không sát" = client vẽ vị trí cũ; fix = cho client biết vận tốc để ngoại suy tới vị trí HIỆN TẠI của vật giữa 2 detect thưa (CPU). Vận tốc đã có sẵn ở server (D-124) → chỉ phơi.
+Verify-Symbol: vision-platform/src/vision_platform/runtime/overlay_projection.py::project_overlay
+Đóng khi: (đã ✅ Wave A) — user nhìn webcam xác nhận box sát khi di chuyển; Wave B (removal S2); Wave C GATED (hợp nhất tracker).
+
+### D-129 — 2026-07-16 — Wave B fix S2: BỎ maxAgeMs (trùng displayLeaseMs) → expose lease CLI tuning
+Status: ✅ code+verify (browser MCP) · design REVISED
+Scope: `profiles/vision_web_app.py` (CLI `--overlay-display-lease-ms`/`--overlay-candidate-lease-ms` → _cfg) + design.md C4/tasks Task 3 (revise) — spec overlay-tracking-refactor Wave B
+Nguồn: LOG Entry #417 · đọc display_stabilizer (lease=last_match+displayLease) · browser MCP webcam
+Links: D-126 (design, C4 revised), D-124 (off-frame-evict), D-127/128 (Wave A)
+Evidence: `vp verify` 837/2·lint 6/0·drift PASS; browser MCP lease 350 → box present 25/25 không flicker, max_rem 335<350 (chứng minh lease=removal-timeout), 0 lỗi.
+Quyết định: S2 "tắt chậm" fix = giảm `displayLeaseMs` (expose CLI, mặc định giữ 600 additive) + off-frame-evict; KHÔNG thêm `maxAgeMs`.
+- Cái mất: không có knob "removal độc lập lease" — nhưng nó vô nghĩa (removal = last_match+lease, đo cùng thứ).
+- Đổi lại: không thêm phức tạp trùng lặp (R3.2); 1 khái niệm removal-timeout rõ ràng = displayLeaseMs.
+- Vì sao (bản chất): `lease_deadline = last_match + displayLeaseMs` refresh mỗi khớp → lease ĐÃ LÀ time-since-update. maxAgeMs = tên khác cùng cơ chế. Fix đúng = tune số đã có, không đẻ config mới.
+Đóng khi: (đã ✅ Wave B) — user rời khung xác nhận tắt nhanh; chọn lease per-camera. Wave C GATED.
+
+### D-130 — 2026-07-16 — Fix lệch 1px canvas↔video (border-box) — browser MCP
+Status: ✅ code+verify (browser MCP)
+Scope: `profiles/vision_web_app.py::_PAGE` (CSS: border #v→#wrap + font-size:0)
+Nguồn: LOG Entry #418 · browser MCP getBoundingClientRect
+Links: D-127 (client render), spec overlay-tracking-refactor (Task 10 canvas mapping)
+Evidence: browser MCP webcam: trước aligned=false (img 492×370 border-box vs canvas 490×368); sau aligned=true (img_rect==canvas_rect [11,92,490,368]); network 748/748 200 OK; 0 lỗi console. `vp verify` 837/2·6/0·drift PASS.
+Quyết định: chuyển `border:1px` từ `#v` sang `#wrap` + `font-size:0` → canvas (absolute 0,0 trong #wrap) và img (block 0,0) cùng gốc → box vẽ khớp video content (hết lệch 1px).
+- Cái mất: không.
+- Đổi lại: căn chỉnh box↔video chính xác pixel (một dạng "không sát" hệ thống đã đóng).
+- Vì sao (bản chất): border trên phần tử bị-overlay đẩy content-box lệch khỏi gốc overlay → luôn đặt border ở CONTAINER chung (#wrap), không ở phần tử được canvas phủ.
+Đóng khi: (đã ✅) — network 200 toàn bộ xác nhận pile-up fix bền.
+
+### D-131 — 2026-07-16 — Fix video đen khi tab nền (MJPEG stall) → auto-reconnect on visibilitychange
+Status: ✅ code+verify (browser MCP wiring) · hồi-phục-thực-tế chờ user
+Scope: `profiles/vision_web_app.py::_PAGE` (JS: visibilitychange→reloadStream + img.onerror→reconnect)
+Nguồn: LOG Entry #419 · ảnh user (video đen + box, "tab xuống bị vậy") · browser MCP
+Links: D-127 (client render), spec overlay-tracking-refactor (transport WebRTC = Non-Goal tương lai)
+Evidence: browser MCP: visibilitychange(visible)→img.src `/stream`→`/stream?t=...` reconnect, img reload complete=true; foreground OK; 0 lỗi console. `vp verify` 837/2·6/0·drift PASS.
+Quyết định: nghe `visibilitychange` → visible thì `img.src='/stream?t='+Date.now()` (ép stream mới) + `img.onerror`→reconnect 500ms. Đóng bug "video đen khi tab nền, reload mới hết".
+- Cái mất: mỗi lần quay lại tab mở kết nối stream mới (bỏ 1 frame) — chấp nhận (đúng ý "reload").
+- Đổi lại: video tự hồi khi quay lại tab, không cần reload tay.
+- Vì sao (bản chất): MJPEG-trong-`<img>` bị trình duyệt treo/hủy khi tab hidden + không tự resume → phải client chủ động nối lại lúc visible. Đây là hạn chế transport MJPEG; WebRTC/WS là giải pháp triệt để (Non-Goal hiện tại).
+Đóng khi: (wiring ✅) — user xác nhận tab-nền→quay-lại video tự hiện (không reload tay).

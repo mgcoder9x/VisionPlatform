@@ -251,7 +251,9 @@ class DisplayStabilizer:
         tracks = tuple(
             DisplayTrack(displayId=st.display_id, trackRevision=st.track_revision, label=st.label,
                          box=st.box, leaseDeadlineNs=st.lease_deadline_ns, missCount=st.miss_count,
-                         confidence=st.confidence)
+                         confidence=st.confidence,
+                         # vận tốc per-ns → per-GIÂY cho wire/client (×1e9). Chưa đủ khớp → 0.
+                         vx=st.vel_x * 1_000_000_000.0, vy=st.vel_y * 1_000_000_000.0)
             for st in sorted(self._confirmed.values(), key=lambda s: s.display_id)
         )
         return DisplayView(revision=self._revision, reason=reason, tracks=tracks)

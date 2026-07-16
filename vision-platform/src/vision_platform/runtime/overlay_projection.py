@@ -68,6 +68,9 @@ def project_overlay(snap: OverlayViewSnapshot, now_ns: int, ghost_sla_ms: int) -
             "confidence": round(float(t.confidence), 4),
             "x": _clip01(t.box.x), "y": _clip01(t.box.y),
             "width": _clip01(t.box.w), "height": _clip01(t.box.h),
+            # vx/vy chuẩn-hoá/giây (Wave A) → client ngoại suy pos+vel*dt (dt tính từ thời-điểm-NHẬN của
+            # client, KHÔNG dùng clock server — 2 đồng hồ khác nhau). Chưa đủ dữ liệu → 0 (client vẽ tĩnh).
+            "vx": round(float(t.vx), 6), "vy": round(float(t.vy), 6),
         })
     out["display"] = {"revision": snap.display.revision, "reason": snap.display.reason, "boxes": disp_boxes}
     return out
