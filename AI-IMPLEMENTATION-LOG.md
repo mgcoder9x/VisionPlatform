@@ -8091,3 +8091,24 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Baseline 860/2 giữ (chỉ đổi doc: end.md + LOG/INDEX/activeContext).
 
 **Đã verify:** `git checkout` khôi phục sạch → `vp check` PASS (#432 trước khi thêm entry này). · **Chưa verify:** kết quả `git push` entry #433 (thực hiện ngay sau commit — báo kết quả thật).
+
+### Entry #434 — 2026-07-18 — VERIFY browser MCP webcam máy k.nguyen (stack production loopback) — KHÔNG lỗi mới — Kiro-Opus
+
+**Bối cảnh:** User lặp lại "mở web bằng browser phát hiện lỗi". Máy `k.nguyen.manh.toan` có webcam → chạy web app config production (overlay hysteresis+lease350 + `--server dev` vì waitress chưa cài venv máy này) loopback port 8026 + soi bằng Playwright MCP.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Dùng `--server dev` (werkzeug) thay waitress cho lượt soi browser vì waitress CHƯA cài trên venv máy này; hành vi browser-side (console/network/overlay) giống hệt, phần waitress-specific (MJPEG buffering) đã verify #427 máy toann. Không cài waitress (tránh đổi env chỉ để soi UI).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (verification thuần, 0 đổi code).
+
+**3. Trade-off đã cân nhắc:**
+- Cài waitress để test đúng stack production vs dùng dev-server → chọn dev-server: mục tiêu lượt này là soi lỗi browser-side (JS/overlay/network), dev-server phục vụ cùng app/routes; cài waitress là item setup per-máy, ghi nhận riêng (không phải bug).
+
+**4. Điều bạn nên biết (số ĐO THẬT browser MCP):**
+- **0 lỗi/cảnh báo console; 2516 request /overlay+/stats đều 200 OK** (không pile-up — fix #415 bền).
+- Stream MJPEG live (img complete 640×480), canvas 490×368 căn khớp (fix #418 bền).
+- `/overlay` health `detector=LIVE source=LIVE`; person **conf 0.947 displayId `1:1` ỔN ĐỊNH** (hysteresis #421 giữ, KHÔNG churn) + chair 0.88; **vx/vy có** (ngoại suy #416 hoạt động); `remainingLeaseMs 319 < 350` (lease đúng #417).
+- **KẾT LUẬN:** web app + overlay + detection end-to-end SẠCH trên webcam máy này dưới config production. KHÔNG lỗi mới. Xác nhận frontier #415-432 bền trên máy thứ 2.
+- **Item setup (không phải bug):** venv máy `k.nguyen` chưa cài extra `web-prod` (waitress) → muốn test đúng stack production ở máy này cần `pip install .[web-prod]`.
+
+**Đã verify:** browser MCP webcam THẬT: 0 console error, 2516/2516 request 200, stream live 640×480, canvas căn 490×368, /overlay health LIVE + person conf 0.947 displayId 1:1 ổn định + vx/vy + lease 319<350 (số thật đọc từ evaluate/network). Server đã dừng sau đo. 0 đổi code → baseline 860/2 giữ. · **Chưa verify:** stack waitress trên máy này (chưa cài, dùng dev-server); RTSP camera (chờ VPN Allow-LAN, K-117).

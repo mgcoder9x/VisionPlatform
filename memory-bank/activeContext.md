@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-18)
-**Cập nhật lúc:** 2026-07-18T10:00:00+07:00.
+**Cập nhật lúc:** 2026-07-18T11:00:00+07:00.
+**[✅ #434 — VERIFY browser MCP webcam máy k.nguyen (production loopback) — KHÔNG lỗi mới]**
+- User lặp "mở web browser soi lỗi". Máy này có webcam → chạy web app config production (overlay hysteresis+lease350, `--server dev` vì waitress chưa cài venv máy này) loopback 8026 + Playwright MCP.
+- **Số ĐO THẬT:** 0 lỗi/cảnh báo console · **2516 request /overlay+/stats đều 200** (pile-up #415 bền) · stream MJPEG live 640×480 · canvas 490×368 căn khớp (#418) · `/overlay` health detector=LIVE source=LIVE, person **conf 0.947 displayId 1:1 ỔN ĐỊNH** (hysteresis #421 giữ, KHÔNG churn) + chair 0.88 + **vx/vy** (ngoại suy #416) + `remainingLeaseMs 319<350` (#417).
+- **KẾT LUẬN:** web+overlay+detection end-to-end SẠCH trên webcam máy này. KHÔNG lỗi mới → frontier #415-432 bền trên máy thứ 2.
+- **Item setup (không phải bug):** venv máy `k.nguyen` chưa cài extra `web-prod` → muốn test đúng waitress ở máy này: `pip install .[web-prod]`.
+- **Ghi sổ:** LOG #434 · INDEX #433→#434 (Σ313 giữ) · block này. Server đã DỪNG. Baseline 860/2 giữ (0 đổi code).
+- **Bước kế = CẦN USER (2 đường thật, #431):** (A) bật Allow-LAN trong VPN → verify RTSP camera `.106`; HOẶC (B) nêu nghiệp vụ cụ thể (đếm/vạch/zone trên web) → mở Wave C/D design-first. Ngoài ra là speculative.
+---
 **[✅ #433 — RECONCILE drift đa-máy (#422→#432) + dọn/viết lại end.md handoff frontier #432 + push]**
 - Máy `k.nguyen.manh.toan`. Phiên bắt đầu ở #421/#422 (đo perf thread K-115). GIỮA phiên workspace auto-sync lên HEAD `20934c7` (máy `toann` đã đẩy #423-#432) → **frontier nhảy #422→#432**. `vp check` FAIL (C1 dup #423 do tôi append lên bản ghi cũ) → phát hiện drift.
 - **Xử lý:** `git checkout -- AI-IMPLEMENTATION-LOG.md end.md` dọn 2 edit lạc của chính tôi (dup #423 + end.md bản #422 stale). **KHÔNG mất việc:** perf #422/K-115 ĐÃ nằm trong commit `b3ee82c` (máy toann gộp #415-422). `vp check` PASS lại (#432/Σ313).
