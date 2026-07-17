@@ -73,7 +73,9 @@ def _build_detector(args):
         return Yolov5PtDetector(args.pt, device=getattr(args, "device", "cpu"),
                                 conf=args.conf, iou=args.iou)
     if args.onnx:
-        from vision_platform.adapters.onnx_detector import OnnxDetector, chw_float_normalize
+        import sys
+        from vision_platform.adapters.onnx_detector import OnnxDetector, chw_float_normalize, onnx_providers_for
+        from vision_platform.adapters.capability_probe import probe_capabilities
         from vision_platform.adapters.yolo_postprocess import yolov5_decode, yolov8_decode
         labels = args.labels.split(",") if args.labels else None
         ver = getattr(args, "yolo", "v5")
@@ -85,8 +87,15 @@ def _build_detector(args):
             def _post(raw):
                 return yolov5_decode(raw, conf_threshold=args.conf, labels=labels)
 
+        # Capability-aware ONNX (F3.2/D-139): trước đây nhánh onnx BỎ QUA --device → luôn CPU (không GPU
+        # được kể cả trên máy GPU). Nay đi qua resolve_device (đối xứng .pt + _det_onnx): hỗ trợ 'auto',
+        # fail-fast khi 'cuda' mà máy không CUDA, + LOG device THẬT. 1 chính sách device chung mọi đường ONNX.
+        caps = probe_capabilities()
+        providers, dev = onnx_providers_for(getattr(args, "device", "cpu"), caps)
+        print(f"[device] onnx yêu cầu={getattr(args, 'device', 'cpu')!r} → dùng={dev!r} "
+              f"(has_cuda={caps.has_cuda}, gpu={caps.gpu_name})", file=sys.stderr)
         inner = OnnxDetector(args.onnx, preprocess_fn=chw_float_normalize, postprocess_fn=_post,
-                             expected_input_size=getattr(args, "model_size", None))
+                             providers=providers, expected_input_size=getattr(args, "model_size", None))
         return DetectorPipeline(inner, model_h=args.model_size, model_w=args.model_size, nms_iou=args.iou)
     # Demo mặc định: model = kích thước frame (letterbox identity → box bám vật chính xác).
     return DetectorPipeline(BrightBlobDetector(threshold=args.threshold),

@@ -75,7 +75,7 @@ def _det_onnx(params: Mapping):
     Mirror `vision_demo_app._build_detector` nhánh onnx → DetectorPipeline(OnnxDetector+decode) tự lo letterbox/NMS/inverse.
     OnnxDetector nạp model ở setup() (không phải construct) → build_runner construct KHÔNG cần file; setup lúc run.
     """
-    from vision_platform.adapters.onnx_detector import OnnxDetector, chw_float_normalize
+    from vision_platform.adapters.onnx_detector import OnnxDetector, chw_float_normalize, onnx_providers_for
     from vision_platform.adapters.yolo_postprocess import yolov5_decode, yolov8_decode
     from vision_platform.adapters.detector_pipeline import DetectorPipeline
     _need(params, "weights", "detector onnx")
@@ -104,14 +104,13 @@ def _det_onnx(params: Mapping):
         raise ConfigError(f"detector onnx 'yolo' phải 'v5'|'v8', got {ver!r}")
 
     size = int(params.get("model_size", 640))
-    # D-098: device=cuda → onnxruntime CUDAExecutionProvider (fallback CPU). OnnxDetector.setup tự lo DLL nvidia (K-088).
-    device = str(params.get("device", "cpu")).lower()
-    if device in ("cuda", "gpu"):
-        providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
-    elif device == "cpu":
-        providers = ["CPUExecutionProvider"]
-    else:
-        raise ConfigError(f"detector onnx 'device' phải 'cpu'|'cuda', got {device!r}")
+    # Capability-aware ONNX (F3.2/D-139): device đi qua resolve_device (đối xứng _det_pt) — hỗ trợ 'auto',
+    # FAIL-FAST CapabilityError khi 'cuda' mà máy KHÔNG CUDA (không fallback CPU âm thầm) + LOG device THẬT.
+    # OnnxDetector.setup tự lo DLL nvidia khi provider CUDA (K-088). 1 chính sách device chung mọi đường ONNX.
+    caps = probe_capabilities()
+    providers, dev = onnx_providers_for(params.get("device", "cpu"), caps)
+    print(f"[device] onnx yêu cầu={params.get('device', 'cpu')!r} → dùng={dev!r} "
+          f"(has_cuda={caps.has_cuda}, gpu={caps.gpu_name})", file=sys.stderr)
     inner = OnnxDetector(params["weights"], preprocess_fn=chw_float_normalize,
                          postprocess_fn=_post, providers=providers)
     return DetectorPipeline(inner, size, size)

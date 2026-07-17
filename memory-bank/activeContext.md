@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-18)
-**Cập nhật lúc:** 2026-07-18T13:00:00+07:00.
+**Cập nhật lúc:** 2026-07-18T15:00:00+07:00.
+**[✅ #438+#437 — Đánh giá kiến trúc CỰC SÂU (spec architecture-review) + TRIỂN KHAI F3.2 (hợp nhất device ONNX, D-139/C-024)]**
+- User: "đánh giá cực sâu tầng kiến trúc, cấp chuyên gia, base dùng chung CPU+GPU" → chọn Technical Design [HLD+LLD].
+- **#438 — Bản đánh giá (`architecture-review` design.md, get_diagnostics 0):** HLD (sơ đồ tầng/2 topology/luồng/concurrency/CPU↔GPU) + LLD (5 port, letterbox/NMS/switchover/stabilizer) + 7 trục findings phân hạng 🔴/🟡/✅ + bảng điểm. **KẾT LUẬN: lõi domain/kernel dual-use XUẤT SẮC (đổi CPU↔GPU/topology KHÔNG đụng lõi) → không viết lại;** khoảng trống ở RIM: 🔴 ARM chưa verify (K-001) · 🔴 throughput@fps (K-014) · 🔴 secret lộ (K-031) · 🟡 bất đối xứng capability-aware ONNX (F3.2) · 🟡 chưa batch-mux · 🟡 2 topology chưa hợp nhất · 🟡 observability/heartbeat default tắt.
+- **#437 — Triển khai essence-fix top-1 F3.2 (D-139/C-024)** — làm được ngay trên CPU: helper THUẦN `onnx_providers_for(requested,caps)` @adapters (dùng `resolve_device` @kernel) → HỢP NHẤT 1 chính sách device cho MỌI đường ONNX. `_det_onnx` (config) + `_build_detector` (web — TRƯỚC BỎ QUA `--device`→luôn CPU) nay honor device + `auto` + **fail-fast cuda-no-gpu** (đảo fallback-âm-thầm D-098) + LOG `[device]`.
+- **VERIFY:** `vp verify` **868/2** (860→868, +8 test onnx-device) · import-linter **6 kept/0 broken** · drift PASS · get_diagnostics 0. EMPIRIC web CPU: `--device auto` → log `[device] onnx yêu cầu='auto' → dùng='cpu' (has_cuda=False)`. CUDA runtime chờ máy GPU (test caps tiêm has_cuda=True → CUDA providers).
+- **Ghi sổ:** LOG #437(F3.2)+#438(đánh giá) · +D-139 +C-024 · INDEX #436→#438 · Σ315→317 (D139·C24) · Verify-Symbol onnx_providers_for (C8 33→34).
+- **Bước kế = CẦN USER chốt target (Phần E design.md, 9 câu):** (1) GPU target x86-64 hay Jetson/ARM? OS Linux/Windows? quy mô cam/viewer? (2) ưu tiên khắc phục kế: batch-mux GPU / profile fleet multi-process+UI / perf-harness drop@fps / observability production? (3) rotate secret K-031 chưa? Chọn → tôi suy ra requirements + tiếp tục triển khai từng bước.
+---
 **[✅ #436 — FIX bản chất "cực nhiều lỗi" = backoff retry + badge mất-kết-nối (D-138, client-JS, verify browser + 860/2)]**
 - User "duyệt theo khuyến nghị" → code fix backoff đã thiết kế #435 (design-first → build).
 - **Fix GỐC (D-138):** đổi chính sách retry (không ẩn lỗi — không ẩn được ở tầng app): `poll` 80ms→cap 2s · `statsLoop` 1s→cap 5s · `img.onerror` 500ms→cap 5s (×2 mỗi lỗi-liên-tiếp, reset khi thành công) + badge "⚠ mất kết nối — đang thử lại…" + poll-recovery chủ động `reloadStream()` (video hồi phục nhanh bám poll heartbeat). Chỉ sửa `_PAGE` JS, KHÔNG đụng server/transport.

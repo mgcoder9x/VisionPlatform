@@ -24,6 +24,25 @@ from typing import Callable, Optional, Sequence
 import numpy as np
 
 from vision_platform.kernel.inference_protocol import Detection
+from vision_platform.kernel.capabilities import MachineCapabilities, resolve_device
+
+
+def onnx_providers_for(requested_device: str, caps: MachineCapabilities) -> tuple[list[str], str]:
+    """(device yêu cầu, caps) → (danh sách onnxruntime providers, device đã resolve). HÀM THUẦN.
+
+    MỘT chính sách device duy nhất cho MỌI đường ONNX (config `_det_onnx` + web/CLI `_build_detector`) —
+    dùng `resolve_device` @kernel: `auto`→cuda/cpu theo caps; `cuda`/`cuda:N` fail-fast `CapabilityError`
+    nếu máy KHÔNG có CUDA (chống "tưởng GPU mà chạy CPU" âm thầm, đối xứng `_det_pt`); `cpu`→CPU.
+    Test tiêm `MachineCapabilities` giả → xác định không cần GPU. Việc PROBE thật + LOG device để nơi gọi
+    (composition root ở profiles) làm — helper này thuần, không I/O.
+
+    - dev resolve bắt đầu `"cuda"` → `["CUDAExecutionProvider","CPUExecutionProvider"]` (CPU fallback runtime của onnxruntime).
+    - còn lại (`"cpu"`) → `["CPUExecutionProvider"]`.
+    """
+    dev = resolve_device(requested_device, caps)
+    providers = (["CUDAExecutionProvider", "CPUExecutionProvider"] if dev.startswith("cuda")
+                 else ["CPUExecutionProvider"])
+    return providers, dev
 
 
 # Kiểu hàm DI (model-specific):

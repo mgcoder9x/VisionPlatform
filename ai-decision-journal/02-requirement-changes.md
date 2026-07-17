@@ -231,3 +231,11 @@ Trạng thái: ✅ (verify 819/2, #400).
 Vì sao (bản chất): `AppConfig`/`parse_app_config` BẮT BUỘC có mảng `[[pipelines]]` (`_require(isinstance(pipelines_raw, list), ...)`). Nhưng consumer của `[detection]` là `vision_web_app` — webcam→detect BESPOKE, KHÔNG theo mô hình pipelines. Nếu nhét vào `AppConfig` thì file config web phải mang `[[pipelines]]` GIẢ (vô nghĩa) mới parse được → sai bản chất + rác. Standalone loader (không đòi pipelines) tôn trọng đúng consumer, vẫn dùng chung parser `_parse_detection` nên KHÔNG drift validate.
 Ảnh hưởng: `[detection]` trong một file pipelines (`vision_slice_app --config`) hiện KHÔNG được `parse_app_config` đọc (bị bỏ qua như key lạ). Đây KHÔNG phải mất mát: cadence chỉ wire ở web app (slice_app dùng motion-gate qua Stage). Nếu sau này slice_app cần cadence → thêm field vào AppConfig + gọi `_parse_detection` (parser đã sẵn).
 Links: D-121, D-086.
+
+### C-024 — Đảo hành vi ONNX device: fallback-CPU-âm-thầm (D-098) → fail-fast + honor device đường web
+Trạng thái: ✅ (verify 868/2 + empiric, #437/D-139).
+Đổi so với trước:
+- **D-098** (cũ) quy định `_det_onnx` device=cuda → providers `[CUDA, CPU]` → onnxruntime **fallback CPU âm thầm** khi máy không CUDA. SANG (D-139): đi qua `resolve_device` → `cuda` trên máy không CUDA = **CapabilityError fail-fast** (không chạy CPU âm thầm). Cũng: `device` lạ trước raise `ConfigError` → nay `CapabilityError`.
+- Đường web/CLI `_build_detector` (nhánh onnx) trước **BỎ QUA `--device`** (luôn CPU) → nay **honor `--device`** qua cùng chính sách (hỗ trợ auto/cuda + log).
+Vì sao (bản chất): fallback-âm-thầm che giấu "tưởng GPU mà chạy CPU" — nguy hiểm cho vận hành 24/7 (mất hiệu năng ngầm, không ai biết). Fail-fast + log là hành vi ĐÚNG cho dual-use thương mại (đối xứng `_det_pt`). Default `cpu` KHÔNG đổi → tương thích ngược với mọi cấu hình hiện có; chỉ đổi ca `cuda`/`auto`/device-lạ.
+Ảnh hưởng test: `test_onnx_device_gpu.py` viết lại — `device=cuda` giờ cần caps có CUDA (tiêm) mới ra providers; cuda-no-gpu → CapabilityError (test mới). Ai dựa fallback-âm-thầm phải đổi sang `device=auto`.

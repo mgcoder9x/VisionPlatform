@@ -8154,3 +8154,43 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Test tự động KHÔNG phủ JS trong `_PAGE` string (verify bằng browser MCP empiric). `vp verify` 860/2 giữ (Python/test không đụng).
 
 **Đã verify:** browser MCP webcam THẬT — live 0 lỗi + badge ẩn; outage 12s → **24 lỗi** (vs ~68 no-backoff ≈ giảm ~2.7-3×) + badge hiện "⚠ mất kết nối…"; restart → badge tắt + overlay 200 health LIVE 4 box + img 640×480 phục hồi. get_diagnostics 0. `vp verify` **860 passed/2 skipped · lint 6 kept/0 broken · drift PASS**. · **Chưa verify:** khử-hẳn-lỗi cần WS (Non-Goal, chưa làm); hành vi dưới mạng chập chờn thật (chỉ mô phỏng stop/start server).
+
+### Entry #437 — 2026-07-18 — Triển khai F3.2 (từ architecture-review): hợp nhất chính sách device MỌI đường ONNX (D-139/C-024) — Kiro-Opus
+
+**Bối cảnh:** Sau bản đánh giá kiến trúc (design.md), user "không dừng ở tài liệu — làm tốt trước". Chọn essence-fix top-1 làm-được-trên-CPU: F3.2 (bất đối xứng capability-aware đường ONNX). Base dùng chung CPU (nay) + GPU (sau).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Helper THUẦN `onnx_providers_for(requested, caps)` @adapters (dùng `resolve_device` @kernel) → 1 chính sách device chung cho `_det_onnx` (config) + `_build_detector` (web/CLI). Chọn helper thay vì lặp logic 3 nơi (DRY = fix gốc bất đối xứng).
+- LOG `[device]` ở cả 2 đường onnx (đối xứng `_det_pt` D-073).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu (C-024):**
+- Đảo D-098: onnx cuda-no-gpu **fallback CPU âm thầm → fail-fast CapabilityError**. Đường web onnx trước **bỏ qua `--device` → nay honor**. Default cpu KHÔNG đổi (tương thích ngược).
+
+**3. Trade-off đã cân nhắc:**
+- Chỉ fix `_det_onnx` (đúng finding F3.2 văn bản) vs fix CẢ `_build_detector` (web, gap nặng hơn: onnx không GPU được) → fix CẢ HAI qua 1 helper: đúng bản chất "1 chính sách device", chi phí nhỏ (thêm probe startup), rủi ro thấp (additive default-cpu). Nếu chỉ fix 1 → vẫn còn bất đối xứng (đi ngược mục tiêu).
+- Fail-fast vs giữ fallback-âm-thầm → fail-fast: an toàn production (không chạy CPU tưởng GPU); giá = ai dựa fallback phải đổi `device=auto` (ghi C-024).
+
+**4. Điều bạn nên biết:**
+- Nhánh CUDA thật (providers CUDA khi có GPU) test bằng **caps tiêm** (has_cuda=True) — máy này no-GPU nên chạy CUDA runtime là **[chưa kiểm trên GPU thật]** (chờ máy GPU; `ensure_cuda_dll_path` K-088 lo DLL lúc đó).
+- `onnx_providers_for` thuần (caps tiêm) → test xác định no-GPU; probe + log để composition root (profiles) làm.
+
+**Đã verify:** `vp verify` **868 passed/2 skipped** (860→868, +8 test) · import-linter **6 kept/0 broken** (adapters→kernel hợp lệ) · drift PASS · get_diagnostics 4 file = 0. EMPIRIC web CPU port 8030: log `[device] onnx yêu cầu='auto' → dùng='cpu' (has_cuda=False, gpu=None)` (đường web onnx nay honor device + hỗ trợ auto + log — trước bỏ qua). Server đã dừng. · **Chưa verify:** hành vi CUDA runtime trên GPU thật (máy no-GPU; test bằng caps tiêm).
+
+### Entry #438 — 2026-07-18 — Mở spec `architecture-review` (design-first): bản đánh giá kiến trúc CỰC SÂU (ghi sổ deliverable) — Kiro-Opus
+
+**Bối cảnh:** User yêu cầu "đánh giá cực sâu tầng kiến trúc, cấp chuyên gia, base dùng chung CPU+GPU". Chọn Technical Design [HLD+LLD]. Ghi sổ deliverable design.md (tạo đầu chuỗi phiên này, ghi bổ sung sau #437 để hoàn tất audit-trail; #437 F3.2 là hệ quả triển khai của chính bản đánh giá này).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Đóng khung "đánh giá kiến trúc" thành spec design-first (`architecture-review`) — vì đánh giá LÀ tài liệu phân tích-thiết kế; requirements suy ra sau (Phần E design.md, 9 câu hỏi chốt).
+- Grounded tuyệt đối: mọi nhận định gắn nhãn ✅[đã đọc code]/🟡[chưa kiểm]/🔵[suy đoán] + phân hạng 🔴/🟡/✅.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (tài liệu đánh giá thuần).
+
+**3. Trade-off đã cân nhắc:**
+- Dừng-ở-tài-liệu vs tiếp-triển-khai → user chốt "không dừng ở tài liệu" → triển khai F3.2 ngay (#437). Các finding khác (🔴 ARM/throughput/secret · 🟡 batch-mux/topology/observability) chờ user chốt target (Phần E) để đưa vào requirements.
+
+**4. Điều bạn nên biết:**
+- design.md kết luận: **lõi domain/kernel dual-use xuất sắc (đổi CPU↔GPU/topology KHÔNG đụng lõi)**; khoảng trống ở RIM, KHÔNG phải tim → không cần viết lại.
+- Toàn bộ nhận định code trong design.md là **đọc-tĩnh**; con số 860/2 là user-report tại thời điểm đó (tôi đã tự chạy #436 = xác nhận).
+
+**Đã verify:** get_diagnostics(design.md)=0 (đúng Kiro Spec Format). Grounded từ code thật (domain/kernel/runtime/application/adapters/profiles + pyproject.toml 6 contracts + 04-things-to-know.md). · **Chưa verify:** các nhận định code chưa chạy runtime từng cái (đọc-tĩnh, đúng bản chất của một bản đánh giá); ARM/throughput/CUDA-runtime là khoảng trống đã nêu.

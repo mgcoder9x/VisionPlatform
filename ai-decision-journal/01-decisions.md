@@ -1581,3 +1581,16 @@ Quyết định + lý do:
 Trade-off: hồi phục stream chậm hơn tối đa = cap backoff (~2-5s) nếu poll cũng đang backoff — nhưng poll-recovery chủ động gọi reloadStream nên thực tế nhanh. KHÔNG khử 100% lỗi console (trình duyệt vẫn log mỗi fetch fail).
 **VERIFY (số THẬT browser MCP, trung thực):** outage 12s WITH backoff = **24 lỗi** vs no-backoff (#435 đo 17 lỗi/3s ≈ 68/12s) → giảm **~2.7-3×** (KHÔNG phải ~25× ước lượng ban đầu — connection-refused không fail tức thì + vài bước backoff đầu vẫn nhanh; badge UX là lợi ích rõ hơn). Live 0 lỗi + badge ẩn; outage → badge hiện; restart → badge tắt + health LIVE + img 640×480 phục hồi. `vp verify` 860/2·lint 6/0·drift PASS.
 Links: K-119, #419 (img reconnect gốc), #415 (poll self-reschedule gốc), WebSocket = follow-on nếu cần multi-viewer.
+
+### D-139 — 2026-07-18 — Hợp nhất chính sách device cho MỌI đường ONNX (F3.2 từ architecture-review) qua resolve_device
+Status: ✅ (code + TDD 868/2 + verify empiric web CPU + import-linter 6/0)
+Scope: `adapters/onnx_detector.py` (+helper `onnx_providers_for`) · `profiles/pipeline_factory.py::_det_onnx` · `profiles/vision_demo_app.py::_build_detector` (nhánh onnx) · test `test_onnx_device_gpu.py`
+Nguồn: LOG Entry #437 · architecture-review design.md Finding F3.2 · đọc code thật + resolve_device @kernel
+Verify-Symbol: vision-platform/src/vision_platform/adapters/onnx_detector.py::onnx_providers_for
+Quyết định + lý do (bản chất, không vá ngọn):
+- **Vấn đề (grounded từ đánh giá kiến trúc):** 2 đường ONNX xử lý device KHÁC nhau: `_det_onnx` (config) map cpu/cuda→providers nhưng KHÔNG `auto`/probe/log + cuda-no-gpu **fallback CPU âm thầm**; `_build_detector` (web/CLI) **BỎ QUA `--device` hoàn toàn** → onnx luôn CPU (không GPU được kể cả máy GPU). Bất đối xứng với `_det_pt` (đã capability-aware D-073).
+- **Fix GỐC:** helper THUẦN `onnx_providers_for(requested, caps)` @adapters dùng `resolve_device` @kernel → (providers, resolved_dev). Cả 2 đường onnx đi qua helper + `probe_capabilities()` + **LOG `[device]`** (đối xứng `_det_pt`). MỘT chính sách device duy nhất cho mọi đường ONNX (DRY, hết bất đối xứng).
+- Hỗ trợ `auto` (→cuda/cpu theo máy); `cuda` mà máy không CUDA → **fail-fast CapabilityError** (đảo fallback-âm-thầm của D-098 — xem C-024); LOG device THẬT (chống "tưởng GPU mà chạy CPU").
+Trade-off: thêm 1 helper + probe ở đường web (chi phí startup không đáng kể) — đổi lấy tính dual-use ĐÚNG (web onnx nay GPU được trên máy GPU) + fail-fast an toàn production. Default `cpu` KHÔNG đổi hành vi.
+**VERIFY:** `vp verify` **868 passed/2 skipped** (860→868, +8 test onnx-device: helper thuần + auto + fail-fast + wiring) · import-linter **6 kept/0 broken** (adapters→kernel hợp lệ) · drift PASS · get_diagnostics 0. EMPIRIC web CPU: `--device auto` → log `[device] onnx yêu cầu='auto' → dùng='cpu' (has_cuda=False)`. Nhánh có-CUDA test bằng caps tiêm (has_cuda=True → CUDA providers); chạy CUDA thật chờ máy GPU ([chưa kiểm runtime GPU]).
+Links: F3.2 (architecture-review), D-073/D-072 (capability-aware gốc), D-098 (fallback CPU — nay đảo, C-024), K-088 (cuda DLL path), resolve_device @kernel/capabilities.py.
