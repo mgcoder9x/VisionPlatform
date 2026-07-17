@@ -8070,3 +8070,24 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Chỉ thêm file tools/ (ngoài src + tests) → baseline test/lint KHÔNG đổi.
 
 **Đã verify:** đọc `OverlayStateStore.snapshot` (dưới `self._lock`, trả immutable) + `vision_web_app` globals (dưới `_lock`); empiric `tools.web_concurrent_probe --threads 12 --duration 5` port 8025 (waitress+auth+video) → **2844/2844 request 200, 0 non-200, ~564 req/s, không crash**; get_diagnostics tool = 0. Baseline 860/2 giữ (chỉ thêm tools/). · **Chưa verify:** soak nhiều-giờ / >12 client / đa-máy (dùng lại probe khi cần).
+
+### Entry #433 — 2026-07-18 — Reconcile drift đa-máy (#422→#432) + dọn/viết lại end.md handoff frontier #432 + push — Kiro-Opus
+
+**Bối cảnh:** Máy `k.nguyen.manh.toan`. Phiên bắt đầu ở #421/#422 (đo perf thread, K-115); GIỮA phiên workspace auto-sync lên HEAD `20934c7` (máy `toann` đã đẩy #423-#432) → frontier nhảy #422→#432. User yêu cầu "viết end.md handoff + push hết".
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Phát hiện drift đa-máy qua `vp check` FAIL (C1 dup #423): bản append #422/#423 của tôi dựa trên frontier CŨ. GHI ĐÈ (git checkout) 2 file lạc của chính tôi (`AI-IMPLEMENTATION-LOG.md` dup #423 + `end.md` bản #422 stale) để khôi phục frontier #432 sạch → `vp check` PASS lại. KHÔNG mất việc: perf #422/K-115 ĐÃ nằm trong commit `b3ee82c` của máy toann.
+- Viết lại `end.md` (đang là transcript FUXA rác — máy khác chưa dọn) thành handoff SẠCH theo frontier THẬT #432.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Handoff nhắm frontier #422 (hiểu-biết đầu phiên) → phải đổi sang **#432** sau khi phát hiện frontier đã tiến (đọc activeContext #425-#432 + git log).
+
+**3. Trade-off đã cân nhắc:**
+- `git checkout --` (discard edit lạc của tôi) vs giữ/merge tay → checkout: 2 edit đó dựa frontier cũ (dup entry + handoff stale), nội dung quyết định thật đã ở LOG/journal frontier #432 (không mất). Discard edit-lạc-của-chính-mình = an toàn (không đụng lịch sử chung).
+
+**4. Điều bạn nên biết:**
+- **K-098 tái diễn:** frontier có thể NHẢY giữa phiên khi đa máy đẩy chéo + workspace auto-sync → LUÔN `vp check` lại khi nghi ngờ, đừng append lên bản ghi cũ. Đây là minh hoạ sống của luật §0.
+- Frontier #432 đã committed + pushed sẵn (HEAD==origin `20934c7`); entry này + end.md là thay đổi DUY NHẤT phiên này cần commit+push.
+- Baseline 860/2 giữ (chỉ đổi doc: end.md + LOG/INDEX/activeContext).
+
+**Đã verify:** `git checkout` khôi phục sạch → `vp check` PASS (#432 trước khi thêm entry này). · **Chưa verify:** kết quả `git push` entry #433 (thực hiện ngay sau commit — báo kết quả thật).

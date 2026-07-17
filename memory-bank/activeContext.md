@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-18)
-**Cập nhật lúc:** 2026-07-18T05:00:00+07:00.
+**Cập nhật lúc:** 2026-07-18T10:00:00+07:00.
+**[✅ #433 — RECONCILE drift đa-máy (#422→#432) + dọn/viết lại end.md handoff frontier #432 + push]**
+- Máy `k.nguyen.manh.toan`. Phiên bắt đầu ở #421/#422 (đo perf thread K-115). GIỮA phiên workspace auto-sync lên HEAD `20934c7` (máy `toann` đã đẩy #423-#432) → **frontier nhảy #422→#432**. `vp check` FAIL (C1 dup #423 do tôi append lên bản ghi cũ) → phát hiện drift.
+- **Xử lý:** `git checkout -- AI-IMPLEMENTATION-LOG.md end.md` dọn 2 edit lạc của chính tôi (dup #423 + end.md bản #422 stale). **KHÔNG mất việc:** perf #422/K-115 ĐÃ nằm trong commit `b3ee82c` (máy toann gộp #415-422). `vp check` PASS lại (#432/Σ313).
+- **Viết lại end.md** (đang là transcript FUXA rác — máy khác chưa dọn) → handoff SẠCH theo frontier THẬT #432 (đủ overlay #415-422 + web-production-hardening #425-428/432 + K-116/Wave-C/RTSP-VPN + config production + bài học K-098).
+- **Ghi sổ:** LOG #433 · INDEX #432→#433 (Σ313 giữ, không +D/C/T/K) · block này. Baseline 860/2 giữ (chỉ đổi doc).
+- **BÀI HỌC (K-098 tái diễn):** frontier NHẢY giữa phiên khi đa-máy đẩy chéo + workspace auto-sync → LUÔN `vp check` lại khi nghi ngờ, đừng append lên bản ghi cũ (gây dup). Minh hoạ sống của luật §0.
+- **Bước kế = CẦN USER (2 đường thật, #431):** (A) bật Allow-LAN trong VPN → verify RTSP camera `.106`; HOẶC (B) nêu nghiệp vụ cụ thể (đếm/vạch/zone trên web) → mở Wave C/D design-first. Ngoài ra là speculative.
+---
 **[✅ #432 — VERIFY thread-safety đa-client web app dưới waitress (static + empiric) + tool probe]**
 - "Mở web phát hiện lỗi" tầng CHƯA kiểm: Wave 1 waitress threads=8 → nhiều client đồng thời truy cập global `_jpeg/_store/_lock`. Review + verify (không suy đoán).
 - **Static (đọc code):** shared state (`_jpeg/_raw/_raw_ver/_legacy_boxes/_vframes/_dframes/_last_read_ns`) đều dưới global `_lock` (writer 2 loop + reader /stream,/stats,/boxes). `/overlay` đọc `OverlayStateStore.snapshot()` = **dưới `self._lock`, trả reference immutable đã commit**; mọi mutation dưới cùng lock + `_commit`→`_build` thay snapshot immutable MỚI → **lock + immutable-snapshot-swap** → reader song song luôn thấy snapshot hoàn chỉnh (không torn). `_store` gán 1 lần trước serve.
