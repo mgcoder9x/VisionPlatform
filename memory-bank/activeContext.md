@@ -1,7 +1,13 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-18)
-**Cập nhật lúc:** 2026-07-18T15:00:00+07:00.
+**Cập nhật lúc:** 2026-07-18T16:00:00+07:00.
+**[✅ #439 — Trả lời 2 câu kiến trúc: GPU-target=config? + tiền xử lý ảnh đã thiết kế chưa (+D-140 bản đồ điểm-tiêm, YAGNI)]**
+- **GPU target (trả lời):** CPU↔x86-NVIDIA-rời = THUẦN cấu hình (`--device auto` sau D-139) + đổi gói (`onnxruntime-gpu`, `ensure_cuda_dll_path` K-088) — KHÔNG đổi kiến trúc (F3.1). Quan trọng KHÔNG vì kiến trúc mà vì ĐẦU TƯ: **Jetson/ARM** cần verify HW atomicity (K-001 🔴, "không chỉ cấu hình"); **batch-mux** chỉ đáng nếu GPU là đích.
+- **Tiền xử lý ảnh (trả lời, D-140):** T1 model-normalize (`preprocess_fn` DI ✅) + T2 letterbox (`resize_fn` DI ✅) ĐÃ CÓ. T3 xử-lý-chung-trước-detect: pipeline/stage HỖ TRỢ (`MediaPacket→MediaPacket`, tiền lệ brightness/dark_filter/motion_gate) nhưng thiếu `MediaPacket.with_media()` + chưa `PreprocessStage`; web `_detect_loop` gọi detect trực tiếp, chưa hook. → HOÃN xây (YAGNI); khi cần: +with_media CoW · +PreprocessStage+registry · +web frame_transform (additive, D-140 chỉ rõ).
+- **Ghi sổ:** LOG #439 · +D-140 (🔵 defer) · INDEX #438→#439 · Σ317→318 (D140). 0 đổi code → baseline 868/2 giữ.
+- **Bước kế = CẦN USER chốt (Phần E design.md):** GPU target (x86/Jetson) + OS + ưu tiên khắc phục kế (batch-mux / fleet multi-process+UI / perf-harness drop@fps / observability) + rotate secret K-031. Chọn → suy ra requirements + triển khai tiếp.
+---
 **[✅ #438+#437 — Đánh giá kiến trúc CỰC SÂU (spec architecture-review) + TRIỂN KHAI F3.2 (hợp nhất device ONNX, D-139/C-024)]**
 - User: "đánh giá cực sâu tầng kiến trúc, cấp chuyên gia, base dùng chung CPU+GPU" → chọn Technical Design [HLD+LLD].
 - **#438 — Bản đánh giá (`architecture-review` design.md, get_diagnostics 0):** HLD (sơ đồ tầng/2 topology/luồng/concurrency/CPU↔GPU) + LLD (5 port, letterbox/NMS/switchover/stabilizer) + 7 trục findings phân hạng 🔴/🟡/✅ + bảng điểm. **KẾT LUẬN: lõi domain/kernel dual-use XUẤT SẮC (đổi CPU↔GPU/topology KHÔNG đụng lõi) → không viết lại;** khoảng trống ở RIM: 🔴 ARM chưa verify (K-001) · 🔴 throughput@fps (K-014) · 🔴 secret lộ (K-031) · 🟡 bất đối xứng capability-aware ONNX (F3.2) · 🟡 chưa batch-mux · 🟡 2 topology chưa hợp nhất · 🟡 observability/heartbeat default tắt.

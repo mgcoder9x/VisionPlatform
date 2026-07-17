@@ -1594,3 +1594,19 @@ Quyết định + lý do (bản chất, không vá ngọn):
 Trade-off: thêm 1 helper + probe ở đường web (chi phí startup không đáng kể) — đổi lấy tính dual-use ĐÚNG (web onnx nay GPU được trên máy GPU) + fail-fast an toàn production. Default `cpu` KHÔNG đổi hành vi.
 **VERIFY:** `vp verify` **868 passed/2 skipped** (860→868, +8 test onnx-device: helper thuần + auto + fail-fast + wiring) · import-linter **6 kept/0 broken** (adapters→kernel hợp lệ) · drift PASS · get_diagnostics 0. EMPIRIC web CPU: `--device auto` → log `[device] onnx yêu cầu='auto' → dùng='cpu' (has_cuda=False)`. Nhánh có-CUDA test bằng caps tiêm (has_cuda=True → CUDA providers); chạy CUDA thật chờ máy GPU ([chưa kiểm runtime GPU]).
 Links: F3.2 (architecture-review), D-073/D-072 (capability-aware gốc), D-098 (fallback CPU — nay đảo, C-024), K-088 (cuda DLL path), resolve_device @kernel/capabilities.py.
+
+### D-140 — 2026-07-18 — Bản đồ điểm-tiêm tiền xử lý ảnh + quyết định HOÃN xây stage preprocess-chung (YAGNI, grounded)
+Status: 🔵 quyết định-thiết-kế (grounded từ code, KHÔNG code — chờ nhu cầu tiền-xử-lý cụ thể)
+Scope: câu hỏi kiến trúc user "có bước tiền xử lý ảnh không? thêm sau thế nào? thiết kế đã có chưa?"
+Nguồn: LOG Entry #439 · đọc code thật: `adapters/detector_pipeline.py`, `adapters/onnx_detector.py` (preprocess_fn), `runtime/stages/*` (brightness/dark_filter/motion_gate/detect), `kernel/media_packet.py`
+Nội dung (grounded — 3 tầng tiền xử lý + mức "đã có"):
+- **T1 tiền xử lý theo MODEL (normalize/layout HWC→NCHW÷255/mean-std/BGR-RGB): ✅ ĐÃ CÓ** = `preprocess_fn` DI trong `OnnxDetector` (`chw_float_normalize`). Đổi model layout = tiêm hàm khác, không sửa adapter.
+- **T2 hình học (resize+letterbox pad): ✅ ĐÃ CÓ** = `DetectorPipeline` + `resize_fn` DI (numpy nearest hiện tại; đổi cv2 bilinear = 1 hàm, toạ độ vẫn đúng nhờ `LetterboxTransform`).
+- **T3 xử-lý-ảnh-CHUNG trước detect (denoise/CLAHE/cân-sáng/cân-bằng-trắng/crop-ROI/undistort):**
+  - Đường **pipeline/stage** (config `vision_slice_app`): kiến trúc ĐÃ HỖ TRỢ (mỗi stage `MediaPacket→MediaPacket`; tiền lệ `brightness_stage`/`dark_filter_stage`/`motion_gate_stage` đọc/gate frame). Thêm `PreprocessStage` (biến-đổi-frame) đặt TRƯỚC `detect` = đúng chỗ. **2 khoảng trống nhỏ:** (a) `MediaPacket` chỉ có CoW `with_artifact/with_metadata`, **CHƯA có `with_media()`** thay frame (phải `dataclasses.replace(packet, media_ref=InMemoryArrayRef.from_owned_array(new))`); (b) chưa có `PreprocessStage` cụ thể + đăng ký registry.
+  - Đường **web app** (`vision_web_app._detect_loop`): gọi `detector.detect(_raw)` TRỰC TIẾP → **CHƯA có hook tiền xử lý**; thêm sau cần tiêm `frame_transform: Callable[[np.ndarray],np.ndarray]` trước detect.
+Quyết định + lý do:
+- **HOÃN xây `PreprocessStage`/`with_media`/web-hook cho tới khi có nhu cầu tiền-xử-lý CỤ THỂ** (YAGNI, tiền lệ D-137 Wave C). Lý do bản chất: xây điểm-tiêm rỗng khi chưa biết phép biến đổi thật = trừu-tượng-hoá-non (interface nên do use-case định hình). T1+T2 đã đủ cho detect hiện tại.
+- KHI có nhu cầu: (1) thêm `MediaPacket.with_media(ref)` (CoW first-class, đối xứng with_artifact); (2) `PreprocessStage(transform_fn)` @runtime/stages + đăng ký `pipeline_factory` registry; (3) web: tiêm `frame_transform` vào `_detect_loop` (trước `detector.detect`). Tất cả ADDITIVE, không đổi bản chất.
+Trade-off: xây-sẵn-điểm-tiêm (base "ready" ngay) vs YAGNI-chờ-nhu-cầu → chọn YAGNI (điểm-tiêm rỗng = nợ + dễ sai hình dạng); bù bằng bản-đồ-thiết-kế NÀY (D-140) → khi cần biết CHÍNH XÁC làm ở đâu, 0 phải đánh giá lại.
+Links: F3 (architecture-review preprocess), D-139 (onnx device unify), D-137 (YAGNI defer tiền lệ), K-028 (letterbox/nms domain), MediaPacket CoW.

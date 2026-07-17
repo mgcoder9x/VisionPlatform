@@ -8194,3 +8194,21 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Toàn bộ nhận định code trong design.md là **đọc-tĩnh**; con số 860/2 là user-report tại thời điểm đó (tôi đã tự chạy #436 = xác nhận).
 
 **Đã verify:** get_diagnostics(design.md)=0 (đúng Kiro Spec Format). Grounded từ code thật (domain/kernel/runtime/application/adapters/profiles + pyproject.toml 6 contracts + 04-things-to-know.md). · **Chưa verify:** các nhận định code chưa chạy runtime từng cái (đọc-tĩnh, đúng bản chất của một bản đánh giá); ARM/throughput/CUDA-runtime là khoảng trống đã nêu.
+
+### Entry #439 — 2026-07-18 — Trả lời 2 câu kiến trúc (GPU-target = config? + tiền xử lý ảnh đã thiết kế chưa) + bản đồ điểm-tiêm preprocess (D-140) — Kiro-Opus
+
+**Bối cảnh:** User hỏi (trong ngữ cảnh Phần E architecture-review): (1) GPU target thực sự quan trọng? "rời" thì sao? cấu hình được không? (2) có bước tiền xử lý ảnh không? thêm sau thế nào? thiết kế đã có chưa? Trả lời grounded (đọc code, không bịa).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Ghi bản đồ điểm-tiêm tiền xử lý (D-140) vào journal (nơi lưu xuyên suốt user yêu cầu) + HOÃN xây stage preprocess-chung (YAGNI, chờ nhu cầu cụ thể). 0 đổi code.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không.
+
+**3. Trade-off đã cân nhắc:**
+- Xây-sẵn điểm-tiêm preprocess (base "ready") vs YAGNI-chờ-nhu-cầu → YAGNI + bản-đồ-thiết-kế (D-140) để khi cần biết chính xác làm ở đâu. Điểm-tiêm rỗng = trừu-tượng-hoá-non (interface nên do use-case định hình).
+
+**4. Điều bạn nên biết (grounded, trả lời user):**
+- **GPU target:** CPU↔x86-NVIDIA-rời = THUẦN cấu hình (`--device auto`, sau D-139) + đổi gói (`onnxruntime-gpu`, `ensure_cuda_dll_path` K-088) — KHÔNG đổi kiến trúc (F3.1). Câu hỏi quan trọng KHÔNG vì kiến trúc mà vì ĐẦU TƯ: **Jetson/ARM** cần verify HW atomicity SHM (K-001 🔴, "không chỉ cấu hình"); **batch-mux** chỉ đáng xây nếu GPU là đích.
+- **Tiền xử lý ảnh (3 tầng):** T1 model-normalize `preprocess_fn` DI ✅; T2 letterbox `resize_fn` DI ✅; T3 xử-lý-chung-trước-detect: pipeline/stage-path có KIẾN TRÚC-chỗ (MediaPacket→MediaPacket, tiền lệ brightness/dark_filter/motion_gate) nhưng thiếu `with_media()` + chưa có PreprocessStage; web-path chưa có hook. Thêm sau khả thi/additive (D-140 chỉ rõ 3 bước).
+
+**Đã verify:** đọc code thật (`detector_pipeline.py`, `onnx_detector.py`, `stages/{detect,brightness,dark_filter}`, `media_packet.py`) — mọi nhận định có path. 0 đổi code → baseline 868/2 giữ. · **Chưa verify:** hiệu quả các phép tiền-xử-lý cụ thể (chưa có yêu cầu → chưa xây, YAGNI).
