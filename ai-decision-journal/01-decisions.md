@@ -1569,3 +1569,15 @@ Quyết định: HOÃN Wave C (hợp nhất `domain/tracker` làm 1 nguồn cho 
 - Cái mất (chấp nhận): tạm còn 2 tracker phân kỳ (nợ bảo trì đã ghi) — vô hại khi 2 path riêng.
 - Đổi lại: không đưa rủi ro vào hệ đã verify; giữ sức cho việc có giá trị thật.
 Đóng khi: user nêu nghiệp vụ cụ thể cần track chung trên 1 path (đếm/vạch/zone/tốc-độ trên web overlay) → MỞ Wave C design-first (interface shaped by nghiệp vụ đó) → TDD giữ analytics+display xanh từng bước. Cho tới đó: KHÔNG tự ý refactor.
+
+### D-138 — 2026-07-18 — Fix bản chất "cực nhiều lỗi" = backoff retry (poll/stats/img) + badge mất-kết-nối (client-JS, KHÔNG đổi transport)
+Status: ✅ (code + verify browser empiric + vp verify 860/2)
+Scope: `profiles/vision_web_app.py` `_PAGE` JS (client) — poll/statsLoop/img-reconnect + badge. KHÔNG đụng server/endpoint/layer.
+Nguồn: LOG Entry #436 · K-119 (root-cause flood) · browser MCP đo trước/sau
+Quyết định + lý do:
+- **Gốc flood (K-119):** lúc server outage, retry cố định (poll 80ms · stats 1s · img.onerror 500ms) bắn liên tục → mỗi fetch fail = 1 lỗi console. Fix ĐÚNG CHỖ = **đổi chính sách retry** (không ẩn lỗi — không ẩn được ở tầng app).
+- **Backoff:** poll 80ms→cap 2s; stats 1s→cap 5s; img 500ms→cap 5s (×2 mỗi lần lỗi liên tiếp; reset về base khi thành công). + badge "⚠ mất kết nối — đang thử lại…" (UX thương mại rõ). + poll hồi phục → `reloadStream()` ngay (video bám poll heartbeat, không chờ backoff img).
+- **KHÔNG chọn WebSocket:** khử triệt để hơn nhưng refactor transport lớn (Non-Goal #419); backoff = client-JS additive, đảo được, rủi ro cực thấp.
+Trade-off: hồi phục stream chậm hơn tối đa = cap backoff (~2-5s) nếu poll cũng đang backoff — nhưng poll-recovery chủ động gọi reloadStream nên thực tế nhanh. KHÔNG khử 100% lỗi console (trình duyệt vẫn log mỗi fetch fail).
+**VERIFY (số THẬT browser MCP, trung thực):** outage 12s WITH backoff = **24 lỗi** vs no-backoff (#435 đo 17 lỗi/3s ≈ 68/12s) → giảm **~2.7-3×** (KHÔNG phải ~25× ước lượng ban đầu — connection-refused không fail tức thì + vài bước backoff đầu vẫn nhanh; badge UX là lợi ích rõ hơn). Live 0 lỗi + badge ẩn; outage → badge hiện; restart → badge tắt + health LIVE + img 640×480 phục hồi. `vp verify` 860/2·lint 6/0·drift PASS.
+Links: K-119, #419 (img reconnect gốc), #415 (poll self-reschedule gốc), WebSocket = follow-on nếu cần multi-viewer.

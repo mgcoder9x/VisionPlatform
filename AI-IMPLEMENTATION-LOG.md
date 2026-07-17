@@ -8133,3 +8133,24 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Item setup: venv máy này chưa cài `web-prod` (waitress) → dùng `--server dev` (browser-side giống hệt).
 
 **Đã verify:** browser MCP webcam THẬT — live 0 lỗi + stress (visibility reconnect #419, resize realign #418, DOM 0-delta) + outage flood tái hiện (17→51 lỗi) + restart-recovery empiric (probe 10/10, health LIVE, img 640×480 phục hồi); code `_PAGE` poll finally-reschedule + img.onerror (đọc source). Server đã DỪNG. 0 đổi code → baseline 860/2 giữ. · **Chưa verify:** khử-hẳn console-noise cần WS transport (chưa làm — Non-Goal); RTSP (chờ VPN K-117).
+
+### Entry #436 — 2026-07-18 — Fix bản chất "cực nhiều lỗi" = backoff retry + badge mất-kết-nối (client-JS, verify browser + 860/2) — Kiro-Opus
+
+**Bối cảnh:** User lặp "cực nhiều lỗi" (đã root-cause K-119 = flood lúc server outage). User "duyệt theo khuyến nghị" → triển khai fix backoff đã thiết kế (design-first #435 → code #436).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Fix GỐC = đổi chính sách retry (backoff poll/stats/img) thay vì đổi transport (WS) — client-JS additive, rủi ro thấp, đảo được (D-138).
+- Thêm badge "mất kết nối — đang thử lại…" (UX thương mại) + poll-recovery chủ động `reloadStream()` (video hồi phục nhanh bám poll heartbeat, không chờ backoff img).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Ước lượng ban đầu "giảm ~25×" (#435 design) → thực đo **~2.7-3×** (24 lỗi/12s vs ~68 no-backoff) — SỬA TRUNG THỰC: connection-refused không fail tức thì + vài bước backoff đầu vẫn nhanh. Badge UX là lợi ích rõ hơn con số.
+
+**3. Trade-off đã cân nhắc:**
+- Backoff (client-JS, ~3× ít lỗi + badge) vs WebSocket (khử triệt để, refactor transport lớn) → chọn backoff: đạt phần lớn lợi ích rủi ro cực thấp; WS = Non-Goal (#419), follow-on nếu cần multi-viewer.
+- Cap backoff (poll 2s/stats 5s/img 5s): hồi phục chậm hơn tối đa = cap NẾU không có poll-recovery-hook; đã thêm hook poll-success→reloadStream nên thực tế nhanh.
+
+**4. Điều bạn nên biết:**
+- KHÔNG khử 100% lỗi console (trình duyệt tự log mỗi fetch-fail — cả WS cũng log mỗi reconnect). Mục tiêu = giảm tối đa + UX rõ.
+- Test tự động KHÔNG phủ JS trong `_PAGE` string (verify bằng browser MCP empiric). `vp verify` 860/2 giữ (Python/test không đụng).
+
+**Đã verify:** browser MCP webcam THẬT — live 0 lỗi + badge ẩn; outage 12s → **24 lỗi** (vs ~68 no-backoff ≈ giảm ~2.7-3×) + badge hiện "⚠ mất kết nối…"; restart → badge tắt + overlay 200 health LIVE 4 box + img 640×480 phục hồi. get_diagnostics 0. `vp verify` **860 passed/2 skipped · lint 6 kept/0 broken · drift PASS**. · **Chưa verify:** khử-hẳn-lỗi cần WS (Non-Goal, chưa làm); hành vi dưới mạng chập chờn thật (chỉ mô phỏng stop/start server).

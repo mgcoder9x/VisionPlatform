@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-18)
-**Cập nhật lúc:** 2026-07-18T12:00:00+07:00.
+**Cập nhật lúc:** 2026-07-18T13:00:00+07:00.
+**[✅ #436 — FIX bản chất "cực nhiều lỗi" = backoff retry + badge mất-kết-nối (D-138, client-JS, verify browser + 860/2)]**
+- User "duyệt theo khuyến nghị" → code fix backoff đã thiết kế #435 (design-first → build).
+- **Fix GỐC (D-138):** đổi chính sách retry (không ẩn lỗi — không ẩn được ở tầng app): `poll` 80ms→cap 2s · `statsLoop` 1s→cap 5s · `img.onerror` 500ms→cap 5s (×2 mỗi lỗi-liên-tiếp, reset khi thành công) + badge "⚠ mất kết nối — đang thử lại…" + poll-recovery chủ động `reloadStream()` (video hồi phục nhanh bám poll heartbeat). Chỉ sửa `_PAGE` JS, KHÔNG đụng server/transport.
+- **VERIFY browser MCP (số THẬT, trung thực):** live 0 lỗi + badge ẩn; outage 12s → **24 lỗi** vs ~68 no-backoff (#435) = giảm **~2.7-3×** (KHÔNG phải ~25× ước lượng ban đầu — connection-refused không fail tức thì; **badge UX là lợi ích rõ hơn con số**); restart → badge tắt + overlay 200 health LIVE 4 box + img 640×480 phục hồi. `vp verify` **860/2·lint 6/0·drift PASS**.
+- **KHÔNG chọn WebSocket:** khử triệt để hơn nhưng refactor transport lớn (Non-Goal #419); backoff = additive rủi ro thấp, đảo được. KHÔNG khử 100% lỗi (trình duyệt tự log mỗi fetch-fail — cả WS cũng vậy).
+- **Ghi sổ:** LOG #436 · +D-138 · INDEX #435→#436 · Σ314→315 (D138). Server đã DỪNG.
+- **Bước kế = CẦN USER (2 đường thật, #431):** (A) bật Allow-LAN VPN → verify RTSP camera `.106`; (B) nêu nghiệp vụ cụ thể → Wave C/D; (C) nếu cần khử-HẲN console-noise → mở spec WebSocket transport (design-first).
+---
 **[✅ #435 — ROOT-CAUSE "cực nhiều lỗi" browser = console flood lúc server restart (transient, app self-heal) + verify stress (+K-119)]**
 - User lặp "mở web browser phát hiện cực nhiều lỗi". #434 happy-path 0 lỗi → soi SÂU/đối kháng + tìm BẢN CHẤT.
 - **Bản chất "cực nhiều lỗi" (tái hiện + đo):** khi server Python DỪNG/restart (thường lúc dev/đổi máy/crash) mà tab đang mở → console flood `ERR_CONNECTION_REFUSED` (poll 80ms thất bại tích luỹ: dừng server → 17→51 lỗi). **Trình duyệt tự log request mạng thất bại — app JS KHÔNG chặn được**; transient/cosmetic, KHÔNG phải defect logic.

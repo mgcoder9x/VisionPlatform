@@ -70,6 +70,7 @@ _PAGE = """<!doctype html><html><head><meta charset="utf-8"><title>Vision Platfo
 <body><h3>Vision Platform — video + overlay (freshness/lease, fix flicker)</h3>
 <div id="wrap"><img id="v" src="/stream"><canvas id="c"></canvas></div>
 <p id="s"></p>
+<div id="conn" style="display:none;position:fixed;top:8px;right:8px;background:#a00;color:#fff;padding:6px 10px;border-radius:4px;font:12px sans-serif;z-index:9">⚠ mất kết nối — đang thử lại…</div>
 <script>
 const img=document.getElementById('v'),cv=document.getElementById('c'),ctx=cv.getContext('2d');
 // KIẾN TRÚC: TÁCH poll (dữ liệu) ⊥ render (vẽ). poll SELF-RESCHEDULING (tối đa 1 fetch in-flight →
@@ -80,11 +81,15 @@ let procEpoch=null, srcEpoch=null; const retired=new Set();
 const boxes=new Map();  // displayId -> {rev, deadline(perf.now ms), b, updatedAt(perf.now ms)}
 function resize(){ if(cv.width!==img.clientWidth||cv.height!==img.clientHeight){cv.width=img.clientWidth;cv.height=img.clientHeight;} }
 const clamp01=(v)=>v<0?0:(v>1?1:v);
+let pollFails=0, statsFails=0, imgFails=0;  // đếm lỗi-liên-tiếp → backoff (giảm flood console + đỡ đốt mạng lúc server mất kết nối, #436)
+const _connBadge=document.getElementById('conn');
+function setConn(ok){ if(_connBadge) _connBadge.style.display = ok ? 'none' : 'block'; }
 // ---- POLL: cập nhật STATE (không vẽ), tự hẹn lần kế SAU khi xong → 1 in-flight ----
 async function poll(){
   try{
-    const t0=performance.now(); let o=null;
-    try{o=await(await fetch('/overlay',{cache:'no-store'})).json();}catch(e){o=null;}
+    const t0=performance.now(); let o=null, fetchOk=false;
+    try{o=await(await fetch('/overlay',{cache:'no-store'})).json();fetchOk=true;}catch(e){o=null;}
+    if(fetchOk){if(pollFails>0){imgFails=0;reloadStream();}pollFails=0;setConn(true);}else{pollFails++;setConn(false);}   // backoff+badge; poll hồi phục → nối lại stream NGAY (#436)
     const rtt=performance.now()-t0, now=performance.now();
     if(o&&o.processEpoch){
       if(procEpoch===null){procEpoch=o.processEpoch;}
@@ -110,7 +115,7 @@ async function poll(){
         for(const id of [...boxes.keys()]) if(!present.has(id)) boxes.delete(id);
       }
     }
-  }finally{ setTimeout(poll,80); }   // reschedule DÙ lỗi → không bao giờ chồng >1 fetch
+  }finally{ setTimeout(poll, pollFails===0?80:Math.min(80*Math.pow(2,pollFails),2000)); }   // reschedule DÙ lỗi; BACKOFF khi lỗi liên tiếp (80ms→cap 2s) → giảm flood console lúc outage; ≤1 in-flight (#415/#436)
 }
 // ---- RENDER: vẽ mỗi animation-frame; ngoại suy pos+vel*dt nếu có vx/vy (Wave A); hết hạn → xóa ----
 function render(){
@@ -129,14 +134,16 @@ function render(){
 }
 // ---- STATS: self-rescheduling (1 in-flight) ----
 async function statsLoop(){
-  try{document.getElementById('s').innerText=await(await fetch('/stats',{cache:'no-store'})).text();}catch(e){}
-  finally{setTimeout(statsLoop,1000);}
+  let ok=false;
+  try{document.getElementById('s').innerText=await(await fetch('/stats',{cache:'no-store'})).text();ok=true;}catch(e){}
+  finally{ statsFails=ok?0:statsFails+1; setTimeout(statsLoop, statsFails===0?1000:Math.min(1000*Math.pow(2,statsFails),5000)); }   // backoff (#436)
 }
 // ---- MJPEG resilience: tab nền → trình duyệt treo/hủy stream <img> + KHÔNG tự nối lại (video đen tới khi
 // reload). Nối lại khi tab HIỆN lại (visibilitychange) + tự reconnect khi stream lỗi. ?t= ép kết nối mới. ----
 function reloadStream(){ img.src='/stream?t='+Date.now(); }
-document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') reloadStream(); });
-img.addEventListener('error',()=>{ setTimeout(reloadStream,500); });
+img.addEventListener('load',()=>{ imgFails=0; });   // stream nhận frame → reset backoff (#436)
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ imgFails=0; reloadStream(); } });
+img.addEventListener('error',()=>{ imgFails++; setTimeout(reloadStream, Math.min(500*Math.pow(2,imgFails-1),5000)); });   // BACKOFF reconnect (500ms→cap 5s) giảm flood outage (#436)
 poll(); requestAnimationFrame(render); statsLoop();
 </script></body></html>"""
 
