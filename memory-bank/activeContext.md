@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-18)
-**Cập nhật lúc:** 2026-07-18T16:00:00+07:00.
+**Cập nhật lúc:** 2026-07-18T17:00:00+07:00.
+**[✅ #440 — Hardening kiến trúc: +import-linter contract `layers` (F1.4) + đính chính comment (F1.5)]**
+- Chờ user chốt GPU target → làm bước hardening verify-được-ngay (không cần GPU/target), theo khuyến nghị F1.4/F1.5 của bản đánh giá. Đúng giá-trị chống-drift + kiến-trúc-cưỡng-chế-bằng-máy.
+- **D-141:** thêm contract `type=layers` (application>runtime>kernel>domain) SONG SONG 6 `forbidden` → tự-bắt-hướng-tầng khi mở rộng (không phải nhớ sửa danh sách cấm); adapters/profiles=rim vẫn do forbidden #5 phủ. Defense-in-depth. + sửa comment "4-layer"→"4 lõi+2 rim".
+- **VERIFY:** `vp verify` **868/2 · import-linter 7 kept/0 broken** (contract layers KEPT ngay lần đầu = **bằng chứng khẳng định** code tôn trọng hướng-tầng top-down, mạnh hơn "vắng import cấm") · drift PASS. Config-only (pyproject.toml), 0 đụng src → baseline giữ.
+- **Ghi sổ:** LOG #440 · +D-141 · INDEX #439→#440 · Σ318→319 (D141). 0 đụng code sản phẩm.
+- **Bước kế = CẦN USER chốt (Phần E):** GPU target x86/Jetson + OS + ưu tiên khắc phục (rotate secret K-031 🔴 / batch-mux / perf-harness drop@fps K-014 🔴 / observability / fleet). Chọn → suy ra requirements + triển khai tiếp. Các essence-fix verify-được-trên-CPU không cần input đã làm gần hết (F3.2 device #437, F1.4/F1.5 layers #440).
+---
 **[✅ #439 — Trả lời 2 câu kiến trúc: GPU-target=config? + tiền xử lý ảnh đã thiết kế chưa (+D-140 bản đồ điểm-tiêm, YAGNI)]**
 - **GPU target (trả lời):** CPU↔x86-NVIDIA-rời = THUẦN cấu hình (`--device auto` sau D-139) + đổi gói (`onnxruntime-gpu`, `ensure_cuda_dll_path` K-088) — KHÔNG đổi kiến trúc (F3.1). Quan trọng KHÔNG vì kiến trúc mà vì ĐẦU TƯ: **Jetson/ARM** cần verify HW atomicity (K-001 🔴, "không chỉ cấu hình"); **batch-mux** chỉ đáng nếu GPU là đích.
 - **Tiền xử lý ảnh (trả lời, D-140):** T1 model-normalize (`preprocess_fn` DI ✅) + T2 letterbox (`resize_fn` DI ✅) ĐÃ CÓ. T3 xử-lý-chung-trước-detect: pipeline/stage HỖ TRỢ (`MediaPacket→MediaPacket`, tiền lệ brightness/dark_filter/motion_gate) nhưng thiếu `MediaPacket.with_media()` + chưa `PreprocessStage`; web `_detect_loop` gọi detect trực tiếp, chưa hook. → HOÃN xây (YAGNI); khi cần: +with_media CoW · +PreprocessStage+registry · +web frame_transform (additive, D-140 chỉ rõ).

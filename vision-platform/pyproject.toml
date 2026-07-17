@@ -43,7 +43,8 @@ markers = [
 
 # ---- Layer boundary enforcement (import-linter) ----
 # Chạy: `lint-imports` (sau khi `pip install -e .[dev]`).
-# 4-layer Hexagonal: domain ← kernel ← runtime ← application; adapters/profiles ở rim.
+# Hexagonal: 4 tầng LÕI (domain ← kernel ← runtime ← application) + 2 vành RIM (adapters/profiles).
+# "6 layer" (AGENTS §4) = 4 lõi + 2 rim. Cưỡng chế: 6 'forbidden' (dep ngoài + hướng) + 1 'layers' (hướng-tầng lõi, F1.4).
 [tool.importlinter]
 root_package = "vision_platform"
 # Bắt buộc khi contract 'forbidden' liệt kê module NGOÀI (cv2/torch/zmq/multiprocessing...).
@@ -109,4 +110,17 @@ forbidden_modules = [
     "vision_platform.runtime.iou_tracker",
     "vision_platform.kernel.tracking_protocol",
     "vision_platform.kernel.crossing_event",
+]
+
+# F1.4 (architecture-review): contract 'layers' BỔ SUNG (song song 'forbidden') → tự-bắt hướng-tầng
+# khi thêm layer/dep mới (không phải nhớ sửa từng danh sách forbidden). Cao→thấp: application > runtime > kernel > domain.
+# adapters/profiles là RIM (không trong stack tuyến tính) → vẫn do 'forbidden' #4/#5 phủ. Defense-in-depth (giữ cả hai).
+[[tool.importlinter.contracts]]
+name = "Tang loi xep chong (layers): application > runtime > kernel > domain"
+type = "layers"
+layers = [
+    "vision_platform.application",
+    "vision_platform.runtime",
+    "vision_platform.kernel",
+    "vision_platform.domain",
 ]

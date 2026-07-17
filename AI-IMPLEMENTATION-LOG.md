@@ -8212,3 +8212,20 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - **Tiền xử lý ảnh (3 tầng):** T1 model-normalize `preprocess_fn` DI ✅; T2 letterbox `resize_fn` DI ✅; T3 xử-lý-chung-trước-detect: pipeline/stage-path có KIẾN TRÚC-chỗ (MediaPacket→MediaPacket, tiền lệ brightness/dark_filter/motion_gate) nhưng thiếu `with_media()` + chưa có PreprocessStage; web-path chưa có hook. Thêm sau khả thi/additive (D-140 chỉ rõ 3 bước).
 
 **Đã verify:** đọc code thật (`detector_pipeline.py`, `onnx_detector.py`, `stages/{detect,brightness,dark_filter}`, `media_packet.py`) — mọi nhận định có path. 0 đổi code → baseline 868/2 giữ. · **Chưa verify:** hiệu quả các phép tiền-xử-lý cụ thể (chưa có yêu cầu → chưa xây, YAGNI).
+
+### Entry #440 — 2026-07-18 — Hardening kiến trúc: +import-linter contract `layers` (F1.4) + đính chính comment (F1.5) — Kiro-Opus
+
+**Bối cảnh:** Chờ user chốt GPU target → làm bước hardening kiến trúc verify-được-ngay (không cần GPU/target), theo khuyến nghị F1.4/F1.5 của chính bản đánh giá architecture-review. Đúng giá-trị-cốt-lõi user (chống drift + kiến trúc cưỡng-chế-bằng-máy).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Thêm contract `type="layers"` (application>runtime>kernel>domain) SONG SONG 6 `forbidden` (D-141). Chọn giữ-cả-hai (defense-in-depth) thay vì thay thế.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (thuần thêm cưỡng-chế + sửa comment; 0 đụng src/test).
+
+**3. Trade-off đã cân nhắc:**
+- layers (redundant phần nào với forbidden về hướng) vs không thêm → thêm: tự-bắt-hướng-tầng khi mở rộng (chống-sót) + positive-enforcement; chi phí 0 (config).
+
+**4. Điều bạn nên biết:**
+- Contract layers KEPT ngay lần đầu = **bằng chứng khẳng định** code đã tôn trọng hướng-tầng lõi top-down (mạnh hơn "vắng import cấm"). adapters/profiles là rim (ngoài stack tuyến tính) → vẫn do forbidden #5 phủ (không đưa vào layers).
+
+**Đã verify:** `scripts\vp.cmd verify` → **import-linter 7 kept/0 broken** (layers KEPT) · **868 passed/2 skipped** · drift PASS · get_diagnostics 0 (config-only). 0 đụng src → baseline giữ. · **Chưa verify:** không có (config lint đã chạy thật, KEPT).

@@ -1610,3 +1610,14 @@ Quyết định + lý do:
 - KHI có nhu cầu: (1) thêm `MediaPacket.with_media(ref)` (CoW first-class, đối xứng with_artifact); (2) `PreprocessStage(transform_fn)` @runtime/stages + đăng ký `pipeline_factory` registry; (3) web: tiêm `frame_transform` vào `_detect_loop` (trước `detector.detect`). Tất cả ADDITIVE, không đổi bản chất.
 Trade-off: xây-sẵn-điểm-tiêm (base "ready" ngay) vs YAGNI-chờ-nhu-cầu → chọn YAGNI (điểm-tiêm rỗng = nợ + dễ sai hình dạng); bù bằng bản-đồ-thiết-kế NÀY (D-140) → khi cần biết CHÍNH XÁC làm ở đâu, 0 phải đánh giá lại.
 Links: F3 (architecture-review preprocess), D-139 (onnx device unify), D-137 (YAGNI defer tiền lệ), K-028 (letterbox/nms domain), MediaPacket CoW.
+
+### D-141 — 2026-07-18 — Bổ sung import-linter contract `layers` (F1.4) + đính chính comment "4-layer" (F1.5)
+Status: ✅ (lint 7 kept/0 broken — layers KEPT; verify)
+Scope: `vision-platform/pyproject.toml` [tool.importlinter] (chỉ config lint, KHÔNG đụng src/test)
+Nguồn: LOG Entry #440 · architecture-review design.md Finding F1.4 + F1.5
+Quyết định + lý do (bản chất):
+- **F1.4:** 6 contract cũ đều `type=forbidden` (danh sách CẤM tường minh) → mạnh (bắt cả dep ngoài cv2/torch) NHƯNG **dễ sót** khi thêm layer/dep mới (phải nhớ thêm vào từng danh sách). Bổ sung 1 contract `type="layers"` (application > runtime > kernel > domain) → **tự-bắt hướng-tầng** (cao chỉ import thấp; thấp KHÔNG import cao) mà không cần sửa danh sách forbidden. GIỮ CẢ HAI (defense-in-depth): `layers`=hướng-tầng-lõi tự-động; `forbidden`=dep-ngoài + rim (adapters/profiles KHÔNG trong stack tuyến tính → vẫn do forbidden #4/#5 phủ).
+- **F1.5:** comment "4-layer Hexagonal" gây nhầm với "6 layer" (AGENTS §4) → sửa rõ "4 tầng LÕI + 2 vành RIM; 6 layer = 4 lõi + 2 rim".
+Trade-off: thêm 1 contract (redundant PHẦN NÀO với forbidden về hướng) → chấp nhận vì (a) tự-động-hoá chống-sót khi mở rộng; (b) positive-enforcement (khẳng định top-down đúng, không chỉ "vắng import cấm"); chi phí = 0 (config). KHÔNG thay forbidden (vẫn cần cho dep-ngoài + rim).
+**VERIFY:** `scripts\vp.cmd verify` → **7 kept / 0 broken** (contract "Tang loi xep chong (layers)" KEPT ngay lần đầu → **bằng chứng khẳng định: code ĐÃ tôn trọng hướng-tầng lõi top-down**, không có import ngược ẩn) · 868 passed/2 skipped · drift PASS. 0 đụng src → baseline giữ.
+Links: F1.4/F1.5 (architecture-review), 6 forbidden contracts cũ (D-001 gốc hexagonal), AGENTS §4.
