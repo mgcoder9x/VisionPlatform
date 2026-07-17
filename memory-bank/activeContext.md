@@ -1,7 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-18)
-**Cập nhật lúc:** 2026-07-18T11:00:00+07:00.
+**Cập nhật lúc:** 2026-07-18T12:00:00+07:00.
+**[✅ #435 — ROOT-CAUSE "cực nhiều lỗi" browser = console flood lúc server restart (transient, app self-heal) + verify stress (+K-119)]**
+- User lặp "mở web browser phát hiện cực nhiều lỗi". #434 happy-path 0 lỗi → soi SÂU/đối kháng + tìm BẢN CHẤT.
+- **Bản chất "cực nhiều lỗi" (tái hiện + đo):** khi server Python DỪNG/restart (thường lúc dev/đổi máy/crash) mà tab đang mở → console flood `ERR_CONNECTION_REFUSED` (poll 80ms thất bại tích luỹ: dừng server → 17→51 lỗi). **Trình duyệt tự log request mạng thất bại — app JS KHÔNG chặn được**; transient/cosmetic, KHÔNG phải defect logic.
+- **App TỰ HỒI PHỤC (verify code + EMPIRIC):** `poll()`/`statsLoop()` `finally{setTimeout(...)}` reschedule-dù-lỗi (vòng lặp không chết) + `img.onerror→reloadStream` + `visibilitychange→reconnect`. Empiric: dừng→bật lại server 8027 → client tự nhận lại (**probe 10/10 OK, health LIVE, 3 box, img 640×480 phục hồi, KHÔNG reload tay**).
+- **Live server ổn định:** 0 lỗi console · stream 640×480 · canvas 490×368 căn (#418) · tab hidden→visible reconnect (#419) · resize 640×520 realign · DOM 0-delta (không leak).
+- **Khử HẲN console-noise lúc outage** = đổi transport WebSocket/SSE (1 lỗi WS thay hàng trăm fetch) — **refactor LỚN, Non-Goal** (cùng nhóm WebRTC #419). KHÔNG làm speculative: hành vi hiện tại đúng + self-heal.
+- **Ghi sổ:** LOG #435 · +K-119 · INDEX #434→#435 · Σ313→314 (K119). Server đã DỪNG. Baseline 860/2 giữ (0 đổi code).
+- **Bước kế = CẦN USER (2 đường thật, #431):** (A) bật Allow-LAN trong VPN → verify RTSP camera `.106`; HOẶC (B) nêu nghiệp vụ cụ thể → mở Wave C/D design-first. Nếu console-noise lúc restart là ĐAU vận hành thật → cân WS transport (spec riêng).
+---
 **[✅ #434 — VERIFY browser MCP webcam máy k.nguyen (production loopback) — KHÔNG lỗi mới]**
 - User lặp "mở web browser soi lỗi". Máy này có webcam → chạy web app config production (overlay hysteresis+lease350, `--server dev` vì waitress chưa cài venv máy này) loopback 8026 + Playwright MCP.
 - **Số ĐO THẬT:** 0 lỗi/cảnh báo console · **2516 request /overlay+/stats đều 200** (pile-up #415 bền) · stream MJPEG live 640×480 · canvas 490×368 căn khớp (#418) · `/overlay` health detector=LIVE source=LIVE, person **conf 0.947 displayId 1:1 ỔN ĐỊNH** (hysteresis #421 giữ, KHÔNG churn) + chair 0.88 + **vx/vy** (ngoại suy #416) + `remainingLeaseMs 319<350` (#417).

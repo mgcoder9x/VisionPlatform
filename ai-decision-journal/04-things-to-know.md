@@ -1190,3 +1190,14 @@ Nội dung (grounded):
 - ⇒ Wave 1 (waitress) đạt mục đích thương mại: phục vụ NHIỀU client đồng thời an toàn (werkzeug dev-server không đảm bảo điều này).
 - **§3.1 — Trusted Command đề nghị (read-only, tái dùng cho load/soak):** `python -m tools.web_concurrent_probe *`.
 Đóng khi: (✅) — không cần thêm. Soak nhiều-giờ / >12 client / nhiều-máy = mở rộng nếu cần (dùng lại probe).
+
+### K-119 — 2026-07-18 — "cực nhiều lỗi" browser = console flood lúc server restart/mất-kết-nối tạm (transient, app TỰ hồi phục)
+Status: ✅ (root-cause + verify code THẬT + empiric restart-recovery)
+Nguồn: LOG Entry #435 · browser MCP webcam máy k.nguyen (port 8026/8027) · đọc `_PAGE` JS `vision_web_app.py`
+Nội dung (chống đoán — code + số đo):
+- **Hiện tượng:** khi server Python DỪNG/restart (rất thường lúc dev / đổi máy / app crash-restart) mà tab browser đang mở → console flood **`ERR_CONNECTION_REFUSED`/`ERR_CONNECTION_RESET`** tới `/overlay`,`/stats`,`/stream` (poll 80ms → mỗi lần thất bại +1 lỗi → hàng chục/hàng trăm lỗi nhanh). Đây RẤT có thể là "cực nhiều lỗi" user thấy. Đo thật: dừng server 8027 → 3s sau 17 lỗi → 6s sau 51 lỗi (tích luỹ).
+- **Bản chất:** lỗi này do **trình duyệt tự log request mạng thất bại** — app JS KHÔNG chặn/ẩn được (không phải defect logic app). Là transient/cosmetic.
+- **App TỰ HỒI PHỤC (verify code + empiric):** `poll()` = `try{fetch}catch{o=null}` + **`finally{setTimeout(poll,80)}`** → vòng lặp reschedule DÙ lỗi, KHÔNG bao giờ chết; `statsLoop()` y hệt; `img.addEventListener('error',()=>setTimeout(reloadStream,500))` + `visibilitychange→reloadStream`. **Empiric:** restart server 8027 → client TỰ nhận lại (probe **10/10 OK**, health LIVE, 3 box, MJPEG img phục hồi 640×480) **KHÔNG cần reload tay**.
+- **Kịch bản live sạch (cùng phiên):** server chạy ổn định → **0 lỗi console**, 2516/2516 request 200, stream live, canvas căn (#418), tab-nền→visible reconnect (#419), resize realign, DOM 0-delta (không leak).
+- **Khử HẲN console-noise lúc outage = cần đổi transport** (WebSocket + exponential backoff: 1 lỗi WS thay hàng trăm fetch; hoặc SSE) — thay đổi kiến trúc LỚN, hiện là **Non-Goal**. KHÔNG làm speculative: hành vi hiện tại đúng chức năng + self-heal; polling vốn dĩ flood-console-khi-outage (không tránh được ở tầng app).
+Đóng khi: (không cần đóng — điều nên biết). Nếu console-noise lúc restart là đau vận hành thật (demo/dashboard) → cân WS transport (spec riêng, cùng hướng WebRTC Non-Goal #419).

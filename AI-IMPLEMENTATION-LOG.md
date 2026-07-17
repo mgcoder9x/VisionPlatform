@@ -8112,3 +8112,24 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - **Item setup (không phải bug):** venv máy `k.nguyen` chưa cài extra `web-prod` (waitress) → muốn test đúng stack production ở máy này cần `pip install .[web-prod]`.
 
 **Đã verify:** browser MCP webcam THẬT: 0 console error, 2516/2516 request 200, stream live 640×480, canvas căn 490×368, /overlay health LIVE + person conf 0.947 displayId 1:1 ổn định + vx/vy + lease 319<350 (số thật đọc từ evaluate/network). Server đã dừng sau đo. 0 đổi code → baseline 860/2 giữ. · **Chưa verify:** stack waitress trên máy này (chưa cài, dùng dev-server); RTSP camera (chờ VPN Allow-LAN, K-117).
+
+### Entry #435 — 2026-07-18 — Root-cause "cực nhiều lỗi" browser = console flood lúc server restart (transient, app self-heal) + verify stress webcam (+K-119) — Kiro-Opus
+
+**Bối cảnh:** User lặp "mở web browser phát hiện cực nhiều lỗi" (máy webcam/no-GPU). Lượt #434 happy-path thấy 0 lỗi → soi SÂU/đối kháng hơn + tìm bản chất "cực nhiều lỗi".
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Soi kịch bản STRESS (tab hidden→visible, resize, soak/heap) + EMPIRIC test restart-recovery (dừng rồi bật lại server, xem client tự hồi phục) — vì happy-path không lộ được nguyên nhân "cực nhiều lỗi" user báo.
+- Chẩn đoán bản chất thay vì vá: "cực nhiều lỗi" = console flood ERR_CONNECTION_REFUSED lúc server outage (poll 80ms thất bại tích luỹ), KHÔNG phải defect app.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (review + chẩn đoán, 0 đổi code).
+
+**3. Trade-off đã cân nhắc:**
+- Giữ polling (flood-console-khi-outage, nhưng đơn giản + self-heal) vs đổi WebSocket/SSE (ít lỗi console lúc outage nhưng refactor transport lớn) → GIỮ polling: hành vi hiện tại đúng chức năng + tự hồi phục; console-noise là cosmetic/transient; WS là Non-Goal (cùng nhóm WebRTC #419), chỉ làm nếu noise là đau vận hành thật. Không tối ưu speculative (R3.2).
+
+**4. Điều bạn nên biết (số ĐO THẬT + code):**
+- **Live server ổn định:** 0 lỗi console; stream live 640×480; canvas 490×368 căn (#418); tab hidden→visible → `img.src=/stream?t=...` reconnect (#419) img phục hồi; resize 640×520 → imgRect==canvasRect [11,70,627,470] aligned; DOM 0-delta (không leak node); heap +508KB/8s (churn JSON, GC chưa chạy — không phải leak).
+- **Outage flood (tái hiện):** dừng server → console 17→51 lỗi ERR_CONNECTION_REFUSED (trình duyệt tự log, app không chặn được).
+- **Self-heal (verify code + empiric):** `poll()`/`statsLoop()` `finally{setTimeout(...)}` reschedule-dù-lỗi + `img.onerror→reconnect` → restart server → probe **10/10 OK**, health LIVE, 3 box, img phục hồi 640×480, KHÔNG reload tay.
+- Item setup: venv máy này chưa cài `web-prod` (waitress) → dùng `--server dev` (browser-side giống hệt).
+
+**Đã verify:** browser MCP webcam THẬT — live 0 lỗi + stress (visibility reconnect #419, resize realign #418, DOM 0-delta) + outage flood tái hiện (17→51 lỗi) + restart-recovery empiric (probe 10/10, health LIVE, img 640×480 phục hồi); code `_PAGE` poll finally-reschedule + img.onerror (đọc source). Server đã DỪNG. 0 đổi code → baseline 860/2 giữ. · **Chưa verify:** khử-hẳn console-noise cần WS transport (chưa làm — Non-Goal); RTSP (chờ VPN K-117).
