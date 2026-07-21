@@ -240,7 +240,7 @@ Nội dung (điều nên biết TRƯỚC khi ship):
   quyết định tách rời, thay 2 hàm DI + file .onnx. Repo KHÔNG nhúng weight nào (tránh kéo license vào code).
 Đóng khi: chọn model + weight cụ thể có license phù hợp mục tiêu thương mại + xác nhận điều khoản file weight đó.
 
-### K-030 — 🟡 (2026-07-05) RTSP ffmpeg/opencv Windows bị 401 với Dahua dù creds đúng
+### K-030 — ✅ (2026-07-19, #450) RTSP opencv-ffmpeg Windows mở Dahua OK khi creds ĐÚNG (401 cũ = sai mật khẩu, K-034)
 Scope: `adapters/rtsp_frame_source.py` · kết nối camera thật
 Nguồn: LOG Entry #189 · chạy thật (401 từ camera) · VLC xác nhận creds đúng
 Nội dung:
@@ -250,6 +250,7 @@ Nội dung:
 - **ĐÍNH CHÍNH (Entry #197, verify WSL):** giả thuyết "chạy Linux sẽ ổn" = **SAI**. Test thật trên WSL2 Ubuntu (opencv-python-headless, ffmpeg bundled) → **401 Y HỆT**. Vậy KHÔNG phụ thuộc OS; là ffmpeg-của-opencv vs Dahua này. VLC dùng live555 (stack khác) nên được. Docker/Linux KHÔNG tự giải.
 Hướng CÓ THỂ giải (chưa verify): (a) SYSTEM ffmpeg (apt, cần sudo) khác bundled? (b) opencv build GStreamer (như VLC); (c) HTTP snapshot Dahua `cgi-bin/snapshot.cgi` (HTTP digest robust, né RTSP); (d) record clip VLC → video file (chạy ngay). Cho "xem detect": (d)+.onnx nhanh nhất.
 Đóng khi: 1 trong các hướng trên chạy lấy được frame thật.
+**✅ ĐÓNG #450:** với creds ĐÚNG (`admin:L2B40AD7` — K-034 đã chỉ 401 cũ là sai mật khẩu `L2B40AD07` dư số 0) + URL `rtsp://.../cam/realmonitor?channel=1&subtype=0`, **opencv-ffmpeg bundled trên Windows (máy `toann`) MỞ Dahua RTSP THÀNH CÔNG** → decode 1080p, `video=2588+` frame, web stream sống. ⇒ "digest 401 fail" trước đây CHỦ YẾU là red-herring MẬT-KHẨU-SAI, KHÔNG phải bất tương thích opencv-ffmpeg↔Dahua cố hữu. [chưa kiểm: có cần rtsp_transport=tcp cho ổn định 24/7 không — quan sát sau].
 
 ### K-031 — 🔴 (2026-07-05) BẢO MẬT: secret production lộ trong config syn/resources
 Scope: an toàn vận hành (ngoài repo — file `C:\...\syn\resources\config\*`)
@@ -1171,7 +1172,8 @@ Nội dung (grounded, không suy đoán):
 > **CẬP NHẬT #430 (D-136) — K-116 ĐÓNG + ĐÍNH CHÍNH:** đọc code thật → `owner_liveness` ĐÃ pid-reuse-safe (so create_time). Suy đoán "PID-reuse chưa guard" ở trên SAI. Gốc thật: psutil báo owner chưa-DEAD 1 nhịp sau kill+join (OS reap-lag/handle Popen) → assert 1-phát race; production tự lành (quarantine retried). Fix test = `wait_until(quarantine==True)` (event-driven, #288) → 12/12 lặp PASS. K-116 Status → ✅ đóng.
 
 ### K-117 — 2026-07-17 — RTSP camera .106 không tới được = VPN chặn LAN (KHÔNG phải lỗi code/camera)
-Status: 🟡 chặn ngoại cảnh (VPN LAN-block) — chờ user bật "Allow LAN" trong VPN (KHÔNG tắt VPN)
+Status: ✅ (2026-07-19, #450) camera .106 NAY REACHABLE — RTSP live verified (user đã mở LAN access / VPN không còn chặn tới .106). Nếu VPN siết lại thì tái diễn (giữ ngữ cảnh chẩn đoán bên dưới).
+**✅ #450 (verify):** chạy web app `--rtsp rtsp://admin:***@192.168.120.106:554/cam/realmonitor?channel=1&subtype=0` trên máy `toann` (Windows GPU) → `video=2588+` frame chảy, browser stream `<img>` naturalW=1920×1080 complete=true, 0 lỗi console, ~1097 req 200 OK. ⇒ LAN tới .106:554 THÔNG (điều kiện VPN-block #429 không còn áp). KHÔNG đụng VPN.
 Nguồn: LOG Entry #429 · chẩn đoán mạng chỉ-đọc (Get-NetIPAddress/Find-NetRoute/Test-NetConnection/arp) máy `toann`
 Nội dung (grounded — số đo, không suy đoán):
 - Máy có IP LAN **192.168.120.104** (cùng /24 với camera .106) + adapter VPN **ProTUN** (10.2.0.2) đang Up.
@@ -1180,6 +1182,7 @@ Nội dung (grounded — số đo, không suy đoán):
 - NHƯNG: ping .106=**False**, mọi TCP .106 (80/554/8000/88/37777)=**False**, **ping gateway LAN .1 cũng =False**, chỉ ping chính máy .104=True.
 - **KẾT LUẬN:** máy chỉ tới được chính nó, KHÔNG tới cả gateway .1 lẫn .106 dù route on-link đúng → **VPN (ProTUN) chặn TOÀN BỘ traffic LAN** (kill-switch / block-local-network qua WFP filter, drop gói dù route local). KHÔNG phải lỗi camera/code/web app.
 Đóng khi: user bật **"Allow LAN / local network access"** trong app VPN (GIỮ VPN bật — tuyệt đối KHÔNG tắt VPN theo yêu cầu user) → re-test `Test-NetConnection 192.168.120.106 -Port 554` (RTSP) / 80 (web config). Nếu VPN không cho phép LAN → không dùng được camera LAN khi VPN bật (quyết định của user). Ràng buộc tuyệt đối: **AI KHÔNG được tắt/đổi VPN của user.**
+> **Addendum #442 (manh mối user):** user báo camera "hình như chỉ là **IPv6**". Lưu ý: `192.168.120.106` là **IPv4** → nếu camera IPv6-only thì `.106` KHÔNG phải nó (chỉ là thiết bị khác trong ARP), giải thích thêm vì sao ping/TCP `.106` fail (bên cạnh VPN-chặn-LAN). **Khi test sau (user chủ động, tài nguyên đủ):** (1) lấy địa chỉ IPv6 + URL RTSP thật từ trang cấu hình camera; (2) RTSP qua IPv6 dạng `rtsp://[<ipv6>]:554/...` (bọc ngoặc vuông); (3) kiểm VPN có route/allow IPv6-LAN không (nhiều VPN chỉ tunnel/allow IPv4 → IPv6 có thể rò hoặc bị chặn khác IPv4); (4) `Test-NetConnection` + `-6`. CHƯA verify được bây giờ (chưa test theo ý user).
 
 ### K-118 — 2026-07-17 — Web app THREAD-SAFE đa-client dưới waitress (static proof + empiric 2844/2844)
 Status: ✅ (verify tĩnh + empiric) — đóng lo ngại multi-viewer từ #420/K-101
@@ -1201,3 +1204,30 @@ Nội dung (chống đoán — code + số đo):
 - **Kịch bản live sạch (cùng phiên):** server chạy ổn định → **0 lỗi console**, 2516/2516 request 200, stream live, canvas căn (#418), tab-nền→visible reconnect (#419), resize realign, DOM 0-delta (không leak).
 - **Khử HẲN console-noise lúc outage = cần đổi transport** (WebSocket + exponential backoff: 1 lỗi WS thay hàng trăm fetch; hoặc SSE) — thay đổi kiến trúc LỚN, hiện là **Non-Goal**. KHÔNG làm speculative: hành vi hiện tại đúng chức năng + self-heal; polling vốn dĩ flood-console-khi-outage (không tránh được ở tầng app).
 Đóng khi: (không cần đóng — điều nên biết). Nếu console-noise lúc restart là đau vận hành thật (demo/dashboard) → cân WS transport (spec riêng, cùng hướng WebRTC Non-Goal #419).
+
+### K-120 — 2026-07-18 — Năng lực CUDA của onnxruntime ≠ của torch (đừng gate đường ONNX bằng torch)
+Status: ✅ (đóng bằng D-142) — bài học kiến trúc dual-use
+Nguồn: LOG Entry #441 · review kiến trúc trên máy GPU toann · đo thật + đọc code
+Nội dung (grounded):
+- **Sự thật đo được (máy toann):** torch KHÔNG cài (`has_torch=False`) nhưng `onnxruntime 1.27` `get_available_providers()` = `['TensorrtExecutionProvider','CUDAExecutionProvider','CPUExecutionProvider']` → **GPU DÙNG được qua onnxruntime KHÔNG cần torch** (xác nhận K-109 bằng số).
+- **Bẫy kiến trúc (bug D-139 vô tình tạo):** `MachineCapabilities.has_cuda` dò QUA torch (`torch.cuda.is_available()`). Nếu đường ONNX gate device theo `has_cuda` (torch) → trên máy GPU-không-torch: `auto`→CPU, `cuda`→CapabilityError → **GPU bất khả dụng oan** dù onnxruntime thấy CUDA.
+- **Vì sao máy trước (k.nguyen no-GPU) KHÔNG bắt được:** máy đó cả torch-cuda LẪN onnxruntime-cuda đều False → 2 nguồn trùng "no CUDA" → bug VÔ HÌNH. Chỉ máy GPU-onnxruntime-gpu-không-torch mới lộ → **review dual-use PHẢI chạy trên đúng cấu hình target mới thấy**.
+- **Nguyên tắc (fix D-142):** gate mỗi runtime bằng NĂNG LỰC CỦA CHÍNH NÓ — ONNX theo `has_onnx_cuda` (dò `ort.get_available_providers()`), torch theo `has_cuda` (dò `torch.cuda`). KHÔNG dùng chung 1 cờ CUDA cho 2 runtime độc lập.
+- **Tổng quát hoá:** khi có N backend inference (onnxruntime/torch/tensorrt/openvino...), "máy có GPU" KHÔNG đủ — phải hỏi "backend X có dùng được GPU trên máy này không". Capability là PER-BACKEND.
+Đóng khi: (✅ D-142 tách has_onnx_cuda). Mở rộng nếu thêm backend khác (openvino/tensorrt-standalone) → thêm cờ năng lực per-backend tương ứng.
+
+
+### K-121 — ✅ (2026-07-19, #452) Đo capacity detector THẬT trên máy `toann`: GPU 36.16 vs CPU 17.14 infer/s (yolov8n@640)
+Status: ✅ đo thật (bench_capacity, median-of-many, warmup 20 + measure 200)
+Scope: `benchmarks/bench_capacity.py --mode infer --onnx models/yolov8n.onnx --yolo v8` · máy `toann` (RTX 2060, onnxruntime-cuda, KHÔNG torch)
+Nguồn: LOG Entry #452 · chạy thật bench_capacity 2 lần (device cuda + cpu) cùng máy/cùng model/cùng imgsz
+Evidence:
+- **GPU (CUDAExecutionProvider):** throughput **36.16 infer/s** · latency p50 **25.1ms** · p95 44.8 · p99 61.9 · min 20.0 · max 68.2.
+- **CPU (CPUExecutionProvider) cùng máy:** throughput **17.14 infer/s** · p50 **58.1ms** · p95 64.2 · p99 70.3.
+- **Lợi ích GPU (định lượng D-142):** **2.11× throughput** · **2.31× latency-p50 thấp hơn**.
+Nội dung (số thật cho sizing/SLA, KHÔNG đoán):
+- 1 RTX 2060 ≈ **36 detect/s** trần cho yolov8n@640 (batch=1) → sizing fleet: ~7 cam @5fps-detect · ~12 cam @3fps · v.v. (input cho multicamera-fleet-profile ASSUMPTION A2 — nay có SỐ, không còn chỉ "nhỏ-vừa").
+- Xác nhận D-142 (onnx-cuda gating) không chỉ "engaged" (log device=cuda ở #451) mà THỰC SỰ nhanh hơn CPU 2.1× → GPU đáng dùng cho detector này.
+Vì sao (bản chất): yolov8n là model NHỎ → GPU chỉ ~2× CPU (không phải 10×) vì kernel launch overhead + model chưa bão hoà GPU; muốn tăng nữa = batch nhiều cam (F3.3 batch-mux) hoặc input nhỏ hơn (416)/INT8 (deploy-time, K-115). Đây là C_inf batch=1; batch-mux có thể nâng throughput/GPU.
+Cross-ref: K-014 (ring-drop@fps — KHÁC scope, vẫn 🔴 chưa đo drop dưới tải sustained), D-142 (GPU fix), K-115 (deploy-time levers), F3.3 (batch-mux), multicamera-fleet-profile A2.
+[chưa kiểm]: fps end-to-end (gồm decode+letterbox+NMS+overlay, không chỉ infer); soak 24/7; TensorRT provider (có thể nhanh hơn CUDA nhưng build engine lâu — chưa thử).

@@ -87,6 +87,8 @@ class ObservabilityConfig:
     metrics_host: str = "127.0.0.1"
     observe_interval_s: float = 0.0
     observe_every_n: int = 0
+    log_file: Optional[str] = None          # F5.3/K-018: đường log production (non-blocking+rotating); None = tắt
+    max_cardinality: Optional[int] = None   # K-019: budget series/metric (chống nổ label); None = không giới hạn
 
 
 @dataclass(frozen=True)

@@ -8,7 +8,7 @@ Phủ Correctness Properties:
 import pytest
 
 from vision_platform.kernel.capabilities import (
-    MachineCapabilities, CapabilityError, resolve_device,
+    MachineCapabilities, CapabilityError, resolve_device, resolve_onnx_device,
 )
 from vision_platform.adapters.capability_probe import probe_capabilities
 
@@ -17,6 +17,31 @@ _CUDA1 = MachineCapabilities(has_torch=True, has_cuda=True, cuda_device_count=1,
 _CUDA2 = MachineCapabilities(has_torch=True, has_cuda=True, cuda_device_count=2, gpu_name="FakeGPU")
 _NOCUDA = MachineCapabilities(has_torch=True, has_cuda=False, cuda_device_count=0)
 _NOTORCH = MachineCapabilities(has_torch=False, has_cuda=False, cuda_device_count=0)
+
+
+# ============ resolve_onnx_device: gate theo has_onnx_cuda (onnxruntime), KHÔNG theo has_cuda (torch) ============
+
+def test_onnx_device_gpu_notorch_auto_picks_cuda():
+    # BUG #nnn: máy GPU-KHÔNG-torch có onnxruntime-gpu → auto PHẢI chọn cuda (has_cuda torch=False không cản).
+    caps = MachineCapabilities(has_torch=False, has_cuda=False, has_onnx_cuda=True)
+    assert resolve_onnx_device("auto", caps) == "cuda"
+    assert resolve_onnx_device("cuda", caps) == "cuda"
+
+
+def test_onnx_device_no_onnxcuda_fail_fast():
+    # onnxruntime KHÔNG có CUDA provider → 'cuda' fail-fast, 'auto' về cpu — kể cả khi torch CÓ cuda.
+    caps = MachineCapabilities(has_torch=True, has_cuda=True, cuda_device_count=1, has_onnx_cuda=False)
+    assert resolve_onnx_device("auto", caps) == "cpu"
+    assert resolve_onnx_device("cpu", caps) == "cpu"
+    with pytest.raises(CapabilityError):
+        resolve_onnx_device("cuda", caps)
+
+
+def test_onnx_device_default_field_false():
+    # has_onnx_cuda mặc định False (tương thích ngược) → auto về cpu khi không set.
+    caps = MachineCapabilities(has_torch=False, has_cuda=False)
+    assert caps.has_onnx_cuda is False
+    assert resolve_onnx_device("auto", caps) == "cpu"
 
 
 # ============ P1: auto chọn theo năng lực ============

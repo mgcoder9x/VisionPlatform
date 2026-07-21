@@ -66,7 +66,8 @@ def test_merge_toml_only_when_cli_unset():
     m = _merge_observability(
         {"observe": False, "metrics_port": None, "metrics_host": None, "observe_interval_s": 0.0, "observe_every_n": 0}, t)
     assert m == {"observe": True, "metrics_port": 9100, "metrics_host": "0.0.0.0",
-                 "observe_interval_s": 3.0, "observe_every_n": 2}
+                 "observe_interval_s": 3.0, "observe_every_n": 2,
+                 "log_file": None, "max_cardinality": None}
 
 
 def test_merge_cli_explicit_overrides_toml():
@@ -91,13 +92,14 @@ def test_merge_none_toml_gives_defaults():
         {"observe": False, "metrics_port": None, "metrics_host": None, "observe_interval_s": 0.0, "observe_every_n": 0}, None)
     # toml=None → dùng ObservabilityConfig() default → metrics_host="127.0.0.1" (KHÔNG None); host None-resolve ở _build_config_observability
     assert m == {"observe": False, "metrics_port": None, "metrics_host": "127.0.0.1",
-                 "observe_interval_s": 0.0, "observe_every_n": 0}
+                 "observe_interval_s": 0.0, "observe_every_n": 0,
+                 "log_file": None, "max_cardinality": None}
 
 
 # ---------- #310: host-sentinel None → resolve 127.0.0.1 (không crash CLI-direct) ----------
 
 def test_build_config_observability_host_none_resolves():
-    _o, exporter = _build_config_observability(observe=False, metrics_port=0, metrics_host=None)
+    _o, exporter, _lh = _build_config_observability(observe=False, metrics_port=0, metrics_host=None)
     try:
         assert exporter is not None and exporter.port > 0   # resolve 127.0.0.1 → start OK, KHÔNG crash
     finally:
@@ -110,9 +112,10 @@ def test_run_from_config_uses_toml_observability(tmp_path, monkeypatch):
     cfg = _write(tmp_path, "[observability]\nmetrics_port = 0\nobserve = true\n\n" + _PIPE_TOML)
     cap: dict = {}
 
-    def spy(observe, metrics_port, metrics_host):
-        cap.update(observe=observe, metrics_port=metrics_port, metrics_host=metrics_host)
-        return None, None                                   # không dựng exporter thật
+    def spy(observe, metrics_port, metrics_host, log_file=None, max_cardinality=None):
+        cap.update(observe=observe, metrics_port=metrics_port, metrics_host=metrics_host,
+                   log_file=log_file, max_cardinality=max_cardinality)
+        return None, None, None                             # không dựng exporter thật (observer, exporter, log_handle)
 
     monkeypatch.setattr(app_mod, "_build_config_observability", spy)
     rc = _run_from_config(cfg)                               # KHÔNG cờ CLI → dùng TOML
@@ -124,7 +127,7 @@ def test_run_from_config_cli_overrides_toml(tmp_path, monkeypatch):
     cfg = _write(tmp_path, "[observability]\nmetrics_port = 9100\n\n" + _PIPE_TOML)
     cap: dict = {}
     monkeypatch.setattr(app_mod, "_build_config_observability",
-                        lambda o, p, h: (cap.update(port=p) or (None, None)))
+                        lambda o, p, h, log_file=None, max_cardinality=None: (cap.update(port=p) or (None, None, None)))
     _run_from_config(cfg, metrics_port=8888)                # CLI override TOML
     assert cap["port"] == 8888
 
@@ -133,6 +136,60 @@ def test_run_from_config_backward_compat_no_section(tmp_path, monkeypatch):
     cfg = _write(tmp_path, _PIPE_TOML)                      # KHÔNG [observability]
     cap: dict = {}
     monkeypatch.setattr(app_mod, "_build_config_observability",
-                        lambda o, p, h: (cap.update(observe=o, port=p) or (None, None)))
+                        lambda o, p, h, log_file=None, max_cardinality=None: (cap.update(observe=o, port=p) or (None, None, None)))
     rc = _run_from_config(cfg)
     assert rc == 0 and cap == {"observe": False, "port": None}   # default → hành vi #299
+
+
+# ---------- F5.3/K-019: wire log_file + max_cardinality qua [observability] TOML ----------
+
+def test_parse_observability_log_file_and_cardinality():
+    raw = _base()
+    raw["observability"] = {"log_file": "/var/log/vp.jsonl", "max_cardinality": 500}
+    o = parse_app_config(raw).observability
+    assert o is not None and o.log_file == "/var/log/vp.jsonl" and o.max_cardinality == 500
+
+
+def test_parse_observability_new_fields_default_none():
+    raw = _base(); raw["observability"] = {"observe": True}
+    o = parse_app_config(raw).observability
+    assert o.log_file is None and o.max_cardinality is None   # vắng → None (opt-in, backward-compat)
+
+
+def test_parse_observability_new_fields_bad_types_raise():
+    # log_file rỗng · max_cardinality không dương / là bool / là float → ConfigError (fail-fast)
+    for bad in ({"log_file": ""}, {"max_cardinality": 0}, {"max_cardinality": -5},
+                {"max_cardinality": True}, {"max_cardinality": 1.5}, {"log_file": 123}):
+        raw = _base(); raw["observability"] = bad
+        with pytest.raises(ConfigError):
+            parse_app_config(raw)
+
+
+def test_merge_new_fields_toml_only_when_cli_unset():
+    t = ObservabilityConfig(log_file="/t/a.jsonl", max_cardinality=300)
+    m = _merge_observability(
+        {"observe": False, "metrics_port": None, "metrics_host": None,
+         "observe_interval_s": 0.0, "observe_every_n": 0, "log_file": None, "max_cardinality": None}, t)
+    assert m["log_file"] == "/t/a.jsonl" and m["max_cardinality"] == 300
+
+
+def test_merge_new_fields_cli_explicit_overrides_toml():
+    t = ObservabilityConfig(log_file="/t/toml.jsonl", max_cardinality=300)
+    m = _merge_observability(
+        {"observe": False, "metrics_port": None, "metrics_host": None,
+         "observe_interval_s": 0.0, "observe_every_n": 0,
+         "log_file": "/t/cli.jsonl", "max_cardinality": 999}, t)
+    assert m["log_file"] == "/t/cli.jsonl" and m["max_cardinality"] == 999
+
+
+def test_run_from_config_wires_new_fields_from_toml(tmp_path, monkeypatch):
+    cfg = _write(tmp_path, "[observability]\nlog_file = '/t/vp.jsonl'\nmax_cardinality = 250\n\n" + _PIPE_TOML)
+    cap: dict = {}
+
+    def spy(observe, metrics_port, metrics_host, log_file=None, max_cardinality=None):
+        cap.update(log_file=log_file, max_cardinality=max_cardinality)
+        return None, None, None
+
+    monkeypatch.setattr(app_mod, "_build_config_observability", spy)
+    rc = _run_from_config(cfg)                               # KHÔNG cờ CLI → dùng TOML
+    assert rc == 0 and cap["log_file"] == "/t/vp.jsonl" and cap["max_cardinality"] == 250

@@ -18,10 +18,15 @@ class MachineCapabilities:
     """Năng lực TÍNH TOÁN của máy hiện tại (kết quả probe). Immutable, thuần — tiêm được để test."""
 
     has_torch: bool
-    has_cuda: bool
-    cuda_device_count: int = 0
+    has_cuda: bool                 # CUDA khả dụng QUA TORCH (torch.cuda) — dùng cho đường .pt (Yolov5PtDetector)
+    cuda_device_count: int = 0     # số GPU theo torch (0 khi torch vắng)
     gpu_name: str | None = None
     has_cv2: bool = False
+    # CUDA khả dụng QUA ONNXRUNTIME (onnxruntime-gpu providers) — ĐỘC LẬP với torch (K-109). Đường ONNX
+    # (OnnxDetector) dùng onnxruntime, KHÔNG dùng torch → phải gate GPU theo cờ này, KHÔNG theo has_cuda(torch).
+    # Bug đã bắt (#nnn): máy GPU-không-torch có onnxruntime-gpu → has_cuda(torch)=False nhưng GPU vẫn dùng được
+    # qua ONNX; nếu gate onnx theo has_cuda → GPU bất khả dụng oan. Default False = tương thích ngược.
+    has_onnx_cuda: bool = False
 
 
 class CapabilityError(RuntimeError):
@@ -81,3 +86,20 @@ def resolve_device(requested: str, caps: MachineCapabilities) -> str:
     raise CapabilityError(
         f"device không hợp lệ: {requested!r} (hợp lệ: auto | cpu | cuda | cuda:N)."
     )
+
+
+def resolve_onnx_device(requested: str, caps: MachineCapabilities) -> str:
+    """Như `resolve_device` NHƯNG gate CUDA theo `caps.has_onnx_cuda` (onnxruntime), KHÔNG theo `has_cuda` (torch).
+
+    VÌ SAO tách (bug #nnn): đường ONNX (`OnnxDetector`) chạy trên **onnxruntime-gpu**, có CUDA ĐỘC LẬP với torch
+    (K-109). Nếu quyết định device cho ONNX bằng `has_cuda` (dò qua torch) thì trên máy GPU-KHÔNG-torch (đúng
+    kịch bản "CPU-first, no-torch, ONNX") sẽ: `auto`→cpu, `cuda`→CapabilityError → **GPU bất khả dụng oan** dù
+    onnxruntime thấy `CUDAExecutionProvider`. Fix GỐC: đường ONNX gate theo năng-lực-ONNX-thật.
+
+    Tái dùng TOÀN BỘ logic đã verify của `resolve_device` bằng cách thay `has_cuda`←`has_onnx_cuda` (một nguồn
+    quyết định, không copy nhánh). Lưu ý `cuda:N` ordinal vẫn kiểm theo `cuda_device_count` (torch) → trên máy
+    torch-vắng nên dùng `auto`/`cuda` (onnxruntime mặc định device 0); `cuda:N` chi tiết là ngoài phạm vi
+    (onnx_providers_for chỉ trả TÊN provider, không set device_id).
+    """
+    import dataclasses
+    return resolve_device(requested, dataclasses.replace(caps, has_cuda=caps.has_onnx_cuda))

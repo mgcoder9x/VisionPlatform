@@ -1,7 +1,108 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
-## Trạng thái hiện tại (2026-07-18)
-**Cập nhật lúc:** 2026-07-18T17:00:00+07:00.
+## Trạng thái hiện tại (2026-07-19)
+**Cập nhật lúc:** 2026-07-19T17:20:00+07:00.
+**[✅ #452 — Đo capacity detector GPU vs CPU (đóng nợ "fps GPU định lượng" #451, +K-121)]**
+- Đóng nợ tôi TỰ nêu ở #451. Harness cố định `bench_capacity` mode infer (frame synthetic → không cần cam/secret). Phục vụ SLA + sizing fleet.
+- **Số đo (cùng máy toann, yolov8n@640, warmup20+measure200):** GPU (onnxruntime-CUDA no-torch) **36.16 infer/s · p50 25.1ms** · CPU **17.14/s · p50 58.1ms** → **2.11× throughput · 2.31× latency thấp hơn** (định lượng D-142).
+- **Ý nghĩa:** 1 RTX 2060 ≈ 36 detect/s trần yolov8n@640 → sizing fleet A2 (~7 cam@5fps · ~12 cam@3fps) — nay có SỐ, không còn chỉ "nhỏ-vừa". Chỉ ~2× vì yolov8n nhỏ (tăng: batch-mux F3.3 / input416-INT8 K-115).
+- **Ghi sổ:** LOG #452 · +K-121 (✅, số đo) · INDEX #451→#452 · Σ327→328 (K121).
+- **[chưa kiểm]:** fps end-to-end (decode+letterbox+NMS+overlay); soak 24/7; TensorRT provider (build engine lâu); K-014 ring-drop@fps sustained (khác scope, vẫn 🔴).
+- **CHỜ USER (các hướng tiếp — cần quyết định, không tự làm speculative):** (A) ANPR .pt (cài torch / export onnx); (B) 3 spec design-first valid (overlay-sse-transport / multicamera-fleet-profile — nay A2 có số 36 detect/s); (C) soak 24/7 / end-to-end fps.
+---
+**[✅ #451 — VERIFY YOLOv8n GPU trên luồng RTSP THẬT (D-142 chạy production)]**
+- User chọn "chạy ngay yolov8n.onnx trên GPU trên luồng cam". Có `models/yolov8n.onnx`; GPU RTX 2060 + onnxruntime-cuda no-torch.
+- **Verify (số đo thật):** log `[device] onnx auto→dùng='cuda' (has_cuda=False)` = **GPU engaged qua onnxruntime KHÔNG cần torch** (D-142 đúng production) · /overlay detector=LIVE **person 0.91 + bottle 0.47** (COCO) · /stats `detect=1199` chảy · **0 lỗi console**.
+- **Pipeline thương mại end-to-end CHẠY THẬT:** RTSP .106 → decode 1080p → YOLOv8n GPU → overlay freshness/lease → web MJPEG+overlay, 0 lỗi.
+- **An toàn:** secret không ghi file (log mask); dừng server = đóng RTSP + giải phóng GPU; không lưu footage.
+- **Ghi sổ:** LOG #451 (verify, không +D/C/T/K — xác nhận D-142 production) · INDEX #450→#451 · Σ327 giữ.
+- **Bước kế = CHỜ USER:** (A) **ANPR use-case thật** (model biển-số/xe `.pt`) — cần cài torch (`vp setup` extras pt, nặng/GPU) HOẶC export .pt→.onnx chạy no-torch (design-first); (B) soak 24/7 + reconnect bền (rtsp_transport=tcp?); (C) 3 spec design-first chờ valid (overlay-sse-transport / multicamera-fleet-profile). Nền: luồng cam + GPU detection + web + chống-drift 3-lớp đều đã verify.
+---
+**[✅ #450 — VERIFY RTSP CAMERA LIVE end-to-end (Dahua .106, Windows GPU) — đóng K-117 + K-030]**
+- User đưa URL RTSP thật `rtsp://admin:***@192.168.120.106:554/cam/realmonitor?channel=1&subtype=0` (creds khớp K-034) + báo "luồng cam giờ đã có". Điều tra: KHÔNG có file cam mới trong repo → dùng URL transient, KHÔNG ghi file (K-031 secret).
+- **Verify (Playwright MCP + web app, số đo thật):** `video=2588+` frame chảy · browser stream `<img>` **1920×1080 complete=true** (MJPEG decode 1080p THẬT, không màn đen) · **0 lỗi console** · ~1097 req /overlay+/stats **200 OK**. mask_rtsp che mật khẩu log ✅.
+- **Đóng 2 rủi ro:** K-117 ✅ (camera .106 reachable, LAN thông, VPN-block #429 hết áp — KHÔNG đụng VPN); K-030 ✅ (opencv-ffmpeg Windows mở Dahua OK khi creds ĐÚNG — 401 cũ = sai mật khẩu red-herring, K-034). Mối lo "cực nhiều lỗi" (K-119): backend+cam chạy = 0 lỗi (khớp #447).
+- **An toàn:** URL/mật khẩu KHÔNG ghi file; ảnh `rtsp-cam-live.jpeg` (cam thật) đã XOÁ; dừng server = đóng phiên RTSP.
+- **Ghi sổ:** LOG #450 (verify, KHÔNG +D/C/T/K — cập nhật status K-117/K-030 sẵn có) · INDEX #449→#450 · Σ327 giữ (không ID mới).
+- **Bước kế = CHỜ USER chọn:** (A) **detection YOLO thật trên luồng cam** — cần `--onnx <model.onnx>` (BrightBlobDetector hiện chỉ dò vùng sáng; GPU sẵn dùng qua onnxruntime-cuda D-142) → tôi cần biết model .onnx nào có sẵn/đường dẫn; (B) ổn định 24/7 (reconnect khi camera chớp mạng, cần `rtsp_transport=tcp`?); (C) 3 spec design-first đang chờ valid (overlay-sse-transport / multicamera-fleet-profile).
+---
+**[✅ #449 — Gia cố chống-drift: git pre-commit hook versioned (lớp phòng thủ LOCAL còn thiếu)]**
+- User yêu cầu "1 cách CỰC MẠNH tránh drift". Hiện trạng: đã có agentStop hook (AI/lượt) + CI verify.yml (server/push). LỖ = không có git pre-commit → local commit được khi drift, chỉ bắt sau push.
+- **Làm:** `.githooks/pre-commit` (MỚI, tracked/versioned → share mọi máy, audit PR) chạy `drift_check.py` → chặn commit nếu drift + `.githooks/README.md` + `vp install-hooks` (target mới trong `scripts/vp.cmd`, đặt `core.hooksPath=.githooks`). Drift-only (nhanh vài giây, không bị bypass; full verify để CI/`vp verify`).
+- **Vì sao versioned `.githooks/` không `.git/hooks/`:** bản chất chống-drift đòi chính hook cũng version-controlled (local không share/audit = tự nó là nguồn drift).
+- **Kết quả: phòng-thủ-3-lớp** chống drift: agentStop (AI/lượt) → pre-commit (local/commit) → CI (server/push). Drift không vào được lịch sử git.
+- **Validate:** `git config core.hooksPath`=`.githooks` ✅ · chạy hook thật qua git-sh → HOOK_EXIT=0 state sạch (cho commit) · self-test [3/3] drift_check PASS = máy trả non-zero khi drift → hook chặn (bắc cầu). Đảo: `git config --unset core.hooksPath`.
+- **Ghi sổ:** LOG #449 · +D-148 (✅) · INDEX #448→#449 · Σ326→327 (D148). File .githooks/ + vp.cmd sửa CHƯA commit (working tree) — user commit khi muốn.
+- **[chưa kiểm]:** hook trên Linux thật (máy Docker cần chmod +x — ghi README); chưa thực-chặn-1-commit-drift-thật (dùng chứng minh bắc cầu).
+- **Ba việc mở giữ nguyên chờ user:** (A) overlay-sse-transport: valid design → Requirements→Tasks→code; (B) multicamera-fleet-profile: chốt 2 số business → Tasks; (C) pre-commit hook: nếu muốn tôi test thực-chặn bằng 1 commit-thử drift (cần bạn cho phép commit).
+---
+**[🔵 #448 — Mở spec `overlay-sse-transport` design-first (fix GỐC "cực nhiều lỗi" K-119 bằng SSE, CHƯA code)]**
+- Sau #447 (GỐC = HTTP-poll → browser log mỗi fetch-fail lúc outage), user chọn **fix tận gốc = đổi transport SSE** (design-first).
+- **Làm:** design.md `overlay-sse-transport` — đổi transport overlay poll→**SSE** (`/events` MỚI song song, GIỮ `/overlay` poll fallback = additive/đảo được); **SSE-không-WebSocket** (overlay 1 chiều); tái dùng `OverlayStateStore`/`project_overlay`/`OverlayViewSnapshot` không đổi model epoch/lease; giữ render rAF + vx/vy (#416). 7 Correctness Property (P2 = console-error SSE ≪ poll = mục tiêu cốt lõi).
+- **Trung thực [chưa kiểm] (phải valid trước code):** waitress buffer text/event-stream (như MJPEG #427)? · SSE+BasicAuth credential (EventSource khó set header)? · thread-budget threads=8 (mỗi viewer 1 connection dài → cạn thread chặn /stream)? — design nêu kèm CÁCH đo (Playwright đóng-dấu-thời-gian + synthetic source như #447).
+- **Ghi sổ:** LOG #448 · +D-147 (🔵 design-first) · INDEX #447→#448 · Σ325→326 (D147). design.md get_diagnostics 0 error (7 warning provisional-req bình thường design-first).
+- **Bước kế = CHỜ USER valid design** → suy ra requirements.md → tasks.md → code TDD (Wave: /events server generator + flush → client EventSource+fallback → Playwright đo Property 2 + valid waitress flush/auth/thread). KHÔNG tự sang requirements (design-first: user đọc design trước).
+---
+**[✅ #447 — RE-VERIFY "cực nhiều lỗi" browser (Playwright MCP) + xác nhận thư mục 4-việc & drift đã có]**
+- User yêu cầu 3 phần: (1) thư mục 4-việc; (2) chống drift cực mạnh; (3) mở web browser soi "cực nhiều lỗi".
+- **Phần 1+2 ĐÃ CÓ (không tạo trùng, đúng lời "có rồi thì cập nhật"):** `ai-decision-journal/` (01=D·02=C·03=T·04=K + INDEX + README, ánh xạ 1:1 4 việc, cập nhật tới D-146) + `tests/drift_check.py`/`vp check` (C1-C9 + 14 self-test + RULES_VERSION sync, tự chạy qua hook `auto-drift-check.kiro.hook`).
+- **Phần 3 — TÁI HIỆN bằng bằng chứng (Playwright MCP, synthetic port 8099):** server-UP = **0 lỗi console · ~373 req 200 OK**; server-DOWN = browser tự log ERR_CONNECTION_REFUSED/RESET mỗi fetch hỏng (13→45, backoff #436 hãm + badge "mất kết nối" hiện); server-BACK = self-heal, badge tắt, overlay_rev tiến, **0 lỗi mới**.
+- **GỐC (RE-CONFIRM K-119, KHÔNG phải defect):** lỗi tầng-MẠNG do TRÌNH DUYỆT tự log khi backend unreachable (down/restart/crash) — JS app KHÔNG chặn được. App phản ứng ĐÚNG (reconnect + backoff #436 + badge). Backend UP = 0 lỗi.
+- **Fix tận GỐC console-noise-khi-outage (nếu user muốn):** đổi transport HTTP-poll → **SSE/WebSocket** (1 kết nối dài → 1 lỗi/outage thay vì hàng trăm). Là QUYẾT ĐỊNH THIẾT KẾ, design-first — CHƯA làm, đề xuất chờ user duyệt.
+- **Ghi sổ:** LOG #447 (verification, KHÔNG +D/C/T/K — RE-CONFIRM K-119) · INDEX #446→#447 · Σ325 giữ. 0 đổi code → baseline giữ.
+- **CHỜ USER quyết (2 việc mở):** (A) Web console-noise: mở spec design-first SSE/WebSocket transport (khử tận gốc) HAY chấp nhận hành vi hiện tại (self-heal+badge đúng, lỗi chỉ cosmetic lúc outage)? (B) Anti-drift gia cố: cài git pre-commit hook chạy `vp check` (chặn commit khi drift) — cần user duyệt vì đụng git hook. (C) multicamera-fleet-profile: chốt 2 số business → sang Tasks.
+---
+**[🔵 #446 — Mở spec `multicamera-fleet-profile` design-first qua `/architecture-selection` (đóng F7.2, CHƯA code)]**
+- User `/architecture-selection` + "cực sâu / cấp chuyên gia". Spec hoạt động gần nhất = `architecture-review` (design-first, KHÔNG có requirements.md, gated Phần E business). Tôi KHÔNG bịa requirements speculative (giữ điểm dừng #442). User chọn hướng **F7.2 — hợp nhất 2 topology** (multi-process bulkhead + web UI live cho N camera).
+- **Làm (design-first, grounded):** (1) requirements.md `multicamera-fleet-profile` — 7 nhóm R + 3 ASSUMPTION có nhãn (A1 GPU x86-64/K-001 nếu ARM · A2 fleet nhỏ-vừa N tham số · A3 MJPEG); (2) architecture_selection.md — phân loại biến → bất biến → **3 candidate KHÁC BẢN CHẤT** (Lane-oriented / Tier-oriented / Event+ResultRepository) → chấm 8 metric → **chọn Lane-oriented** (god-object ~25% thấp nhất · INV1 isolation cưỡng-chế-bằng-ranh-giới-process · 0 sync cycle · tái dùng tối đa); (3) design.md — 14 Correctness Property, sơ đồ hexagonal + 3 luồng, get_diagnostics 0.
+- **Trade-off chốt:** InferenceService fan-in cao = điểm ghép chia sẻ (nơi tích hợp batch-mux F3.3 sau). Loại Tier (god-object>50%) + Event+Repo (bus=SPOF nghịch isolation).
+- **Ghi sổ:** LOG #446 (subagent) + reconcile INDEX #445→#446 · Σ324→325 (D145→D146) · +D-146 (🔵 design-first) · activeContext. C8 giữ 39 (design doc, không symbol mới).
+- **Bước kế = CHỜ USER:** (A) duyệt kiến trúc + chốt 2 số business (GPU target x86/Jetson; quy mô N camera + viewer) → sang phase **Tasks** → code TDD; (B) nếu muốn đổi kiến trúc → re-run architecture-selection. KHÔNG tự sang Tasks (feature lớn, PLAN-FIRST + chờ duyệt).
+---
+**[✅ #445 — Wire log_file + max_cardinality qua `[observability]` TOML (deploy-by-TOML, đóng nợ Non-Goal-v1)]**
+- User "cực sâu tiếp tục". #443 (log-file) + #444 (cardinality budget) mới chỉ có đường CLI; cả 2 tự ghi nợ "config-TOML chưa wire (Non-Goal v1)". Tiếp mục không-gated verify-được-ngay đúng DNA repo: đóng nợ đó → 2 feature production deploy QUA TOML (GitOps D-086), không chỉ CLI ad-hoc.
+- **Code:** +2 field `log_file`/`max_cardinality` vào `ObservabilityConfig`@kernel (additive, default None) · `_parse_observability`@config_loader validate fail-fast (log_file chuỗi-không-rỗng; max_cardinality int-dương chặn bool/0/âm/float) · `_merge_observability` +2 key precedence CLI-explicit>TOML>default (D-086) · `_run_from_config` +2 tham số → CLI-dict + build-call + caller `main`.
+- **VERIFY:** `vp verify` **894/2** (888→894, +6 test)·import-linter **7 kept/0 broken**·drift PASS; 6 test (parse 2 field, parse default-None, parse fail-fast 6 case, merge TOML-only, merge CLI-override, e2e wire-từ-TOML); get_diagnostics 0.
+- **Chỗ phải sửa (bài học #443):** đổi chữ ký `_build_config_observability` (gọi kèm log_file=/max_cardinality= từ đường config) → 3 spy monkeypatch phải +2 kwargs + 2 assert-dict-tuyệt-đối +2 key → tự bắt bằng 2 test fail rồi fix.
+- **Ghi sổ:** LOG #445 · +D-145 (✅, Verify-Symbol ObservabilityConfig → C8 38→39) · INDEX #444→#445 · Σ323→324 (D145). 2 nợ Non-Goal-v1 #443/#444 ĐÓNG.
+- **Bước kế (chờ user/tài nguyên):** (A) test live GPU+RTSP (VPN Allow-LAN + IPv6 K-117); (B) Part E: batch-mux (cần GPU Task-0 gate), rotate secret K-031, topology-fleet, ARM K-001. Follow-on nhỏ (không bắt buộc): emit `cardinality_dropped` thành metric self-observability; K-017 wire backpressure-metrics.
+---
+**[✅ #444 — K-019: cưỡng chế cardinality budget bằng máy (chống Prometheus OOM)]**
+- Sau F5.3 logging (#443), tiếp mục không-gated verify-được-ngay đúng DNA repo: K-019 (review: "cardinality budget CHƯA cưỡng chế" — mới cảnh báo docstring). Cardinality vô hạn = Prometheus OOM (killer 24/7).
+- **Code:** `runtime/observability.py::InMemoryMetrics(max_cardinality=None)` — `_admit(name,key)` dưới lock: None→không giới hạn (tương thích ngược); đặt → series MỚI vượt cap PER-METRIC-NAME → DROP + tăng `cardinality_dropped` (quan-sát-được, không im lặng), series ĐÃ CÓ vẫn update. Cap per-name (1 metric runaway không starve metric khác). Wire opt-in CLI `--metrics-max-cardinality` → `_build_config_observability`(+param) → `InMemoryMetrics`.
+- **VERIFY:** `vp verify` **888/2** (881→888, +7 test)·import-linter **7 kept/0 broken**·drift PASS; 7 unit (no-cap-unlimited, cap-drop+đếm, per-name-độc-lập, counter+histogram, re-write-không-drop, fail-fast-param, iter_metrics-loại-drop); get_diagnostics 0.
+- **Ghi sổ:** LOG #444 · +D-144 (✅, Verify-Symbol InMemoryMetrics → C8 37→38) · INDEX #443→#444 · Σ322→323 (D144). K-019 ĐÓNG (cưỡng-chế-bằng-máy).
+- **Chuỗi observability production đã đủ (verify-được-không-GPU):** logs (F5.3 non-blocking+rotating+flush #443) + metrics cardinality-bounded (K-019 #444) + exposition Prometheus (#284) + /metrics HTTP (#291). Nợ observability 24/7 (K-017/18/19) gần đóng hết ở tầng verify-được.
+- **Bước kế (chờ user/tài nguyên):** (A) test live GPU+RTSP (VPN Allow-LAN + IPv6 K-117); (B) Part E: batch-mux (cần GPU Task-0 gate), rotate secret K-031, topology-fleet, ARM K-001. Follow-on nhỏ: config-TOML cho --log-file/--metrics-max-cardinality; K-017 wire backpressure-metrics.
+---
+**[✅ #443 — Production logging (F5.3/K-018): non-blocking + rotating + flush-on-shutdown]**
+- User "cực sâu tiếp tục / chọn cái chạy cực đại". Đánh giá: **loại** batch-mux (Task-0 = SPIKE BENCH GATE cần GPU-bench+network, build trước gate = vi phạm kỷ luật spec R3.2) + **loại** topology-unify/Wave-C (YAGNI, gated business/scale). **Chọn F5.3 production logging** — gap THẬT (K-018 tự-ghi cố-ý-hoãn), **KHÔNG speculative** (mọi deploy 24/7 cần, độc lập scale/GPU/feature), **verify được KHÔNG cần GPU/LAN/test-live** → đúng "chạy cực đại" làm trọn end-to-end.
+- **Code (đóng 3 thứ K-018):** `adapters/production_log_handle.py::ProductionLogHandle` — `_DropCountingQueueHandler` (bounded `queue.Queue` + drop-newest + đếm khi đầy → non-blocking hot-path, chống OOM, triết lý K-016) → `QueueListener` (thread nền ghi file) → `RotatingFileHandler` (maxBytes/backupCount, chống đầy đĩa) + `shutdown()` = stop drain + flush + close (không mất log cuối). `runtime/observers.py::FileLoggingObserver` (serialize JSON → `sink.emit` tiêm DI, KHÔNG import adapter → contract #3). Wire `--log-file` opt-in vào `vision_slice_app` (`_build_config_observability` 2→3-tuple + shutdown teardown).
+- **VERIFY:** `vp verify` **881/2** (874→881, +7 test)·import-linter **7 kept/0 broken**·drift PASS; 7 unit (flush-no-loss 200-record, rotation-backup, drop-counting, idempotent, emit-before-start-raise, bad-params, observer-JSON); **E2E**: `vision_slice_app --source fake --detector fake --observe --log-file $tmp --frames 20` → file có `{"event":"pipeline_snapshot",...,"is_final":true}` + flush-on-shutdown sau process thoát. get_diagnostics 0.
+- **Chỗ phải sửa (đổi chữ ký hàm chung):** `_build_config_observability` 2→3-tuple → 12 test fail giữa chừng (8 call-site + 3 spy + NameError log_handle khi build tiêm) → đã fix hết. Bài học: đổi chữ ký hàm dùng-chung phải quét MỌI call-site + spy + init-trước-nhánh.
+- **Ghi sổ:** LOG #443 · +D-143 (✅, Verify-Symbol ProductionLogHandle+FileLoggingObserver → C8 35→37) · INDEX #442→#443 · Σ321→322 (D143).
+- **Bước kế (chờ user / khi có tài nguyên):** (A) test live GPU inference + RTSP (bật Allow-LAN VPN + IPv6 K-117); (B) chốt Part E architecture-review: GPU target, rotate secret K-031, batch-mux (khi có GPU cho Task-0 gate), fleet/topology. Follow-on nhỏ: đường config-TOML `--log-file`, cardinality-enforcement K-019.
+---
+**[⏸️ #442 — Ghi manh mối camera IPv6 (K-117) + CHỐT ĐIỂM DỪNG (user hoãn test, tài nguyên ít)]**
+- User: camera "hình như chỉ IPv6" + "chưa muốn test, tài nguyên ít, hết việc không-test thì để sau". Tôn trọng: KHÔNG test, KHÔNG đụng VPN.
+- **Manh mối IPv6 (ghi K-117):** `192.168.120.106` là **IPv4** → nếu camera IPv6-only thì `.106` không phải nó (thiết bị khác trong ARP) → lý do bổ sung ping/RTSP fail (cạnh VPN-chặn-LAN). Test sau (user chủ động): lấy IPv6+URL RTSP từ trang cấu hình camera, `rtsp://[ipv6]:554/...`, kiểm VPN có allow/route IPv6-LAN không.
+- **CHỐT ĐIỂM DỪNG (đúng ý user):** việc không-cần-test/LAN/quyết-định-business đã HẾT. KHÔNG tạo requirements.md architecture-review speculative (design Part E gate requirements theo 9 câu hỏi business user CHƯA trả lời — tạo giờ = đoán, vi phạm không-bịa). KHÔNG vẽ việc.
+- **Ghi sổ:** LOG #442 (note/pause, KHÔNG +D/C/T/K) · addendum K-117 · INDEX #441→#442 · Σ321 giữ. 0 đổi code → baseline 874/2 giữ.
+- **SẴN SÀNG cho lần test sau của user (tài nguyên đủ + bật Allow-LAN VPN):**
+  1. GPU qua ONNX nay dùng được (D-142): web app `--device auto` → CUDA (RTX 2060) — verify `--capabilities` has_onnx_cuda=true.
+  2. Web production stack verified: waitress + Basic Auth + security headers + thread-safe đa-client + không leak.
+  3. RTSP: bật "Allow LAN" trong VPN + xử lý IPv6 (K-117) → test camera thật.
+- **CHỜ USER (không tiến được nếu thiếu):** (A) test live (khi tài nguyên đủ + VPN LAN); (B) chốt Part E architecture-review: GPU target x86/Jetson (K-001) · rotate secret K-031 🔴 · ưu tiên batch-mux(F3.3)/perf-harness(K-014)/fleet(F7.2)/observability. → suy ra requirements + triển khai.
+---
+**[✅ #441 — [máy toann GPU] Review kiến trúc CỰC SÂU phiên #434-440 + FIX GỐC bug onnx-cuda gating (D-142)]**
+- User trỏ `end.md` (handoff k.nguyen #440), yêu cầu review kiến trúc cực sâu xem kỹ phiên trước, tập trung THIẾT KẾ (VPN chặn stream, KHÔNG tắt VPN → không test live), báo khi OK. Máy này CÓ GPU.
+- **§0 chống-drift:** context tôi CŨ (#432); git+file thật → frontier **#440/Σ319** (k.nguyen tiếp #433-440 trên #432 của tôi, đã push, máy này pull đủ HEAD=origin=1b645a5 tree clean). `vp check` #432 stale. Re-orient #440. KHÔNG mất việc/phân kỳ.
+- **Validate bản `architecture-review` (máy kia):** SOUND, grounded, trung thực. Tôi nâng nhãn [chưa kiểm]→✅ bằng CHẠY THẬT trên máy GPU: `vp verify` **874/2·import-linter 7 kept/0 broken·drift PASS**. Xác nhận F3.2 (device onnx) + F1.4 (layers contract, 7 contracts) đã fix; finding MỞ còn giá trị: K-001 ARM·K-014 throughput·K-031 secret·F3.3 batch-mux·F7.2 topology-unify·F5.2/5.3 observability.
+- **FIX GỐC bug máy GPU (D-142/K-120) — máy no-GPU k.nguyen SÓT:** D-139 gate device đường ONNX theo `caps.has_cuda` (dò qua **torch**). Máy toann: torch VẮNG (has_cuda=False) nhưng `ort.get_available_providers()`=[Tensorrt,**CUDA**,CPU] → GPU dùng được qua onnxruntime KHÔNG cần torch (K-109). ⇒ trước fix: onnx `auto`→CPU, `cuda`→CapabilityError → **GPU bất khả dụng oan**. Fix: `MachineCapabilities`+`has_onnx_cuda` (dò onnxruntime providers) + `resolve_onnx_device` gate theo nó (torch path `_det_pt`/`resolve_device` KHÔNG đổi, additive default False). Bug chỉ lộ trên máy GPU-không-torch (máy no-GPU 2 nguồn trùng False → vô hình).
+- **VERIFY:** `vp verify` 874/2 (868→874, +6 test regression)·lint 7/0·drift PASS; máy toann `--capabilities` **has_onnx_cuda=true** (torch=False) → onnx `auto`→CUDA. get_diagnostics 0.
+- **Ghi sổ:** LOG #441 · +D-142 (✅, Verify-Symbol resolve_onnx_device) · +K-120 · INDEX #440→#441 · Σ319→321 (D142·K120).
+- **Bước kế = CẦN USER (như bạn dặn "báo khi OK để xem máy + test"):** (1) bật Allow-LAN trong VPN (AI KHÔNG đụng) → test camera RTSP + GPU inference LIVE (giờ onnx dùng được GPU); (2) chốt Phần E architecture-review: GPU target x86/Jetson (K-001 🔴 nếu Jetson) · rotate secret K-031 🔴 · ưu tiên batch-mux(F3.3)/perf-harness(K-014)/fleet(F7.2)/observability. → suy ra requirements triển khai tiếp.
+---
 **[✅ #440 — Hardening kiến trúc: +import-linter contract `layers` (F1.4) + đính chính comment (F1.5)]**
 - Chờ user chốt GPU target → làm bước hardening verify-được-ngay (không cần GPU/target), theo khuyến nghị F1.4/F1.5 của bản đánh giá. Đúng giá-trị chống-drift + kiến-trúc-cưỡng-chế-bằng-máy.
 - **D-141:** thêm contract `type=layers` (application>runtime>kernel>domain) SONG SONG 6 `forbidden` → tự-bắt-hướng-tầng khi mở rộng (không phải nhớ sửa danh sách cấm); adapters/profiles=rim vẫn do forbidden #5 phủ. Defense-in-depth. + sửa comment "4-layer"→"4 lõi+2 rim".

@@ -88,9 +88,18 @@ def _parse_observability(raw: Any) -> ObservabilityConfig:
     _require(isinstance(every, int) and not isinstance(every, bool),
              f"observability.observe_every_n phải là số nguyên (nhận {every!r})")
 
+    log_file = raw.get("log_file")
+    _require(log_file is None or (isinstance(log_file, str) and log_file != ""),
+             f"observability.log_file phải là chuỗi không rỗng hoặc vắng (nhận {log_file!r})")
+
+    max_card = raw.get("max_cardinality")
+    _require(max_card is None or (isinstance(max_card, int) and not isinstance(max_card, bool) and max_card > 0),
+             f"observability.max_cardinality phải là số nguyên dương hoặc vắng (nhận {max_card!r})")
+
     return ObservabilityConfig(
         observe=observe, metrics_port=port, metrics_host=host,
         observe_interval_s=float(interval), observe_every_n=every,
+        log_file=log_file, max_cardinality=max_card,
     )
 
 

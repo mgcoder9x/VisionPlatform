@@ -99,9 +99,17 @@ def setup_logging(level: str = "INFO") -> None:
 
 
 class InMemoryMetrics:
-    """Metrics trong bộ nhớ, thread-safe. Production: thay bằng adapter Prometheus/StatsD."""
+    """Metrics trong bộ nhớ, thread-safe. Production: thay bằng adapter Prometheus/StatsD.
 
-    def __init__(self):
+    CƯỠNG-CHẾ CARDINALITY (K-019, opt-in): `max_cardinality` = số series (label-set phân biệt) TỐI ĐA mỗi
+    metric-name. None = không giới hạn (mặc định, tương thích ngược). Đặt (production) → series MỚI vượt cap →
+    DROP + đếm `cardinality_dropped` (quan-sát-được, KHÔNG im lặng); series ĐÃ CÓ vẫn update bình thường. Bounded
+    số series → chống Prometheus OOM khi lỡ đưa label high-cardinality (packet_id/bbox coords). Trước đây K-019
+    chỉ là cảnh báo docstring — nay cưỡng-chế-bằng-máy (đúng triết lý repo: bất biến cưỡng chế thay vì lời nhắc)."""
+
+    def __init__(self, *, max_cardinality: int | None = None):
+        if max_cardinality is not None and max_cardinality <= 0:
+            raise ValueError(f"max_cardinality phải > 0 hoặc None, got {max_cardinality}")
         self._lock = Lock()
         self._counters: dict[str, int] = defaultdict(int)
         self._gauges: dict[str, float] = {}
@@ -109,22 +117,48 @@ class InMemoryMetrics:
         # (name, labels) CÓ CẤU TRÚC theo key — ghi lúc write để iter_metrics KHỎI parse-ngược chuỗi key
         # (parse `name{k=v}` bị lossy khi value chứa ,/=/} — spec metrics-exposition D-071). Bounded (K-019).
         self._labelsets: dict[str, tuple[str, dict]] = {}
+        self._max_cardinality = max_cardinality
+        self._name_cardinality: dict[str, int] = defaultdict(int)   # số series ĐÃ NHẬN mỗi metric-name
+        self._cardinality_dropped: int = 0                          # series bị từ chối do vượt cap (quan-sát-được)
+
+    def _admit(self, name: str, key: str) -> bool:
+        """GỌI DƯỚI LOCK. True nếu (name,key) được ghi; False nếu series MỚI vượt cap (drop + đếm)."""
+        if self._max_cardinality is None:
+            return True
+        if key in self._labelsets:                 # series đã tồn tại → luôn cho update (không tạo series mới)
+            return True
+        if self._name_cardinality[name] >= self._max_cardinality:
+            self._cardinality_dropped += 1         # series MỚI vượt budget → DROP (không im lặng)
+            return False
+        self._name_cardinality[name] += 1          # nhận series mới → tăng đếm cardinality của name
+        return True
+
+    @property
+    def cardinality_dropped(self) -> int:
+        with self._lock:
+            return self._cardinality_dropped
 
     def counter(self, name: str, value: float = 1.0, **labels) -> None:
         key = self._key(name, labels)
         with self._lock:
+            if not self._admit(name, key):   # K-019: series mới vượt cap → drop (đã đếm), KHÔNG tạo series
+                return
             self._counters[key] += int(value)
             self._labelsets[key] = (name, dict(labels))
 
     def gauge(self, name: str, value: float, **labels) -> None:
         key = self._key(name, labels)
         with self._lock:
+            if not self._admit(name, key):
+                return
             self._gauges[key] = value
             self._labelsets[key] = (name, dict(labels))
 
     def histogram(self, name: str, value: float, **labels) -> None:
         key = self._key(name, labels)
         with self._lock:
+            if not self._admit(name, key):
+                return
             self._histograms[key].append(value)
             self._labelsets[key] = (name, dict(labels))
 

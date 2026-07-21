@@ -52,6 +52,33 @@ class LoggingObserver:
         )
 
 
+class FileLoggingObserver:
+    """Ghi mỗi snapshot 1 dòng JSON tới `sink` NON-BLOCKING (spec F5.3/K-018 — production logging).
+
+    `sink` TIÊM qua DI (duck-typed `.emit(str)`) — runtime KHÔNG import adapter (contract #3). Composition
+    (profiles) truyền `ProductionLogHandle` (adapter: bounded-queue non-blocking + rotating + flush-on-shutdown).
+    Observer chỉ SERIALIZE + gọi `emit` (non-blocking) → hot-path không chặn bởi I/O file (đúng hợp đồng
+    `IPipelineObserver`). Tách serialize (runtime) ⊥ transport/rotation/flush (adapter).
+    """
+
+    def __init__(self, sink) -> None:
+        self._sink = sink   # object có .emit(str) — vd ProductionLogHandle (tiêm ở profiles)
+
+    def on_snapshot(self, snapshot: PipelineSnapshot) -> None:
+        import json
+        self._sink.emit(json.dumps({
+            "event": "pipeline_snapshot",
+            "source_id": snapshot.source_id,
+            "frames_read": snapshot.frames_read,
+            "processed": snapshot.processed,
+            "skipped": snapshot.skipped,
+            "stage_errors": snapshot.stage_errors,
+            "fps": round(snapshot.frames_per_second, 2),
+            "skip_rate": round(snapshot.skip_rate, 4),
+            "is_final": snapshot.is_final,
+        }, ensure_ascii=False))
+
+
 class MetricsObserver:
     """Cập nhật gauge vào `InMemoryMetrics` (nhãn CHỈ `source` — bounded cardinality K-019).
 

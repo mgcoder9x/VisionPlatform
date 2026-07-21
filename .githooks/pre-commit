@@ -1,0 +1,40 @@
+#!/bin/sh
+# ============================================================================
+#  pre-commit — CONG CHONG-DRIFT LOCAL (versioned, dung chung moi may).
+#
+#  BAN CHAT: bat drift SOM NHAT (luc commit) thay vi sau push (CI verify.yml).
+#  Phong-thu-nhieu-lop: (1) hook agentStop [AI moi luot] -> (2) pre-commit [local,
+#  moi commit, file nay] -> (3) CI [server-side, moi push/PR]. Drift KHONG the
+#  vao lich su git neu hook bat.
+#
+#  CHI chay drift_check.py (nhanh vai giay) — KHONG pytest/lint (cham -> bi bypass);
+#  full verify de `vp verify` + CI. Exit !=0 => chan commit.
+#
+#  Kich hoat 1 lan/clone: `scripts\vp.cmd install-hooks` (dat core.hooksPath=.githooks).
+#  Bo qua co chu dich 1 lan: `git commit --no-verify` (KHONG khuyen khich).
+#  Discovery Python bam tests/drift_check.cmd: py -3 -> venv du an -> python.
+# ============================================================================
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT" || exit 1
+SCRIPT="tests/drift_check.py"
+VENV="vision-platform/.venv/Scripts/python.exe"
+
+if py -3 --version >/dev/null 2>&1; then
+  py -3 "$SCRIPT"; rc=$?
+elif [ -x "$VENV" ]; then
+  "$VENV" "$SCRIPT"; rc=$?
+elif python --version >/dev/null 2>&1; then
+  python "$SCRIPT"; rc=$?
+else
+  echo "[pre-commit] ERROR: khong tim thay Python (da thu: py -3, venv, python)." >&2
+  exit 9009
+fi
+
+if [ "$rc" -ne 0 ]; then
+  echo "" >&2
+  echo "[pre-commit] DRIFT-CHECK FAIL (rc=$rc) — COMMIT BI CHAN." >&2
+  echo "  Ban ghi (LOG / INDEX / journal / activeContext) lech thuc te." >&2
+  echo "  Sua cho khop roi commit lai. (Bo qua co chu dich: git commit --no-verify)" >&2
+  exit 1
+fi
+exit 0

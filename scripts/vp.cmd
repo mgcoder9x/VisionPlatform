@@ -11,7 +11,7 @@ REM  GHI DE theo may bang bien moi truong (nap tu scripts\env.local.cmd neu co):
 REM    VP_PYTHON  = interpreter base de dung venv (vd "py -3.11"); mac dinh: tu do.
 REM    VP_EXTRAS  = pip extras (vd "dev,onnx,cv2,web,pt"); mac dinh: dev,onnx,cv2,web.
 REM
-REM  Dung: vp <env|setup|test|lint|check|verify|help>
+REM  Dung: vp <env|setup|test|lint|check|verify|install-hooks|help>
 REM  Thoat: 0 = OK · khac 0 = loi (propagate exit code cua buoc that bai).
 REM ============================================================================
 setlocal enabledelayedexpansion
@@ -44,6 +44,7 @@ if /i "%CMD%"=="test"   goto :test
 if /i "%CMD%"=="lint"   goto :lint
 if /i "%CMD%"=="check"  goto :check
 if /i "%CMD%"=="verify" goto :verify
+if /i "%CMD%"=="install-hooks" goto :install_hooks
 goto :help
 
 :env
@@ -111,6 +112,21 @@ if not "!SUM!"=="0" ( echo [vp] VERIFY FAIL & exit /b 1 )
 echo [vp] VERIFY OK — test + lint + drift-check deu PASS
 exit /b 0
 
+:install_hooks
+REM Kich hoat git hooks versioned tu .githooks/ (chong drift: pre-commit chay drift-check).
+REM core.hooksPath = local config, dao duoc bang: git config --unset core.hooksPath
+pushd "%ROOT%"
+git rev-parse --is-inside-work-tree >nul 2>&1
+if errorlevel 1 ( popd & echo [vp] ERROR: khong phai git repo & exit /b 1 )
+git config core.hooksPath .githooks
+set "RC=!errorlevel!"
+popd
+if not "!RC!"=="0" ( echo [vp] ERROR: git config that bai RC=!RC! & exit /b !RC! )
+echo [vp] Da kich hoat git hooks tu .githooks/ (core.hooksPath=.githooks).
+echo [vp]   pre-commit se chay drift-check + chan commit neu drift.
+echo [vp]   Go: git config --unset core.hooksPath
+exit /b 0
+
 :has_gpu
 where nvidia-smi >nul 2>&1
 if errorlevel 1 exit /b 1
@@ -125,6 +141,7 @@ echo   test    : pytest -q  (dung venv du an)
 echo   lint    : import-linter qua importlinter.api (ne AV — K-044)
 echo   check   : drift-check (nhat quan bo nho + RULES_VERSION)
 echo   verify  : test + lint + check
+echo   install-hooks : kich hoat git hooks .githooks/ (pre-commit chan commit khi drift)
 echo.
 echo Profile rieng may: copy scripts\env.local.cmd.example -^> scripts\env.local.cmd (gitignored)
 exit /b 0

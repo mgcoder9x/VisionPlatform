@@ -1,8 +1,9 @@
 """ONNX device policy — capability-aware, HỢP NHẤT 1 chính sách device mọi đường ONNX (F3.2/D-139).
 
-`onnx_providers_for(requested, caps)` (adapters, THUẦN) dùng `resolve_device` @kernel: hỗ trợ 'auto',
-FAIL-FAST `CapabilityError` khi 'cuda' mà máy KHÔNG CUDA (KHÔNG fallback CPU âm thầm — đối xứng `_det_pt`).
-`_det_onnx` (config) đi qua helper + probe + LOG. Test tiêm `MachineCapabilities` giả → không cần GPU/onnxruntime-gpu.
+`onnx_providers_for(requested, caps)` (adapters, THUẦN) dùng `resolve_onnx_device` @kernel: gate CUDA theo
+`caps.has_onnx_cuda` (onnxruntime providers, ĐỘC LẬP torch — K-109); hỗ trợ 'auto', FAIL-FAST `CapabilityError`
+khi 'cuda' mà onnxruntime KHÔNG CUDA. `_det_onnx`/`_build_detector` đi qua helper + probe + LOG. Test tiêm
+`MachineCapabilities` giả → không cần GPU/onnxruntime-gpu.
 """
 from __future__ import annotations
 
@@ -12,8 +13,16 @@ from vision_platform.profiles import pipeline_factory as pf
 from vision_platform.kernel.capabilities import MachineCapabilities, CapabilityError
 from vision_platform.adapters.onnx_detector import onnx_providers_for
 
-_GPU = MachineCapabilities(has_torch=True, has_cuda=True, cuda_device_count=1, gpu_name="RTX", has_cv2=True)
-_CPU = MachineCapabilities(has_torch=False, has_cuda=False)
+# GPU đầy đủ (torch + onnxruntime đều thấy CUDA)
+_GPU = MachineCapabilities(has_torch=True, has_cuda=True, cuda_device_count=1, gpu_name="RTX",
+                           has_cv2=True, has_onnx_cuda=True)
+_CPU = MachineCapabilities(has_torch=False, has_cuda=False)   # has_onnx_cuda default False
+# KỊCH BẢN BUG (#nnn) — máy GPU CÓ onnxruntime-gpu NHƯNG KHÔNG cài torch: has_cuda(torch)=False,
+# has_onnx_cuda=True. Đường ONNX PHẢI dùng được GPU (đây là kịch bản CPU-first-no-torch của onnx).
+_GPU_NOTORCH = MachineCapabilities(has_torch=False, has_cuda=False, has_onnx_cuda=True)
+# Ngược lại: có torch-CUDA nhưng onnxruntime KHÔNG có CUDA provider (onnxruntime CPU-only) → onnx PHẢI về/chặn CPU.
+_TORCHCUDA_NO_ONNXCUDA = MachineCapabilities(has_torch=True, has_cuda=True, cuda_device_count=1,
+                                             gpu_name="RTX", has_onnx_cuda=False)
 
 _CUDA = ["CUDAExecutionProvider", "CPUExecutionProvider"]
 _CPUONLY = ["CPUExecutionProvider"]
@@ -46,6 +55,26 @@ def test_helper_nocuda_cuda_fail_fast():
 def test_helper_bad_device_raises():
     with pytest.raises(CapabilityError):
         onnx_providers_for("tpu", _CPU)
+
+
+# ---------- REGRESSION (bug #nnn): onnx gate theo has_onnx_cuda, KHÔNG theo has_cuda(torch) ----------
+
+def test_onnx_cuda_without_torch_auto_picks_cuda():
+    # GỐC: máy GPU-KHÔNG-torch (onnxruntime-gpu thấy CUDA) → auto PHẢI chọn CUDA (trước bug: về CPU oan).
+    assert onnx_providers_for("auto", _GPU_NOTORCH) == (_CUDA, "cuda")
+
+
+def test_onnx_cuda_without_torch_cuda_ok():
+    # GỐC: 'cuda' trên máy GPU-không-torch → CUDA (trước bug: CapabilityError oan vì has_cuda(torch)=False).
+    assert onnx_providers_for("cuda", _GPU_NOTORCH) == (_CUDA, "cuda")
+
+
+def test_onnx_ignores_torch_cuda_when_onnxruntime_has_no_cuda():
+    # ĐỐI XỨNG: có torch-CUDA nhưng onnxruntime CPU-only → onnx 'auto' về CPU, 'cuda' fail-fast
+    # (onnx KHÔNG mượn được CUDA của torch).
+    assert onnx_providers_for("auto", _TORCHCUDA_NO_ONNXCUDA) == (_CPUONLY, "cpu")
+    with pytest.raises(CapabilityError):
+        onnx_providers_for("cuda", _TORCHCUDA_NO_ONNXCUDA)
 
 
 # ---------- _det_onnx wiring (monkeypatch probe + OnnxDetector spy) ----------

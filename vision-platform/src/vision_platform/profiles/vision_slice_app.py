@@ -64,10 +64,11 @@ class _CompositeObserver:
                 pass
 
 
-def _build_config_observability(observe, metrics_port, metrics_host):
-    """Dựng observer + optional exporter `/metrics` DÙNG CHUNG (khử trùng lặp: cả main CLI-direct lẫn `_run_from_config`).
+def _build_config_observability(observe, metrics_port, metrics_host, log_file=None, max_cardinality=None):
+    """Dựng observer + optional exporter `/metrics` (+ optional log-file production) DÙNG CHUNG (khử trùng lặp).
 
-    Trả `(observer, exporter)`: observer=None nếu không bật gì; exporter=None nếu `metrics_port is None`.
+    Trả `(observer, exporter, log_handle)`: observer=None nếu không bật gì; exporter=None nếu `metrics_port is None`;
+    log_handle=None nếu `log_file is None` (nơi gọi PHẢI `log_handle.shutdown()` lúc teardown → flush-on-shutdown).
     `metrics_port=0` → OS cấp cổng ephemeral (test). DÙNG CHUNG **1** `InMemoryMetrics` → `MetricsObserver` gắn nhãn
     `source=snapshot.source_id` → `/metrics` aggregate MỌI pipeline trong 1 process (mỗi camera 1 series gauge).
     Điều kiện wire = `observe OR metrics_port is not None` (metrics đơn lẻ, không cần --observe, vẫn lên).
@@ -78,12 +79,21 @@ def _build_config_observability(observe, metrics_port, metrics_host):
     if observe:
         from vision_platform.runtime.observers import LoggingObserver
         observers_list.append(LoggingObserver())
+    log_handle = None
+    if log_file:
+        # Production logging (F5.3/K-018): non-blocking + rotating + flush-on-shutdown. Observer ghi qua sink
+        # (DI) → hot-path không chặn bởi I/O file. Nơi gọi PHẢI shutdown() lúc teardown (drain+flush).
+        from vision_platform.adapters.production_log_handle import ProductionLogHandle
+        from vision_platform.runtime.observers import FileLoggingObserver
+        log_handle = ProductionLogHandle(log_file).start()
+        observers_list.append(FileLoggingObserver(log_handle))
+        print(f"[log] production log (non-blocking + rotating) → {log_file}", file=sys.stderr)
     exporter = None
     if metrics_port is not None:
         from vision_platform.runtime.observability import InMemoryMetrics
         from vision_platform.runtime.observers import MetricsObserver
         from vision_platform.adapters.metrics_http_server import MetricsHttpExporter, is_loopback
-        metrics = InMemoryMetrics()
+        metrics = InMemoryMetrics(max_cardinality=max_cardinality)   # K-019: cưỡng chế budget series (opt-in)
         observers_list.append(MetricsObserver(metrics))
         if not is_loopback(metrics_host):
             print(f"[metrics] CẢNH BÁO: /metrics bind {metrics_host} KHÔNG xác thực — chỉ dùng mạng nội bộ tin cậy",
@@ -97,7 +107,7 @@ def _build_config_observability(observe, metrics_port, metrics_host):
         observer = _CompositeObserver(observers_list)
     else:
         observer = None
-    return observer, exporter
+    return observer, exporter, log_handle
 
 
 def _merge_observability(cli: dict, toml_obs) -> dict:
@@ -117,6 +127,8 @@ def _merge_observability(cli: dict, toml_obs) -> dict:
         "metrics_host": cli.get("metrics_host") if cli.get("metrics_host") is not None else t.metrics_host,
         "observe_interval_s": cli.get("observe_interval_s") if cli.get("observe_interval_s") else t.observe_interval_s,
         "observe_every_n": cli.get("observe_every_n") if cli.get("observe_every_n") else t.observe_every_n,
+        "log_file": cli.get("log_file") if cli.get("log_file") is not None else t.log_file,
+        "max_cardinality": cli.get("max_cardinality") if cli.get("max_cardinality") is not None else t.max_cardinality,
     }
 
 
@@ -242,7 +254,8 @@ def _validate_config_only(path: str) -> int:
 def _run_from_config(path: str, *, build=None,
                      observe: bool = False, observe_interval_s: float = 0.0,
                      observe_every_n: int = 0,
-                     metrics_port: int | None = None, metrics_host: str | None = None) -> int:
+                     metrics_port: int | None = None, metrics_host: str | None = None,
+                     log_file: str | None = None, max_cardinality: int | None = None) -> int:
     """Đường declarative (config-declarative): file TOML → dựng + chạy từng pipeline tuần tự (v1 sync).
 
     BULKHEAD per-pipeline (K-045): mỗi pipeline chạy trong khoang CÔ LẬP — lỗi khi BUILD (constructor thiếu
@@ -267,16 +280,20 @@ def _run_from_config(path: str, *, build=None,
     app = load_app_config(path)   # LOAD TRƯỚC: cần app.observability để merge cờ-CLI↔TOML (D-086)
 
     exporter = None
+    log_handle = None            # khởi tạo TRƯỚC nhánh → finally an toàn kể cả khi `build` được tiêm (bỏ qua observability)
     if build is None:
         # Hợp nhất cờ CLI (tham số) ↔ section [observability] TOML (precedence CLI-explicit>TOML>default, D-086).
         m = _merge_observability(
             {"observe": observe, "metrics_port": metrics_port, "metrics_host": metrics_host,
-             "observe_interval_s": observe_interval_s, "observe_every_n": observe_every_n},
+             "observe_interval_s": observe_interval_s, "observe_every_n": observe_every_n,
+             "log_file": log_file, "max_cardinality": max_cardinality},
             app.observability)
         # Smart-default nhịp emit SAU merge: (observe∨metrics) & chưa set nhịp → 5s (self-consistent).
         if (m["observe"] or m["metrics_port"] is not None) and m["observe_every_n"] == 0 and m["observe_interval_s"] == 0.0:
             m["observe_interval_s"] = _DEFAULT_OBSERVE_INTERVAL_S
-        observer, exporter = _build_config_observability(m["observe"], m["metrics_port"], m["metrics_host"])
+        observer, exporter, log_handle = _build_config_observability(
+            m["observe"], m["metrics_port"], m["metrics_host"],
+            log_file=m["log_file"], max_cardinality=m["max_cardinality"])   # F5.3/K-019 giờ wire qua [observability] TOML (D-086)
         if observer is not None:
             build = lambda pcfg: build_runner(  # noqa: E731 — observer DÙNG CHUNG mọi pipeline (source_id từ snapshot)
                 pcfg, observer=observer,
@@ -303,6 +320,8 @@ def _run_from_config(path: str, *, build=None,
     finally:
         if exporter is not None:
             exporter.stop()   # R3.2: luôn đóng cổng/thread (kể cả 1 pipeline raise ra ngoài / KeyboardInterrupt)
+        if log_handle is not None:
+            log_handle.shutdown()   # flush-on-shutdown: drain queue log + close file (không mất log cuối)
 
 
 def _build_argparser() -> argparse.ArgumentParser:
@@ -351,6 +370,12 @@ def _build_argparser() -> argparse.ArgumentParser:
                         help="bật exporter HTTP /metrics (Prometheus scrape) ở cổng này (0=ephemeral). Bật → cũng emit snapshot định kỳ")
     parser.add_argument("--metrics-host", default=None,
                         help="địa chỉ bind exporter /metrics (không set → 127.0.0.1 an toàn; 0.0.0.0=phơi mạng, KHÔNG auth → chỉ mạng nội bộ). Sentinel None để merge với [observability] TOML")
+    parser.add_argument("--log-file", default=None,
+                        help="ghi observability log ra FILE production (non-blocking + rotating theo size + "
+                             "flush-on-shutdown, F5.3/K-018). Không set → chỉ stdout như cũ. Opt-in, additive.")
+    parser.add_argument("--metrics-max-cardinality", type=int, default=None,
+                        help="K-019: số series (label-set) TỐI ĐA mỗi metric-name cho /metrics (chống Prometheus "
+                             "OOM khi lỡ đưa label high-cardinality). Không set → không giới hạn (như cũ). Opt-in.")
     parser.add_argument("--capabilities", action="store_true",
                         help="IN năng lực máy hiện tại (torch/cuda/cv2/gpu) dạng JSON rồi thoát — kiểm máy TRƯỚC khi deploy (đổi máy GPU/không-GPU)")
     return parser
@@ -389,7 +414,9 @@ def main(argv=None) -> int:
             return _validate_config_only(args.config)
         return _run_from_config(args.config, observe=args.observe,
                                 observe_interval_s=args.observe_interval, observe_every_n=args.observe_every,
-                                metrics_port=args.metrics_port, metrics_host=args.metrics_host)
+                                metrics_port=args.metrics_port, metrics_host=args.metrics_host,
+                                log_file=getattr(args, "log_file", None),
+                                max_cardinality=getattr(args, "metrics_max_cardinality", None))
 
     _validate(args, parser)   # H4: validate cờ TRƯỚC khi map sang PipelineConfig
 
@@ -401,21 +428,28 @@ def main(argv=None) -> int:
     track_summary = _TrackSummarySink() if args.track else None
     extra_sinks = [track_summary] if track_summary is not None else []
 
-    # Observer(s) + optional exporter /metrics (đường inline) — DÙNG CHUNG helper với đường --config (DRY, #298).
-    observer, exporter = _build_config_observability(args.observe, args.metrics_port, args.metrics_host)
+    # Observer(s) + optional exporter /metrics (+ optional production log-file) — DÙNG CHUNG helper (DRY, #298).
+    observer, exporter, log_handle = _build_config_observability(
+        args.observe, args.metrics_port, args.metrics_host, log_file=getattr(args, "log_file", None),
+        max_cardinality=getattr(args, "metrics_max_cardinality", None))
+
+    def _close_observability():
+        if exporter is not None:
+            exporter.stop()
+        if log_handle is not None:
+            log_handle.shutdown()   # flush-on-shutdown: drain queue log + close file (không mất log cuối)
+
     try:
         runner = build_runner(pcfg, observer=observer, emit_every_n=obs_every,
                               emit_interval_s=obs_interval, extra_sinks=extra_sinks)
     except CapabilityError as e:   # H2: ép cuda thiếu GPU → thông báo gọn + exit 2 (không traceback thô)
         print(f"LỖI NĂNG LỰC (device): {e}", file=sys.stderr)
-        if exporter is not None:
-            exporter.stop()   # exporter đã start trong _build_config_observability → đóng cổng, không rò
+        _close_observability()     # đóng cổng exporter + flush log, không rò
         return 2
     try:
         stats = runner.run(max_frames=args.max_frames)
     finally:
-        if exporter is not None:
-            exporter.stop()
+        _close_observability()
 
     _print_summary(stats, track_summary, args)
     return 0

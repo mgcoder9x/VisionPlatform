@@ -757,3 +757,46 @@ của một base tốt: chi phí còn lại nằm ở vành ngoài, không ở t
 
 *Hết design.md — bản đánh giá kiến trúc. Mọi nhận định code đều grounded từ file nguồn đã đọc (có path);
 các con số test/lint và nhãn K-* là báo cáo phiên trước, đã gắn nhãn [chưa kiểm bởi tôi] theo luật AGENTS §5.*
+
+
+---
+
+# PHẦN F — VALIDATION trên máy GPU (`toann`, phiên #441) — reconcile + bug mới
+
+> Bản đánh giá gốc (Phần A–E) viết trên máy `k.nguyen.manh.toan` (**KHÔNG-GPU**), toàn bộ đọc-tĩnh. Phần F là
+> **kiểm chứng độc lập trên máy `toann` (CÓ GPU RTX 2060 + onnxruntime-gpu, KHÔNG torch)** — đúng cấu hình
+> target dual-use mà máy trước không có. Nâng nhãn 🟡[chưa kiểm] → ✅ nơi đã tự chạy, và bắt 1 bug máy trước sót.
+
+## F.0 Tự chạy verify (đáp câu E.9) — nâng nhãn [chưa kiểm]→✅
+- `scripts\vp.cmd verify` trên máy GPU này: **874 passed / 2 skipped · import-linter 7 kept / 0 broken · drift PASS**.
+  ⇒ baseline (Phần 0 ghi 🟡 user-report 860/2, lint 6/0) nay **✅ tự-verify** — số đã tiến hoá theo #434-441.
+- Nhãn `import-linter 6 contracts` (A.2) nay là **7** (F1.4 đã implement ở #440/D-141 — xem F.1).
+
+## F.1 Reconcile finding đã bị fix trong CÙNG session (doc↔code drift)
+- **F1.4 (thêm `type=layers`) → ✅ ĐÃ LÀM (#440/D-141):** import-linter nay 7 kept/0 broken, contract `layers`
+  KEPT ngay lần đầu = bằng chứng khẳng định hướng-tầng top-down. Finding F1.4 nên coi là **RESOLVED**.
+- **F3.2 (bất đối xứng device ONNX↔torch) → ✅ ĐÃ LÀM (#437/D-139) NHƯNG chưa trọn → xem F.2.** `_det_onnx`
+  và `_build_detector` nay đều qua `onnx_providers_for` + probe + LOG (đối xứng `_det_pt`).
+
+## F.2 🔴→✅ BUG MỚI (máy no-GPU sót): device ONNX gate SAI nguồn năng lực (đã FIX #441/D-142)
+- **Đo thật máy toann:** `--capabilities` cho `has_cuda=False` (torch VẮNG) NHƯNG
+  `onnxruntime.get_available_providers()` = `['TensorrtExecutionProvider','CUDAExecutionProvider','CPUExecutionProvider']`
+  → **GPU dùng được qua onnxruntime KHÔNG cần torch** (K-109 xác nhận bằng số).
+- **Bug (do D-139):** `onnx_providers_for → resolve_device → caps.has_cuda` (dò qua **torch**). Trên máy
+  GPU-KHÔNG-torch (đúng kịch bản "CPU-first, no-torch, ONNX" mà F3.1 tự hào): onnx `auto`→CPU, `cuda`→
+  `CapabilityError` → **GPU bất khả dụng OAN** dù onnxruntime thấy CUDA. F3.2 fix đã vô tình **buộc đường ONNX
+  phụ thuộc torch** — phá chính triết lý của nó.
+- **Vì sao Phần A–E (máy no-GPU) không bắt được:** máy đó cả torch-cuda LẪN onnxruntime-cuda đều False → 2 nguồn
+  trùng "no CUDA" → bug VÔ HÌNH. → **bài học (K-120): review dual-use PHẢI chạy trên đúng cấu hình target.**
+- **FIX GỐC (D-142, additive):** `MachineCapabilities` +`has_onnx_cuda` (probe `ort.get_available_providers()`);
+  `resolve_onnx_device` gate CUDA theo `has_onnx_cuda` (KHÔNG phải torch `has_cuda`); `onnx_providers_for` dùng
+  nó. Torch path (`_det_pt`/`resolve_device`) KHÔNG đổi. Verify 874/2 + máy toann `has_onnx_cuda=true`. Nguyên
+  tắc tổng quát: **capability là PER-BACKEND** (mỗi runtime gate bằng năng lực của chính nó).
+
+## F.3 Xác nhận các finding MỞ còn giá trị (chưa đụng — thuộc phạm vi khác)
+🔴 K-001 (ARM/Jetson chưa verify) · 🔴 K-014 (throughput/drop@fps — máy k.nguyen ĐÃ đo `measure_ring_drop`
+#440: keep-latest drop% ≈ 1−consumer/producer, SLA hợp lý) · 🔴 K-031 (secret rotate) · 🟡 F3.3 (batch-mux
+chưa có) · 🟡 F7.2 (2 topology chưa hợp nhất) · 🟡 F5.2/5.3 (heartbeat/observability production). Live GPU
+inference + camera RTSP: **CHỜ user** (VPN chặn LAN — K-117, KHÔNG tắt VPN).
+
+*Hết Phần F — validation máy GPU. Nhận định đều grounded (lệnh + đọc code, có path).*

@@ -33,7 +33,7 @@ def _get(port: int, path: str = "/metrics", timeout: float = 2.0) -> str:
 
 def test_shared_exporter_aggregates_two_cameras():
     """P1/P2 (R1.2, R1.3): observe+metrics → composite observer; feed 2 camera khác source_id → /metrics có CẢ 2."""
-    observer, exporter = _build_config_observability(observe=True, metrics_port=0, metrics_host="127.0.0.1")
+    observer, exporter, _lh = _build_config_observability(observe=True, metrics_port=0, metrics_host="127.0.0.1")
     assert observer is not None and exporter is not None
     try:
         observer.on_snapshot(_snap("cam-A", 5.0))
@@ -48,7 +48,7 @@ def test_shared_exporter_aggregates_two_cameras():
 
 def test_metrics_without_observe_still_serves():
     """R1.2: chỉ metrics_port (KHÔNG observe) → vẫn có MetricsObserver + /metrics phục vụ (Lỗ-4 #298)."""
-    observer, exporter = _build_config_observability(observe=False, metrics_port=0, metrics_host="127.0.0.1")
+    observer, exporter, _lh = _build_config_observability(observe=False, metrics_port=0, metrics_host="127.0.0.1")
     assert observer is not None and exporter is not None   # observer = MetricsObserver đơn (không None)
     try:
         observer.on_snapshot(_snap("cam-X", 3.0))
@@ -62,14 +62,14 @@ def test_metrics_without_observe_still_serves():
 
 def test_no_flags_returns_none_none():
     """R1.4/R2.2: không cờ nào → (None, None) → _run_from_config hành xử y hệt hiện tại (Noop, không exporter)."""
-    observer, exporter = _build_config_observability(observe=False, metrics_port=None, metrics_host="127.0.0.1")
+    observer, exporter, _lh = _build_config_observability(observe=False, metrics_port=None, metrics_host="127.0.0.1")
     assert observer is None
     assert exporter is None
 
 
 def test_observe_only_returns_single_observer_no_exporter():
     """observe đơn lẻ → observer LoggingObserver, KHÔNG exporter (giữ hành vi D-070)."""
-    observer, exporter = _build_config_observability(observe=True, metrics_port=None, metrics_host="127.0.0.1")
+    observer, exporter, _lh = _build_config_observability(observe=True, metrics_port=None, metrics_host="127.0.0.1")
     assert observer is not None
     assert exporter is None
 
@@ -78,7 +78,7 @@ def test_observe_only_returns_single_observer_no_exporter():
 
 def test_exporter_stop_closes_port():
     """R3.2: sau stop() → GET cổng → từ chối kết nối (đã đóng, không rò socket/thread)."""
-    _observer, exporter = _build_config_observability(observe=False, metrics_port=0, metrics_host="127.0.0.1")
+    _observer, exporter, _lh = _build_config_observability(observe=False, metrics_port=0, metrics_host="127.0.0.1")
     port = exporter.port
     _get(port)                        # còn sống: OK
     exporter.stop()
@@ -90,14 +90,14 @@ def test_exporter_stop_closes_port():
 
 def test_warns_on_non_loopback_bind(capsys):
     """R3.3: bind non-loopback → cảnh báo 'KHÔNG xác thực'; loopback → không cảnh báo."""
-    _o, exporter = _build_config_observability(observe=False, metrics_port=0, metrics_host="0.0.0.0")
+    _o, exporter, _lh = _build_config_observability(observe=False, metrics_port=0, metrics_host="0.0.0.0")
     try:
         err = capsys.readouterr().err
         assert "CẢNH BÁO" in err and "xác thực" in err
     finally:
         exporter.stop()
 
-    _o2, exporter2 = _build_config_observability(observe=False, metrics_port=0, metrics_host="127.0.0.1")
+    _o2, exporter2, _lh = _build_config_observability(observe=False, metrics_port=0, metrics_host="127.0.0.1")
     try:
         err2 = capsys.readouterr().err
         assert "CẢNH BÁO" not in err2

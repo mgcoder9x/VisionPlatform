@@ -40,10 +40,21 @@ def probe_capabilities() -> MachineCapabilities:
     except ImportError:
         pass
 
+    # CUDA khả dụng QUA ONNXRUNTIME — ĐỘC LẬP torch (onnxruntime-gpu có CUDA/Tensorrt provider không cần torch).
+    # Dò bằng danh sách provider onnxruntime thấy (K-109). Bọc an toàn: onnxruntime optional (.[onnx]) → vắng=False.
+    has_onnx_cuda = False
+    try:
+        import onnxruntime as ort  # dep optional (.[onnx])
+
+        has_onnx_cuda = "CUDAExecutionProvider" in ort.get_available_providers()
+    except Exception:  # noqa: BLE001 — onnxruntime vắng/lỗi truy vấn → coi như không có CUDA-onnx (KHÔNG raise)
+        has_onnx_cuda = False
+
     return MachineCapabilities(
         has_torch=has_torch,
         has_cuda=has_cuda,
         cuda_device_count=n,
         gpu_name=gpu,
         has_cv2=has_cv2,
+        has_onnx_cuda=has_onnx_cuda,
     )
