@@ -82,11 +82,12 @@ Trạng thái: 🔴 (phát hiện 2026-07-03) · **ĐÃ CÓ phân tích thiết 
 K đề xuất 2-3 (chính xác cần đo SLA, như K-004).
 **SUB-SPEC SWITCHOVER: Task 1-9 ✅ TRÊN WINDOWS (2026-07-03).** ✅ Task 8 (PBT, D-016) · ✅ Task 9 (observability, D-017) · ✅ Task 7 (T-C no-leak, D-018). Còn treo (đã ghi rõ, KHÔNG claim xong tuyệt đối): 🔴 K-003 (POSIX teardown) · 🔴 K-014 (Q2 số-đo-tải) · 🔴 K-001 (ARM). → Quay lại phần DẠY HỌC: Feynman #05 + viết bài switchover.
 
-### K-014 — 🟡 Q2 frame-drop: BOUND xác nhận thực nghiệm ≤ n_slots; throughput dưới tải fps thật CHƯA đo
+### K-014 — ✅ Q2 frame-drop: BOUND ≤ n_slots + drop@fps thật ĐÃ ĐO (perf-harness)
 Scope: shm-ring-epoch-switchover / Q2
-Nguồn: LOG Entry #155 · `tests/test_switchover_q2_bound.py` · design.md §Q2
+Nguồn: LOG Entry #155 · #453 · `tests/test_switchover_q2_bound.py` · `benchmarks/measure_ring_drop.py` · design.md §Q2
 CẬP NHẬT 2026-07-03 (D-022): **bound ≤ n_slots đã chứng minh THỰC NGHIỆM** — worst-case (ring đầy frame chưa đọc) drop = 4 = n_slots; đối chứng drain trước switchover → drop = 0. 2 test deterministic pass.
-CÒN 🔴: số throughput/drop dưới **tải fps thật + đa reader** (timing-dependent, cần perf harness riêng) — chưa đo, KHÔNG bịa. Đóng khi: có perf harness đo drop@30fps thật (gắn tuning K-004).
+CẬP NHẬT 2026-07-19 (D-149, ĐÓNG ✅): drop DƯỚI TẢI fps thật ĐÃ đo bằng `measure_ring_drop.py` (in-process keep-latest, 30fps producer, 480×640, 3 vòng variance≈0): consume 33ms→drop **0.0%**·cons_fps 30.0 · 50ms→**34.0%**·19.8 · 100ms(YOLO-CPU)→**66.2%**·10.0. Quan hệ **drop% ≈ 1 − consumer_rate/producer_rate**; **consumer_fps = 1000/consume_ms** bất kể producer → keep-latest **latency-bounded** (consumer không backlog, drop = frame cũ bỏ, không tích luỹ trễ) = hành vi ĐÚNG real-time, số này là SLA nguồn KHÔNG phải lỗi. Ghép #452 (detector-throughput GPU/CPU) → SLA đầu-cuối định lượng.
+CÒN (ngoài scope đóng): đa-reader fan-out >1 consumer cùng ring (topology khác, ngoài đường web/inference 1-consumer/stream hiện tại) — chưa đo, KHÔNG bịa.
 
 ### K-013 — 🔴 Môi trường venv đổi phiên bản (dựng lại bằng Python máy hiện tại)
 Scope: môi trường build/test

@@ -1711,3 +1711,15 @@ Quyết định: thêm LỚP PHÒNG THỦ LOCAL còn thiếu giữa hook-agentSt
 - Cái mất: kích hoạt cần 1 lệnh/clone (`vp install-hooks`); Linux cần chmod +x (ghi README); đổi git config local (đảo bằng `git config --unset core.hooksPath`).
 - Đổi lại: drift KHÔNG thể vào lịch sử git ở local (bắt lúc commit, sớm nhất) — đáp đúng yêu cầu "cực mạnh".
 Đóng khi: (✅) hook chạy thật HOOK_EXIT=0 state sạch + self-test drift_check chứng minh non-zero-khi-drift (bắc cầu) + core.hooksPath set. Follow-on [chưa kiểm]: test hook trên Linux thật (máy Docker) + thực-chặn-1-commit-drift.
+
+### D-149 — 2026-07-19 — perf-harness đo frame-drop@fps THẬT của SHM ring (đóng K-014)
+Status: ✅ (chạy thật 3 vòng/kịch bản trên base #452, variance≈0, số khớp lý thuyết keep-latest; drift PASS)
+Scope: `vision-platform/benchmarks/measure_ring_drop.py` (dev-tool CHỈ-ĐỌC/đo, KHÔNG đụng src/test)
+Nguồn: LOG Entry #453 · K-014 · `tests/test_switchover_q2_bound.py` (API tham chiếu)
+Verify-Symbol: vision-platform/benchmarks/measure_ring_drop.py::_run_once
+Quyết định + lý do (bản chất):
+- **Vấn đề:** K-014 (#155) đã chứng minh bound drop ≤ n_slots (deterministic in-process) nhưng CHƯA đo drop DƯỚI TẢI fps thật (chiều thời gian, timing-dependent) → finding 🔴 SLA architecture-review; máy `toann` #441-452 không đụng ring-drop@fps.
+- **Giải pháp:** harness in-process 2-thread + mailbox 1-slot keep-latest. Producer ghi ring @`--fps` (`WriterEpochCoordinator.write`); consumer lấy ref MỚI NHẤT + sleep `--consume-ms` (mô hình inference) qua `ReaderEpochCoordinator.read_ref`. Tách `drop_ring_full` (write→None backpressure) vs `drop_superseded` (ref bị ref mới thay trong mailbox trước consume = keep-latest).
+- **Vì sao in-process (không đo qua web/subprocess):** cô lập ĐÚNG cơ chế ring, không lẫn nhiễu decode/YOLO/HTTP → số tái lập variance≈0 (khác probe thread #422 nhiễu CPU-contention 2-3×). Là số học produce-rate vs consume-rate.
+- **Kết luận SLA (số thật, 30fps producer, 480×640):** consume 33ms→drop 0.0% · 50ms→34.0% · 100ms→66.2%; quan hệ drop% ≈ 1 − consumer_rate/producer_rate; consumer_fps LUÔN = 1000/consume_ms → keep-latest **latency-bounded** (consumer không bị backlog kéo chậm; drop = frame cũ bỏ, không tích luỹ trễ). Hành vi ĐÚNG cho real-time.
+- **Cái giá / khi nào KHÔNG đủ:** mô hình 1 consumer/stream (khớp đường web/inference chính); đa-reader fan-out >1 consumer cùng ring là topology khác — chưa phủ (ngoài đường chính hiện tại).

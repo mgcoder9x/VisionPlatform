@@ -1,160 +1,56 @@
-Including Steering Documents
+# end.md — HANDOFF chuyển máy (KHÔNG phải trạng thái; frontier THẬT xác định qua `scripts\vp.cmd check`)
 
-AGENTS.md
+> ⚠️ K-064: file này là HANDOFF người-đọc, KHÔNG phải nguồn sự thật. Nguồn thật = `vp check` +
+> `AI-IMPLEMENTATION-LOG.md` + `ai-decision-journal/00-INDEX.md` + `memory-bank/activeContext.md`.
+> ⚠️ K-098: **frontier có thể NHẢY giữa phiên** (đa máy đẩy chéo + workspace auto-sync). LUÔN chạy
+> `git status` + `vp check` TRƯỚC khi làm; nghi ngờ → `git fetch` + đối chiếu, đừng append trên base cũ.
 
-00-core-rules.md
-Thinking completed
-+
-→ Chế độ: XÂY (tiếp tục TASK 5 — perf-harness K-014)
+## 0. ĐẦU PHIÊN BẮT BUỘC (copy chạy ngay)
+```
+git status
+scripts\vp.cmd check      :: drift-check nhanh (C1-C9 + RULES sync + self-test)
+```
+Đọc 5 entry cuối `AI-IMPLEMENTATION-LOG.md` + block trên cùng `activeContext.md` + `00-INDEX.md` header.
+FAIL drift → SỬA cho khớp thực tế TRƯỚC khi làm. Behind upstream → `git pull --ff-only` rồi đối chiếu lại.
 
-Đầu phiên bắt buộc: kiểm tra trạng thái git + drift trước, rồi đọc bộ nhớ. Chạy song song các bước độc lập.
+## 1. FRONTIER THẬT (chốt lúc viết handoff, đã `vp check` PASS)
+- **LOG #453 · Σ329 (D149 · C24 · T35 · K121) · HEAD=origin=`8dc44ee` · nhánh `chore/dev-env-launcher-portable-hooks`**
+- drift PASS · C8=40 Verify-Symbol · RULES_VERSION 16 (5 mirror khớp).
+- `vp verify` = test + import-linter + drift · `vp check` = chỉ drift (nhanh) · `vp install-hooks` = đặt git pre-commit (D-148, `.githooks/`).
 
-Command
-c:\Users\k.…ionPlatform
+## 2. VIỆC VỪA XONG PHIÊN NÀY (#453, máy `k.nguyen.manh.toan` CPU)
+- **Đóng K-014 🔴→✅ (D-149):** perf-harness `vision-platform/benchmarks/measure_ring_drop.py` đo FRAME-DROP@fps
+  THẬT của SHM ring (in-process 2-thread keep-latest; tách `drop_ring_full` backpressure vs `drop_superseded`).
+  **Số THẬT (CPU, 30fps producer, 480×640, variance≈0):** consume 33ms→drop 0.0%·30fps · 50ms→34.0%·19.8 ·
+  100ms(YOLO-CPU)→66.2%·10.0. Quan hệ `drop% ≈ 1 − consumer_rate/producer_rate`; `consumer_fps=1000/consume_ms`
+  bất kể producer → keep-latest **latency-bounded** (consumer full-tốc không backlog, drop=frame cũ, không tích
+  luỹ trễ) = hành vi ĐÚNG real-time, SLA nguồn KHÔNG phải lỗi. Ghép #452 (detector GPU 36/s · CPU 17/s) = SLA đầu-cuối.
+- **RECONCILE K-098:** phiên khởi base cũ `1b645a5` (#440); giữa phiên workspace-sync + máy `toann` GPU push
+  origin tới `8dc44ee` #452 (Σ328: onnx-cuda gating / production logging / cardinality / fleet-profile spec /
+  SSE-transport spec / RTSP-verify). Bookkeeping #441/D-142 tôi soạn trên base cũ TRÙNG số máy kia → `git restore`
+  + `git pull --ff-only` #452 → làm lại #453/D-149 trên base mới (bài học #433: KHÔNG append trên base cũ).
+- **§3.1 — đề nghị user thêm Trusted Command:** `python -m benchmarks.measure_ring_drop *` (dev-tool CHỈ-ĐỌC/đo).
 
-git status && echo "=====DIFF-STAT=====" && git diff --stat
-us && echo "=====DIFF-STAT=====" && git diff --stat                             On branch chore/dev-env-launcher-portable-hooks
-Your branch is up to date with 'origin/chore/dev-env-launcher-portable-hooks'.
+## 3. TRẠNG THÁI NỀN (từ #441-#452, máy `toann` GPU + #453 máy này)
+- **Web/overlay:** sạch (verify Playwright MCP nhiều lần); production-hardening Wave 1+2+3 XONG (waitress + BasicAuth + security-headers + TLS-doc).
+- **Detector device policy:** hợp nhất qua `onnx_providers_for`/`resolve_device` (#437/D-139 + onnx-cuda gating D-142); GPU verify THẬT trên RTSP (#450/#451); capacity GPU 36/s vs CPU 17/s yolov8n@640 (#452/K-121).
+- **Observability production:** logging non-blocking+rotating (#443/K-018) + cardinality budget (#444/K-019) + wire TOML (#445).
+- **Chống-drift:** `vp check` (C1-C9 + self-test) + git pre-commit hook versioned (#449/D-148) = phòng-thủ-3-lớp agentStop→pre-commit→CI.
+- **SHM ring SLA:** bound ≤ n_slots (đã CM) + drop@fps đo (#453/K-014 ✅) → SLA nguồn định lượng đầy đủ cho 1-consumer/stream.
 
-Untracked files:
-  (use "git add <file>..." to include in what will be committed)
-        vision-platform/benchmarks/measure_ring_drop.py
+## 4. SPEC ĐANG MỞ (design-first, CHỜ USER VALID — chưa code)
+- `.kiro/specs/architecture-review/design.md` — bản đánh giá kiến trúc CỰC SÂU (Phần E = 9 câu chốt để suy requirements).
+- `.kiro/specs/multicamera-fleet-profile/` (requirements+design) — profile fleet đa-cam đa-process; A2 nay có số 36 detect/s.
+- `.kiro/specs/overlay-sse-transport/design.md` — khử tận gốc console-noise browser bằng SSE (thay MJPEG poll).
 
-nothing added to commit but untracked files present (use "git add" to track)
-=====DIFF-STAT=====
-Thinking completed
-+
-Có 1 file untracked measure_ring_drop.py (VỪA TẠO phiên trước). Chạy drift-check + đọc bộ nhớ song song.
+## 5. BƯỚC KẾ = CẦN USER CHỐT (không tự làm speculative — nguyên tắc YAGNI của user)
+- **(A) ANPR .pt** (cài torch / export ONNX) — nghiệp vụ biển số.
+- **(B) valid 1 trong 3 spec design-first** ở §4 → requirements → tasks → code TDD.
+- **(C) soak 24/7 / đo end-to-end fps** (decode+letterbox+NMS+overlay) — nối tiếp #452/#453.
+- **🔴 còn mở:** K-001 (ARM chưa verify — cần HW Jetson) · K-031 (rotate secret production).
 
-Command
-c:\Users\k.…ionPlatform
-
-scripts\vp.cmd check
-vp.cmd check                                                                    === [1/3] MEMORY CONSISTENCY (LOG/journal/INDEX/activeContext khớp thực tế) ===
-[PASS] C1-LOG: 444 entry, max #440 · dup-LEGACY(bỏ qua)=[90, 91, 95, 96]
-[PASS] C2-INDEX-LOGREF: INDEX ghi #440 vs LOG max #440
-[PASS] C3-D: 141 ID, max D-141
-[PASS] C5-D: khớp INDEX
-[PASS] C3-C: 24 ID, max C-024
-[PASS] C5-C: khớp INDEX
-[PASS] C3-T: 35 ID, max T-035
-[PASS] C5-T: khớp INDEX
-[PASS] C3-K: 119 ID, max K-119
-[PASS] C5-K: khớp INDEX
-[PASS] C4-INDEX-TOTAL: INDEX ghi (D141·C24·T35·K119=Σ319) vs THẬT (D141·C24·T35·
-K119=Σ319)                                                                      [PASS] C6-ACTIVE-STAMP: có mốc 'Cập nhật lúc'
-[PASS] C6-ACTIVE-LATEST: activeContext nhắc #440
-[PASS] C7-INDEX-CITES: mọi #N trích ∈ LOG
-[PASS] C8-DOC-CODE: 34 Verify-Symbol khớp code
-[PASS] C9-GIT: local dong-bo/vuot upstream (behind=0 · ahead=0 · chore/dev-env-l
-auncher-portable-hooks@db58665)                                                 
-=== [2/3] RULES_VERSION SYNC (mọi mirror + kit khớp) ===
-      16  AGENTS.md
-      16  GEMINI.md
-      16  .github/copilot-instructions.md
-      16  .kiro/steering/00-core-rules.md
-      16  ai-learning-os-kit/AGENTS.template.md
-
-=== [3/3] SELF-TEST checker (guard chống regex-rot — checker phải BẮT được drift
-) ===                                                                           [PASS] self:baseline-clean-PASS
-[PASS] self:C1-catch-dup
-[PASS] self:C2-catch-header-mismatch
-[PASS] self:C4-catch-wrong-total
-[PASS] self:C5-catch-orphan
-[PASS] self:C6-catch-missing-stamp
-[PASS] self:C6-catch-stale-pointer
-[PASS] self:C7-catch-phantom-cite
-[PASS] self:C8-clean-PASS
-[PASS] self:C8-catch-missing-symbol
-[PASS] self:C8-catch-missing-file
-[PASS] self:C9-catch-behind
-[PASS] self:C9-no-upstream-SKIP-PASS
-[PASS] self:C9-unavailable-SKIP-PASS
-
-DRIFT-CHECK: PASS — bản ghi nhất quán.
-Read file(s)
-
-activeContext.md
-
-measure_ring_drop.py
-Thinking completed
-+
-Drift PASS · frontier #440 · harness đã viết đầy đủ. Giờ chạy harness thật để lấy số K-014.
-
-Command
-c:\Users\k.…on-platform
-
-.venv\Scripts\python.exe -m benchmarks.measure_ring_drop
-nv\Scripts\python.exe -m benchmarks.measure_ring_drop                           [ring-drop] fps=30.0 · consume=100.0ms (~10.0/s) · n_slots=8 · 480x640 · 5.0s × 
-3 vòng                                                                            vòng  produced  received  drop_full  drop_sup  drop%   cons_fps 
-  1     151       50        93         7         66.2    10.0     
-  2     151       50        93         7         66.2    10.0     
-  3     151       50        93         7         66.2    10.0     
-  MEDIAN drop%=66.2 · consumer_fps=10.0
-  (drop cao là ĐÚNG cho real-time keep-latest khi consumer<producer: bỏ frame cũ
-, giữ mới nhất — box vẫn bám frame mới; đây là số ĐO SLA nguồn, không phải lỗi.)
-Thinking completed
-+
-Số ổn định tuyệt đối qua 3 vòng (variance=0): produced 151 (~30fps×5s ✓), received 50 (10/s×5s ✓), drop 66.2%. Đúng bản chất keep-latest.
-
-Để K-014 có bằng chứng SLA đầy đủ (và tự-kiểm harness đo đúng bản chất, chống số bịa), chạy thêm 2 kịch bản consumer-rate khác — chứng minh quan hệ consumer-rate ↔ drop%.
-
-Command
-c:\Users\k.…on-platform
-
-.venv\Scripts\python.exe -m benchmarks.measure_ring_drop --consume-ms 33 && echo ===== && .venv\Scripts\python.exe -m benchmarks.measure_ring_drop --consume-ms 50
-&& .venv\Scripts\python.exe -m benchmarks.measure_ring_drop --consume-ms 50     [ring-drop] fps=30.0 · consume=33.0ms (~30.3/s) · n_slots=8 · 480x640 · 5.0s × 3
- vòng                                                                             vòng  produced  received  drop_full  drop_sup  drop%   cons_fps 
-  1     151       145       0          5         3.3     29.0     
-  2     150       147       0          3         2.0     29.4     
-  3     151       148       0          2         1.3     29.6     
-  MEDIAN drop%=2.0 · consumer_fps=29.4
-  (drop cao là ĐÚNG cho real-time keep-latest khi consumer<producer: bỏ frame cũ
-, giữ mới nhất — box vẫn bám frame mới; đây là số ĐO SLA nguồn, không phải lỗi.)=====
-[ring-drop] fps=30.0 · consume=50.0ms (~20.0/s) · n_slots=8 · 480x640 · 5.0s × 3
- vòng                                                                             vòng  produced  received  drop_full  drop_sup  drop%   cons_fps 
-  1     151       99        44         7         33.8    19.8     
-  2     151       99        44         7         33.8    19.8     
-  3     150       98        44         7         34.0    19.6     
-  MEDIAN drop%=33.8 · consumer_fps=19.8
-  (drop cao là ĐÚNG cho real-time keep-latest khi consumer<producer: bỏ frame cũ
-, giữ mới nhất — box vẫn bám frame mới; đây là số ĐO SLA nguồn, không phải lỗi.)
-Thinking completed
-+
-Bảng SLA nhất quán hoàn hảo với lý thuyết real-time keep-latest:
-
-consumer rate	drop%	consumer_fps	frame giữ
-~30/s (=producer)	2.0%	29.4	~all
-~20/s	33.8%	19.8	2/3
-~10/s (YOLO-CPU)	66.2%	10.0	1/3
-Quan hệ drop% ≈ 1 − consumer_rate/producer_rate xác nhận harness đo đúng bản chất (không nhiễu, không bịa). Điểm SLA cốt lõi: consumer_fps LUÔN = 1000/consume_ms bất kể producer chạy 30fps → chứng minh keep-latest latency-bounded: consumer luôn chạy full tốc độ của nó, không bị backlog kéo chậm, drop = frame cũ bị bỏ (không tích luỹ độ trễ).
-
-Giờ ghi sổ. Đọc journal K-014 + INDEX + LOG tail để bump đúng.
-
-Read file(s)
-
-00-INDEX.md 1 - 31
-
-AI-IMPLEMENTATION-LOG.md 1 - 31
-Thinking completed
-+
-Cần đọc LOG entry #440 (format) + entry K-014 hiện tại trong journal + dòng total/logref của INDEX. Đọc song song.
-
-Command
-c:\Users\k.…ionPlatform
-
-.venv\Scripts\python.exe -c "import io,sys; sys.stdout=io.TextIOWrapper(sys.stdout.buffer,encoding='utf-8'); t=open('AI-IMPLEMENTATION-LOG.md',encoding='utf-8').read(); i=t.rfind('## Entry #440'); print(t[i:] if i>0 else t[-3000:])"
-('## Entry #440'); print(t[i:] if i>0 else t[-3000:])"                          .venv\Scripts\python.exe: The module '.venv' could not be loaded. For more infor
-mation, run 'Import-Module .venv'.                                              
-Thinking completed
-+
-Command
-
-vision-platform\.venv\Scripts\python.exe -c "import io,sys; sys.stdout=io.TextIOWrapper(sys.stdout.buffer,encoding='utf-8'); t=open('AI-IMPLEMENTATION-LOG.md',encoding='utf-8').read(); i=t.rfind('Entry #440'); print(t[i-2:])"
-Command
-c:\Users\k.…ionPlatform
-
-vision-platform\.venv\Scripts\python.exe -c "import io,sys; sys.stdout=io.TextIOWrapper(sys.stdout.buffer,encoding='utf-8'); t=open('AI-IMPLEMENTATION-LOG.md',encoding='utf-8').read(); i=t.rfind('Entry #440'); print(t[i-2:])"
-'utf-8').read(); i=t.rfind('Entry #440'); print(t[i-2:])"                       # Entry #440 — 2026-07-18 — Hardening kiến trúc: +import-linter contract `layers
-` (F1.4) + đính chính comment (F1.5) — Kiro-Opus                                
-**Bối cảnh:** Chờ user chốt GPU target → làm bước hardening kiến trúc verify-đượ
+## 6. RÀNG BUỘC VẬN HÀNH (lặp lại để máy sau khỏi vấp)
+- Python qua `vision-platform\.venv\Scripts\python.exe` hoặc `scripts\vp.cmd`; lệnh routine qua launcher cố định (§3.1); `python -c` chỉ thăm-dò 1-lần.
+- Shell cmd nuốt `&`-chaining / PowerShell nuốt `$`/`;` → lệnh ĐƠN. LOG entry heading = **`### Entry #N`** (3 dấu #, drift C1 mới nhận).
+- DỪNG server nền TRƯỚC `vp verify` (đốt CPU → flaky giả). Port TIME_WAIT → đổi port. git: không `add -A`, không force/reset, push nhánh hiện tại.
+- Verify browser = Playwright MCP trên webcam/RTSP thật. Máy này: CPU, có Docker + webcam, KHÔNG GPU. Máy `toann`: GPU + RTSP cam Dahua `.106`.

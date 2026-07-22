@@ -8458,3 +8458,26 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 **Vì sao chỉ ~2× (không 10×):** yolov8n NHỎ → GPU chưa bão hoà + kernel-launch overhead; muốn tăng = batch-mux nhiều cam (F3.3) hoặc input 416/INT8 (K-115 deploy-time). Đây là C_inf batch=1.
 **Ghi sổ:** LOG #452 · +K-121 (✅, số đo) · INDEX #451→#452 · Σ327→328 (K121). Cross-ref K-014 (ring-drop KHÁC scope, vẫn 🔴)/D-142/F3.3.
 **Đã verify:** 2 lần chạy bench_capacity thật (GPU+CPU), output số ở trên (đọc từ process). · **Chưa verify:** fps END-TO-END (gồm decode+letterbox+NMS+overlay); soak 24/7; TensorRT provider (chưa thử — build engine lâu); drop@fps sustained (K-014 vẫn mở).
+
+---
+
+### Entry #453 — 2026-07-19 — perf-harness đo FRAME-DROP@fps THẬT của SHM ring (đóng K-014 🔴 SLA) — Kiro-Opus
+
+**Bối cảnh:** Máy `k.nguyen.manh.toan` (CPU, không GPU). K-014 mở từ Entry #155: bound drop ≤ n_slots đã chứng minh THỰC NGHIỆM (deterministic, in-process serialize) NHƯNG throughput/drop DƯỚI TẢI fps thật (timing-dependent) CHƯA đo — chỉ đóng khi "có perf harness đo drop@30fps thật". Finding 🔴 SLA của architecture-review. **RECONCILE K-098 đầu việc:** phiên này khởi từ base cũ (1b645a5, #440); giữa phiên workspace auto-sync + máy `toann` push tới origin #452 (Σ328, gồm onnx-cuda gating D-142 / production logging / cardinality / fleet-profile / SSE / RTSP-verify — KHÔNG có ring-drop@fps). Bookkeeping #441/D-142 tôi soạn trên base cũ TRÙNG số máy kia → `git restore` bỏ (không mất việc: harness đã ở commit 1b645a5; số đo giữ trong phiên) → fast-forward tới #452 → làm lại trên base mới với số đúng #453/D-149. Đúng bài học #433 (không append trên base cũ).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Dựng harness `benchmarks/measure_ring_drop.py` (D-149): mô hình **in-process 2-thread + mailbox 1-slot keep-latest** (producer ghi ring @`--fps` qua `WriterEpochCoordinator.write`; consumer đọc ref MỚI NHẤT + sleep `--consume-ms` mô hình inference qua `ReaderEpochCoordinator.read_ref`). TÁCH BẠCH 2 nguồn drop: `drop_ring_full` (write→None backpressure) vs `drop_superseded` (ref bị thay trong mailbox trước consume = keep-latest bỏ frame cũ).
+- Đo bằng **số học tốc-độ** (produce-rate vs consume-rate) thay vì qua web/subprocess → số ỔN ĐỊNH (không nhiễu CPU-contention như probe thread #422).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (thuần thêm dev-tool đo, 0 đụng src/test sản phẩm).
+
+**3. Trade-off đã cân nhắc:**
+- Harness in-process (1 consumer keep-latest) vs đo end-to-end qua web: chọn in-process vì (a) cô lập ĐÚNG cơ chế ring drop (không lẫn nhiễu decode/YOLO/HTTP); (b) số tái lập variance≈0. Cái giá: chưa phủ đa-reader fan-out (topology khác — web/inference thực tế là 1 consumer/stream nên mô hình khớp đường chính).
+
+**4. Điều bạn nên biết (SỐ ĐO THẬT — máy k.nguyen CPU, 30fps producer, 480×640, 5s×3 vòng, chạy lại trên base #452):**
+- consume 33ms (~30/s = producer) → drop **0.0%** (median) · consumer_fps 30.0 (theo kịp)
+- consume 50ms (~20/s) → drop **34.0%** · consumer_fps 19.8 (giữ 2/3)
+- consume 100ms (~10/s = YOLO-CPU) → drop **66.2%** · consumer_fps 10.0 (giữ 1/3)
+- Quan hệ **drop% ≈ 1 − consumer_rate/producer_rate** (xác nhận harness đo đúng bản chất, không bịa). **consumer_fps LUÔN = 1000/consume_ms** bất kể producer 30fps → chứng minh keep-latest **latency-bounded**: consumer chạy full tốc độ của nó, KHÔNG bị backlog kéo chậm, drop = frame CŨ bị bỏ (không tích luỹ độ trễ). Hành vi ĐÚNG cho real-time (box bám frame mới nhất) — số này là SLA nguồn KHÔNG phải lỗi. Bổ trợ #452 (đo detector-throughput GPU/CPU): #452 cho biết consumer_rate khả dĩ (inference/s), #453 cho biết drop-nguồn ứng với consumer_rate đó → ghép lại = SLA đầu-cuối định lượng được.
+
+**Đã verify:** chạy THẬT `python -m benchmarks.measure_ring_drop` (+ `--consume-ms 33/50`) 3 vòng/kịch bản trên base #452, variance≈0, số khớp lý thuyết keep-latest; `scripts\vp.cmd check` drift PASS. · **Chưa verify:** đa-reader fan-out (>1 consumer cùng ring) — ngoài mô hình harness này, ngoài đường chính (1 consumer/stream). K-014 đóng cho phần drop@fps đơn-consumer keep-latest (tiêu chí "perf harness đo drop@30fps thật" ĐÃ đạt).

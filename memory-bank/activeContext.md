@@ -1,7 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-19)
-**Cập nhật lúc:** 2026-07-19T17:20:00+07:00.
+**Cập nhật lúc:** 2026-07-19T20:10:00+07:00.
+**[✅ #453 — perf-harness đo FRAME-DROP@fps THẬT → ĐÓNG K-014 🔴→✅ (D-149) — máy k.nguyen CPU]**
+- User: end.md không còn đúng → đối chiếu frontier THẬT qua `vp check`. **PHÁT HIỆN K-098 drift đa-máy giữa phiên:** khởi base cũ `1b645a5` (#440); workspace auto-sync + máy `toann` GPU đã push origin tới `8dc44ee` #452 (Σ328: onnx-cuda gating D-142 / production logging / cardinality / fleet-profile / SSE-transport / RTSP-verify — **KHÔNG có ring-drop@fps**). Bookkeeping #441/D-142 tôi soạn trên base cũ TRÙNG số máy kia → `git restore` bỏ (harness đã ở commit 1b645a5, số đo giữ trong phiên) → `git pull --ff-only` tới #452 → làm lại #453/D-149 trên base mới (đúng bài học #433: KHÔNG append trên base cũ).
+- **Vấn đề (K-014 mở từ #155, #452 xác nhận vẫn 🔴):** bound drop ≤ n_slots đã chứng minh (deterministic) nhưng drop DƯỚI TẢI fps thật (timing-dependent) CHƯA đo → finding 🔴 SLA. Làm được ngay trên CPU (không cần GPU/target).
+- **D-149 (harness `benchmarks/measure_ring_drop.py`):** in-process 2-thread + mailbox 1-slot keep-latest; producer ghi ring @`--fps` (`WriterEpochCoordinator.write`), consumer lấy ref mới nhất + sleep `--consume-ms` (mô hình inference, `ReaderEpochCoordinator.read_ref`); tách `drop_ring_full` (backpressure) vs `drop_superseded` (keep-latest bỏ frame cũ). Số học tốc-độ (không nhiễu như probe #422).
+- **SỐ THẬT (CPU 30fps producer, 480×640, 3 vòng variance≈0):** consume 33ms→drop **0.0%**·cons_fps 30.0 · 50ms→**34.0%**·19.8 · 100ms(YOLO-CPU)→**66.2%**·10.0. Quan hệ **drop% ≈ 1−consumer_rate/producer_rate**; **consumer_fps=1000/consume_ms** bất kể producer → keep-latest **LATENCY-BOUNDED** (consumer full-tốc không backlog, drop=frame cũ bỏ, không tích luỹ trễ) = hành vi ĐÚNG real-time, SLA nguồn KHÔNG phải lỗi. Ghép #452 (detector-throughput GPU 36/s · CPU 17/s) → SLA đầu-cuối định lượng.
+- **VERIFY:** chạy thật harness 3 kịch bản trên base #452 (variance≈0, khớp lý thuyết) + `vp check` drift PASS. Dev-tool CHỈ-ĐỌC, 0 đụng src/test → baseline giữ. K-014 ĐÓNG cho drop@fps đơn-consumer keep-latest; đa-reader fan-out ngoài scope.
+- **Ghi sổ:** LOG #453 · +D-149 · K-014 🔴→✅ · INDEX #452→#453 · Σ328→329 (D149) · Verify-Symbol `_run_once` (C8 39→40). **§3.1: đề nghị user thêm Trusted Command** `python -m benchmarks.measure_ring_drop *` (dev-tool chỉ-đọc, không ghi repo/không đổi src → trust an toàn).
+- **CHỜ USER (các hướng tiếp — không tự làm speculative):** (A) ANPR .pt (cài torch / export onnx); (B) 3 spec design-first valid (overlay-sse-transport / multicamera-fleet-profile A2 nay có số 36 detect/s); (C) soak 24/7 / end-to-end fps; (D) 🔴 còn lại: K-001 (ARM cần HW) · K-031 (rotate secret).
+---
 **[✅ #452 — Đo capacity detector GPU vs CPU (đóng nợ "fps GPU định lượng" #451, +K-121)]**
 - Đóng nợ tôi TỰ nêu ở #451. Harness cố định `bench_capacity` mode infer (frame synthetic → không cần cam/secret). Phục vụ SLA + sizing fleet.
 - **Số đo (cùng máy toann, yolov8n@640, warmup20+measure200):** GPU (onnxruntime-CUDA no-torch) **36.16 infer/s · p50 25.1ms** · CPU **17.14/s · p50 58.1ms** → **2.11× throughput · 2.31× latency thấp hơn** (định lượng D-142).
