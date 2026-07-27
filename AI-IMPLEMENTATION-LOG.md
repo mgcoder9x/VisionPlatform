@@ -8594,3 +8594,29 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Sự cố vận hành của tôi (đã báo user): một lệnh soạn sai cú pháp lồng nháy làm `cmd set` in **toàn bộ biến môi trường** vào log phiên, trong đó có 3 biến chứa API key (`OPENAI_API_KEY`, `openAI_key`, `HUNGNGUYEN_API_KEY`) → đã khuyến nghị **rotate** (thuộc nhóm K-031 🔴). Không nhắc lại giá trị.
 
 **Đã verify:** `scripts\vp.cmd verify` → **909 passed/2 skipped** (908→909: +1 guard URL tuyệt đối) · **import-linter 7 kept/0 broken** · **drift PASS** · get_diagnostics 0. Empiric: 401-không-credential (urllib), 200-có-credential, browser MCP 2 đường (header tiêm + URL-credential) trước/sau fix. · **Chưa verify:** (a) auth qua **dialog thật** của trình duyệt (Playwright bị chặn — dùng header tiêm thay thế, tương đương ở tầng HTTP nhưng KHÔNG phải cùng cơ chế cache credential của browser); (b) hành vi sau reverse-proxy có path-prefix; (c) soak 24/7; (d) SSE trên máy `toann` GPU/RTSP.
+
+---
+
+### Entry #458 — 2026-07-27 — ĐÓNG rủi ro rò-rỉ-slot bằng ĐO TRỰC TIẾP: phơi `streams=a/b` @/stats + chế độ churn cho probe (D-154) — Kiro-Opus
+
+**Bối cảnh:** sau #456, rủi ro còn lại của bulkhead là **rò rỉ slot** — nếu `release()` sót ở đường nào thì `active` tăng dần và hệ **chết dần** trong vận hành 24/7 (failure mode chậm, khó quy trách). Bằng chứng ban đầu (chạy capacity-probe 3 lần, lần nào cũng giữ đúng 6) chỉ là **suy ra**, không phải đo `active`. Đồng thời phát hiện vấn đề thiết kế: bulkhead **vô hình** với người vận hành cho tới khi nó đã từ chối (503) — tài nguyên có trần mà không quan sát được.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **D-154:** phơi trạng thái bulkhead ra `/stats` dạng `streams=<active>/<max>` (chỉ khi bật bulkhead; không bật → KHÔNG in, để không bịa số liệu).
+- Thêm **chế độ `--churn`** vào probe TÊN CỐ ĐỊNH `tools/web_sse_capacity_probe.py` (§3.1: logic mới bỏ VÀO launcher, không tạo lệnh mới): lặp mở-rồi-đóng N kết nối dài, đọc `streams=a/b` mỗi chu kỳ, verdict RÒ RỈ nếu `active` không về mốc ban đầu.
+- 2 test guard: `/stats` phơi đúng `streams=2/6` → `streams=0/6` sau release; và KHÔNG in `streams=` khi `_admission is None`.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (thuần thêm observability + công cụ đo; hành vi endpoint cũ giữ nguyên, `/stats` chỉ THÊM 1 trường ở cuối).
+
+**3. Trade-off đã cân nhắc:**
+- Phơi qua `/stats` (text) vs thêm metric Prometheus riêng: `/stats` rẻ, thấy ngay trong UI + probe đọc được; Prometheus đúng bài hơn cho fleet nhưng cần wire `MetricsObserver` (đã có hạ tầng #291) — HOÃN tới khi có nhu cầu scrape thật (YAGNI), ghi lại làm hướng.
+- Churn 300 chu kỳ vs 40: chọn 40 (10+30) để có bằng chứng đủ mạnh mà không đốt CPU/thời gian phiên; soak thật 24/7 vẫn là việc riêng (nêu rõ ở phần chưa-verify).
+- Rủi ro của việc phơi số liệu: tiết lộ tải hệ thống cho ai xem được `/stats` — chấp nhận vì `/stats` đã nằm sau Basic Auth khi bật auth (verify #457) và không chứa dữ liệu cá nhân.
+
+**4. Điều bạn nên biết (SỐ ĐO THẬT, waitress `--threads 8` → trần 6):**
+- **Churn 10 chu kỳ × 6 kết nối:** mọi chu kỳ `active khi mở = 6/6`, `active sau đóng = 0/6` → **KHÔNG RÒ RỈ**; `peak=6` = đúng trần.
+- **Churn 30 chu kỳ nữa** (tổng **240 lần acquire/release** trong phiên): `active` cuối = 0 → verdict "KHÔNG RÒ RỈ (release đúng)".
+- Tái xác nhận **P8**: `/stats` vẫn phục vụ được **ngay khi 6/6 slot đang bị chiếm** (reserve 2 thread hoạt động).
+- Vận hành: `streams=a/b` cho biết mức bão hoà; `a` không về 0 khi không còn viewer = dấu hiệu rò rỉ cần điều tra.
+
+**Đã verify:** `scripts\vp.cmd verify` → **911 passed/2 skipped** (909→911: +2 test `/stats` streams) · **import-linter 7 kept/0 broken** · **drift PASS**. Empiric: churn 10 + churn 30 (số trên) trên waitress thật với webcam. · **Chưa verify:** (a) **soak 24/7 thật** (240 chu kỳ ≠ nhiều ngày; đặc biệt chưa kiểm client ngắt BẤT THƯỜNG — kill process/mất mạng đột ngột — có luôn chạy `finally` release hay không); (b) hành vi sau reverse-proxy (proxy giữ kết nối riêng, có thể làm server thấy kết nối sống lâu hơn thực tế); (c) chưa xuất ra Prometheus (`/metrics`) — chỉ `/stats` text.

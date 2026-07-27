@@ -1772,3 +1772,16 @@ Quyết định + lý do (bản chất):
 - **Fix ĐÚNG:** dựng URL từ `location.origin` (không bao giờ chứa credential) ⇒ miễn nhiễm baseURI. Đối chứng đo: absolute → 200; tương đối → TypeError. Sau fix, cùng kịch bản: `statsFails=0`, `/stats` có data, `sseFails=0`, `img.src` sạch credential, poll-fallback 200/health LIVE.
 - **Guard chống hồi quy:** test khẳng định `_PAGE` có `const BASE=location.origin;` + 4 URL tuyệt đối và KHÔNG còn `fetch('/`, `new EventSource('/`, `img.src='/`, `src="/stream"`.
 - **Cái giá / khi nào KHÔNG dùng:** nếu sau này deploy dưới reverse-proxy có **path-prefix** (vd `/camera1/`) thì `location.origin` thiếu prefix → phải dựng base từ prefix thật (hiện app không có prefix nào, mọi route ở gốc `/`).
+
+### D-154 — 2026-07-27 — Phơi `streams=active/max` @`/stats` + chế độ `--churn` cho probe (đo TRỰC TIẾP rò rỉ slot bulkhead)
+Status: ✅ (911/2 · lint 7 kept/0 broken · drift PASS · churn 40 chu kỳ / 240 acquire-release: active luôn về 0)
+Scope: `vision-platform/src/vision_platform/profiles/vision_web_app.py` (route `/stats`) · `tools/web_sse_capacity_probe.py` (+`--churn`,`--churn-conns`) · `tests/test_web_sse.py` (+2 test)
+Nguồn: LOG Entry #458 · D-152 (bulkhead)
+Verify-Symbol: vision-platform/tools/web_sse_capacity_probe.py::_run_churn
+Quyết định + lý do (bản chất):
+- **Vấn đề 1 — rò rỉ slot:** nếu `release()` sót ở một đường nào thì `active` chỉ tăng → hệ **chết dần** trong 24/7. Bằng chứng cũ (chạy capacity-probe 3 lần đều giữ 6) là **suy ra**, không đo `active` ⇒ chưa đủ theo chuẩn verify của repo.
+- **Vấn đề 2 — bulkhead VÔ HÌNH:** tài nguyên có trần mà không quan sát được thì operator chỉ biết khi nó ĐÃ từ chối (503). Trần không nhìn thấy = không lên kế hoạch dung lượng được.
+- **Giải pháp:** `/stats` in `streams=<active>/<max>` (bỏ trường này khi không bật bulkhead — KHÔNG bịa số) + `--churn` trong probe CỐ ĐỊNH (không tạo lệnh mới, §3.1) lặp mở/đóng rồi đối chiếu `active`.
+- **Số thật:** churn 10×6 → mọi chu kỳ `6/6` khi mở, `0/6` sau đóng; churn 30 nữa (tổng 240 acquire/release) → `active` cuối = 0 ⇒ **release đúng, không rò rỉ**. Đồng thời tái xác nhận reserve: `/stats` phục vụ được ngay khi 6/6 slot bị chiếm.
+- **Cái giá / hạn chế:** 240 chu kỳ ≠ soak 24/7; **chưa** kiểm client ngắt BẤT THƯỜNG (kill process, rút mạng) có chạy `finally` release không. Chưa xuất Prometheus (`/metrics`) — hoãn theo YAGNI dù hạ tầng metrics đã có (#291).
+- **Khi nào KHÔNG đủ:** fleet nhiều process/nhiều máy → `/stats` text không tổng hợp được; lúc đó phải đưa `streams` thành metric Prometheus để scrape.

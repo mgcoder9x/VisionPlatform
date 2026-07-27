@@ -120,3 +120,33 @@ def test_client_uses_absolute_urls_not_relative_paths():
     for relative in ("fetch('/", "new EventSource('/", "img.src='/"):
         assert relative not in page, f"còn URL tương đối (bẫy K-124): {relative}"
     assert 'src="/stream"' not in page          # <img> nạp qua reloadStream() dùng BASE
+
+
+# --- Observability bulkhead: /stats phơi `streams=active/max` (phát hiện bão hoà + RÒ RỈ slot trong soak) ---
+def test_stats_exposes_stream_admission_saturation(monkeypatch):
+    """Tài nguyên CÓ TRẦN mà không quan sát được thì vận hành chỉ biết khi nó ĐÃ từ chối (503).
+    `streams=a/b` là cách đo RÒ RỈ slot trực tiếp (a phải về 0 khi không còn viewer) — đã dùng ở churn probe #458."""
+    from vision_platform.runtime.stream_admission import StreamAdmission
+
+    adm = StreamAdmission(6)
+    assert adm.try_acquire() is True and adm.try_acquire() is True
+    monkeypatch.setattr(web, "_admission", adm)
+    monkeypatch.setattr(web, "_store", _store_with_box())
+    with web.app.test_request_context("/stats"):
+        body = web.stats()
+    assert "streams=2/6" in body
+
+    adm.release()
+    adm.release()
+    with web.app.test_request_context("/stats"):
+        body2 = web.stats()
+    assert "streams=0/6" in body2          # slot trả lại → operator thấy ngay, không phải suy đoán
+
+
+def test_stats_omits_streams_when_admission_absent(monkeypatch):
+    """Không bật bulkhead (đường test/legacy) → KHÔNG bịa số liệu."""
+    monkeypatch.setattr(web, "_admission", None)
+    monkeypatch.setattr(web, "_store", _store_with_box())
+    with web.app.test_request_context("/stats"):
+        body = web.stats()
+    assert "streams=" not in body

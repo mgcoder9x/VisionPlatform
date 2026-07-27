@@ -1,7 +1,17 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-27)
-**Cập nhật lúc:** 2026-07-27T11:40:00+07:00.
+**Cập nhật lúc:** 2026-07-27T12:30:00+07:00.
+**[✅ #458 — ĐÓNG rủi ro RÒ RỈ SLOT bằng ĐO TRỰC TIẾP: `streams=a/b` @/stats + `--churn` probe (D-154)]**
+- Rủi ro còn lại của bulkhead #456: nếu `release()` sót đường nào → `active` tăng dần → hệ **chết dần** trong 24/7 (failure mode chậm, khó quy trách). Bằng chứng ban đầu (probe 3 lần đều giữ 6) chỉ là **SUY RA**, không đo `active` ⇒ chưa đạt chuẩn verify của repo.
+- Đồng thời lộ vấn đề thiết kế: bulkhead **VÔ HÌNH** với operator tới khi nó ĐÃ từ chối (503) → không lập kế hoạch dung lượng được.
+- **D-154:** `/stats` phơi **`streams=<active>/<max>`** (không bật bulkhead → KHÔNG in, tránh bịa số) + thêm **`--churn`/`--churn-conns`** vào probe TÊN CỐ ĐỊNH `tools/web_sse_capacity_probe.py` (§3.1: logic mới bỏ VÀO launcher, không tạo lệnh mới) — lặp mở/đóng rồi đối chiếu `active`.
+- **SỐ THẬT (waitress `--threads 8` → trần 6):** churn 10×6 → mọi chu kỳ `6/6` khi mở, **`0/6` sau đóng**; churn 30 nữa (tổng **240 lần acquire/release**) → `active` cuối = 0 ⇒ **release đúng, KHÔNG rò rỉ**; peak=6 = đúng trần. Tái xác nhận **P8**: `/stats` vẫn phục vụ **ngay khi 6/6 slot bị chiếm** (reserve hoạt động).
+- **VERIFY:** `vp verify` **911 passed/2 skipped** (909→911, +2 test `/stats` streams) · **lint 7 kept/0 broken** · **drift PASS**.
+- **Ghi sổ:** LOG #458 · +D-154 · INDEX #457→#458 · Σ336→337 (D154) · Verify-Symbol `_run_churn` (C8 44→45).
+- **CHƯA VERIFY (trung thực, đây là các lỗ còn lại):** (a) **soak 24/7 thật** — 240 chu kỳ ≠ nhiều ngày; đặc biệt **chưa kiểm client ngắt BẤT THƯỜNG** (kill process/rút mạng) có chạy `finally` release hay không; (b) hành vi trần dưới **reverse-proxy** nginx/Caddy (proxy giữ kết nối riêng → server có thể thấy kết nối sống lâu hơn thực tế; + path-prefix ảnh hưởng `BASE` của D-153); (c) auth qua **dialog THẬT** của browser (Playwright bị chặn; header-tiêm chỉ tương đương ở tầng HTTP); (d) đo SSE trên máy `toann` GPU/RTSP; (e) 🔴 K-001 (ARM, cần HW) · K-031 (rotate secret — có thêm lý do từ #457).
+- **Khuyến nghị bước kế của tôi:** làm (a) trước ở phần **đo được ngay** — kill client đột ngột (không close socket) rồi xem `streams` có về 0 (đây là ca biên THẬT: viewer tắt máy/mất mạng), vì nếu `finally` không chạy thì bulkhead sẽ dần khoá hết hệ; sau đó (b) dựng nginx bằng Docker (máy này CÓ Docker) để verify `deploy/README-tls-reverse-proxy.md` — tài liệu đó hiện là khẳng định CHƯA kiểm.
+---
 **[✅ #457 — ĐÓNG Property 4 (SSE + Basic Auth ✅) + FIX GỐC bẫy URL-có-credential (D-153, +K-124)]**
 - Rủi ro `[chưa kiểm]` cuối của spec SSE. Quan trọng: nếu `EventSource` không mang được credential thì BẬT auth = overlay âm thầm rơi về poll (mất fix K-119) hoặc chết.
 - **Property 4 ✅ (đo 2 đường độc lập để không bị nhiễu bởi kỹ thuật test):** server chặn đúng — thiếu credential thì `/events`,`/stream`,`/overlay` đều **401 + `WWW-Authenticate: Basic realm="VisionPlatform"`**; có credential → `/events` **200 `text/event-stream`**. Bằng chứng sạch (URL SẠCH + tiêm header `Authorization` qua `page.route`, mô phỏng phiên đã xác thực): `sseFails=0`·`degraded=false`·`statsFails=0`·`/stats` 200 data thật (`video=5585 · detect=3756 · overlay_rev=3757`)·boxes=2·canvas vẽ·video 640×480 → **browser TỰ gửi credential Basic đã cache cho cả SSE, KHÔNG cần set custom header** (đính chính "[chưa kiểm]" của spec).

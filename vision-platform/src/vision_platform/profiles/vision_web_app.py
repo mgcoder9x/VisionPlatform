@@ -469,7 +469,11 @@ def stats():
     with _lock:
         n = len(_legacy_boxes)
     ev = _store.snapshot().eventRevision if _store is not None else 0
-    return f"video={_vframes} · detect={_dframes} · boxes={n} · overlay_rev={ev}"
+    # Phơi trạng thái bulkhead (D-152): tài nguyên CÓ TRẦN mà không quan sát được thì vận hành chỉ biết khi nó
+    # ĐÃ từ chối (503). `streams=a/b` cho operator thấy mức bão hoà + phát hiện RÒ RỈ slot (a không về 0 khi
+    # không còn viewer nào) — đây là cách kiểm rò rỉ trong soak dài, thay vì suy đoán.
+    st = f" · streams={_admission.active}/{_admission.max_streams}" if _admission is not None else ""
+    return f"video={_vframes} · detect={_dframes} · boxes={n} · overlay_rev={ev}{st}"
 
 
 def _merge_detection(cli: dict, toml_det: Optional[DetectionCadenceConfig]) -> DetectionCadenceConfig:

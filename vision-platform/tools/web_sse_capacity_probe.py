@@ -51,6 +51,62 @@ def _probe_short(base: str, path: str, headers: dict, timeout: float):
         return False, f"{type(e).__name__}: {e}"
 
 
+def _stats_streams(base: str, headers: dict, timeout: float):
+    """Đọc `streams=a/b` từ `/stats` → (active, max) hoặc None nếu server chưa phơi (bản cũ)."""
+    req = urllib.request.Request(base + "/stats", headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:  # noqa: S310
+            txt = r.read().decode("utf-8", errors="replace")
+    except Exception:  # noqa: BLE001
+        return None
+    for part in txt.split("·"):
+        part = part.strip()
+        if part.startswith("streams="):
+            a, _, b = part[len("streams="):].partition("/")
+            try:
+                return int(a), int(b)
+            except ValueError:
+                return None
+    return None
+
+
+def _run_churn(args) -> int:
+    """Đo RÒ RỈ SLOT: lặp mở-rồi-đóng kết nối dài, kiểm `active` có về 0 (bulkhead D-152 release đúng chưa)."""
+    base = f"http://{args.host}:{args.port}"
+    long_paths = [p.strip() for p in args.long_paths.split(",") if p.strip()]
+    headers = _auth_header()
+    print(f"[churn] base={base} · cycles={args.churn} · conns/cycle={args.churn_conns} · long_paths={long_paths}")
+    before = _stats_streams(base, headers, args.timeout)
+    if before is None:
+        print("  [churn] /stats KHÔNG phơi `streams=a/b` → server bản cũ hoặc không bật bulkhead; KHÔNG kết luận được.")
+        return 1
+    print(f"  {'chu kỳ':<8} {'mở được':<9} {'active khi mở':<15} {'active sau đóng':<16}")
+    leaked = None
+    peak = 0
+    for c in range(1, args.churn + 1):
+        held = []
+        for i in range(args.churn_conns):
+            try:
+                held.append(_open_long(base, long_paths[i % len(long_paths)], headers, args.timeout))
+            except Exception:  # noqa: BLE001 — 503 khi đạt trần là hợp lệ, không phải lỗi
+                pass
+        at_open = _stats_streams(base, headers, args.timeout)
+        for r in held:
+            try:
+                r.close()
+            except Exception:  # noqa: BLE001,S110
+                pass
+        time.sleep(0.3)   # chờ server chạy `finally` của generator (release)
+        after = _stats_streams(base, headers, args.timeout)
+        peak = max(peak, at_open[0] if at_open else 0)
+        leaked = after[0] if after else None
+        print(f"  {c:<8} {len(held):<9} {str(at_open[0]) + '/' + str(at_open[1]) if at_open else '?':<15} "
+              f"{str(after[0]) + '/' + str(after[1]) if after else '?':<16}")
+    print(f"  KẾT LUẬN: active ban đầu={before[0]} · peak={peak} · active cuối={leaked} → "
+          f"{'KHÔNG RÒ RỈ (release đúng)' if leaked == before[0] else 'RÒ RỈ SLOT — release thiếu!'}")
+    return 0 if leaked == before[0] else 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="tools.web_sse_capacity_probe")
     ap.add_argument("--host", default="127.0.0.1")
@@ -61,7 +117,14 @@ def main() -> int:
     ap.add_argument("--probe-path", default="/stats", help="request NGẮN dùng để phát hiện starve")
     ap.add_argument("--timeout", type=float, default=4.0, help="timeout coi là STARVE (giây)")
     ap.add_argument("--threads-hint", type=int, default=None, help="chỉ để in đối chiếu (--threads của server)")
+    ap.add_argument("--churn", type=int, default=0,
+                    help="CHẾ ĐỘ RÒ RỈ SLOT: số chu kỳ mở-rồi-đóng kết nối dài; đọc `streams=a/b` ở /stats mỗi "
+                         "chu kỳ. Rò rỉ = `a` KHÔNG về 0 sau khi đóng hết (hệ chết dần trong soak 24/7).")
+    ap.add_argument("--churn-conns", type=int, default=4, help="số kết nối dài mở trong mỗi chu kỳ churn")
     args = ap.parse_args()
+
+    if args.churn > 0:
+        return _run_churn(args)
 
     base = f"http://{args.host}:{args.port}"
     long_paths = [p.strip() for p in args.long_paths.split(",") if p.strip()]
