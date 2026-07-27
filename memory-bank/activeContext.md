@@ -1,7 +1,20 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-27)
-**Cập nhật lúc:** 2026-07-27T14:10:00+07:00.
+**Cập nhật lúc:** 2026-07-27T15:05:00+07:00.
+**[✅ #461 — SỬA DRIFT tài liệu deploy reverse-proxy: +SSE, +sizing thread, +bẫy proxy, +bảng trạng thái (D-155)]**
+- Khuyến nghị #459 là verify doc deploy bằng nginx thật, nhưng **Docker daemon chưa bật** (`open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified` — **KHÔNG phải tường lửa**, K-126) và AI không tự bật dịch vụ hệ thống ⇒ làm phần **giá trị cao, rủi ro 0** trước: sửa DRIFT nội dung tài liệu.
+- **Drift phát hiện (nặng hơn cả việc chưa test):** tài liệu viết ở **#428 = TRƯỚC SSE (#454) và TRƯỚC bulkhead (#456)** ⇒ ai deploy theo sẽ (a) **MẤT OVERLAY** vì không cấu hình no-buffering cho `/events`; (b) **chạm trần ~3 viewer** vì để `--threads` mặc định 8 (mỗi viewer giữ 2 kết nối dài); (c) tin một tài liệu **chưa từng chạy**.
+- **D-155 (doc-only):** +**§2c** hai-kênh-streaming (`/stream` MJPEG + `/events` SSE, kèm cơ chế) · +**§2d** sizing **`--threads ≥ 2N+2`** + quan sát `streams=a/b` + **cảnh báo path-prefix KHÔNG hỗ trợ** (client dựng URL từ `location.origin`, D-153 → nhiều camera phải dùng subdomain riêng) · +**bảng TRẠNG THÁI KIỂM CHỨNG** đầu file (✅ app đã-đo / 📗 dựa-docs-nginx-chính-chủ / 🔴 toàn-chuỗi-qua-proxy `[chưa kiểm]`) để tài liệu **không tự thành nguồn drift** · sửa cả **ví dụ §1** (`--threads 22`) + **5 dòng checklist** (nơi operator copy-paste).
+- **3 phát hiện ground từ docs chính chủ `nginx.org/ngx_http_proxy_module`:**
+  1. `proxy_buffering` mặc định **on**, nhưng tắt được bằng **header response `X-Accel-Buffering: no`** — app **ĐÃ set** trên `/events` ⇒ **phòng thủ lớp 2**: operator quên `proxy_buffering off` thì SSE **vẫn** không bị gom buffer; nginx còn **ẩn** header `X-Accel-*` khỏi client. Rủi ro duy nhất: cố ý khai `proxy_ignore_headers X-Accel-Buffering`.
+  2. `proxy_read_timeout` mặc định **60s** (giữa 2 lần đọc) ⇒ **heartbeat SSE 15s giờ có lý do ĐỊNH LƯỢNG** (15<60), không phải số tuỳ ý; MJPEG khi **nguồn chết** không ghi gì → nginx cắt sau 60s → client `img.onerror` backoff reload (#436) = hành vi đúng.
+  3. **BẪY mới, chưa ai nêu:** `proxy_ignore_client_abort` mặc định `off` = client ngắt thì nginx đóng luôn kết nối upstream → app chạy `finally` → **trả slot bulkhead**. Bật `on` ⇒ slot bị giữ tới `channel_timeout` **120s** (K-125) ⇒ **mất dung lượng ~2 phút mỗi lần ai đóng tab**. Đã ghi cảnh báo + checklist.
+- **VERIFY:** `get_diagnostics` doc = 0; dữ kiện nginx đọc **tận docs chính chủ** (fetch OK, không bị chặn); số của app dẫn lại từ LOG có bằng chứng (#427/#454/#456-#459); `vp verify` chạy trước commit.
+- **Ghi sổ:** LOG #461 · +D-155 · INDEX #460→#461 · Σ339→340 (D155).
+- **CÒN 🔴 (đã ghi tường minh trong chính tài liệu):** **toàn chuỗi qua proxy THẬT** (nginx/Caddy → waitress: SSE live · MJPEG live · trần bulkhead khi proxy giữ kết nối riêng · TLS/HSTS · Basic Auth qua proxy) — cần **user bật Docker Desktop** hoặc cấp máy có nginx. Khi dựng được: đo theo §2c/§2d rồi cập nhật bảng trạng thái + ghi LOG mới.
+- **Bước kế — CẦN USER CHỌN:** (1) bật Docker → tôi đóng nốt 🔴 proxy; (2) đo SSE trên máy `toann` GPU/RTSP; (3) ANPR .pt (cài torch/export onnx); (4) 🔴 K-001 (ARM, cần HW) · 🔴 K-031 (rotate secret — có thêm lý do từ sự cố in env #457).
+---
 **[🔒 #460 — LUẬT MỚI: CẤM VƯỢT tường lửa/kiểm soát mạng công ty (AGENTS §8 · RULES_VERSION 17→18 · +K-126)]**
 - User chỉ thị trực tiếp: "công ty có bảo mật, nếu chặn tường lửa TUYỆT ĐỐI không được vượt mà báo lại; nếu vượt sẽ gây ảnh hưởng lớn cho tôi" → ràng buộc phải sống XUYÊN PHIÊN + XUYÊN MÁY + cho MỌI AI ⇒ nâng lên **tầng LUẬT có máy-kiểm** (không chỉ nhớ trong phiên; tiền lệ K-117 "AI không tắt VPN" chỉ ở journal, lần này nghiêm trọng hơn).
 - **Nội dung luật (AGENTS §8):** bị CHẶN (firewall/proxy công ty/DNS/policy/TLS-inspection/registry nội bộ) → **DỪNG NGAY + BÁO user + đề xuất cách HỢP LỆ** (xin mở quyền · mirror nội bộ đã duyệt · làm offline · bỏ bước). **CẤM tường minh:** đổi/tắt VPN·firewall·AV·proxy·DNS·`hosts`; tunnel/VPN khác; `--insecure`/`--no-check-certificate`/tắt xác thực TLS; domain-mirror lách; retry vòng vo để "lọt". Chặn = **KẾT QUẢ HỢP LỆ của phép đo** → nhãn `[bị chặn — chưa kiểm]` (khớp §5).

@@ -1785,3 +1785,14 @@ Quyết định + lý do (bản chất):
 - **Số thật:** churn 10×6 → mọi chu kỳ `6/6` khi mở, `0/6` sau đóng; churn 30 nữa (tổng 240 acquire/release) → `active` cuối = 0 ⇒ **release đúng, không rò rỉ**. Đồng thời tái xác nhận reserve: `/stats` phục vụ được ngay khi 6/6 slot bị chiếm.
 - **Cái giá / hạn chế:** 240 chu kỳ ≠ soak 24/7; **chưa** kiểm client ngắt BẤT THƯỜNG (kill process, rút mạng) có chạy `finally` release không. Chưa xuất Prometheus (`/metrics`) — hoãn theo YAGNI dù hạ tầng metrics đã có (#291).
 - **Khi nào KHÔNG đủ:** fleet nhiều process/nhiều máy → `/stats` text không tổng hợp được; lúc đó phải đưa `streams` thành metric Prometheus để scrape.
+
+### D-155 — 2026-07-27 — Sửa DRIFT tài liệu deploy reverse-proxy: +SSE, +sizing thread, +bẫy `proxy_ignore_client_abort`, +bảng trạng thái kiểm chứng
+Status: ✅ doc (0-diag; dữ kiện nginx từ docs chính chủ; toàn chuỗi qua proxy thật vẫn 🔴 [chưa kiểm] — ghi tường minh trong file)
+Scope: `vision-platform/deploy/README-tls-reverse-proxy.md` (§1 ví dụ · §2c · §2d · checklist · bảng trạng thái đầu file)
+Nguồn: LOG Entry #461 · docs `nginx.org/en/docs/http/ngx_http_proxy_module.html` · #454/#456/#458/#459 (số đo app) · K-126 (Docker chưa bật ≠ tường lửa)
+Quyết định + lý do (bản chất):
+- **Vấn đề:** tài liệu viết ở #428 (**trước SSE #454 và trước bulkhead #456**) nhưng vẫn được coi là hướng dẫn deploy đúng ⇒ ai làm theo sẽ (a) **mất overlay** vì không cấu hình no-buffering cho `/events`; (b) **chạm trần 3 viewer** vì để `--threads` mặc định 8 (mỗi viewer 2 kết nối dài); (c) tin một tài liệu **chưa từng chạy**.
+- **Giải pháp:** thêm §2c (2 kênh streaming + cơ chế) · §2d (sizing `--threads ≥ 2N+2`, `streams=a/b`, cảnh báo path-prefix do D-153 dùng `location.origin`) · cảnh báo `proxy_ignore_client_abort` · **bảng phân loại trạng thái** (đã-đo ✅ / dựa-docs-chính-chủ 📗 / chưa-kiểm 🔴) để tài liệu KHÔNG tự thành nguồn drift. Sửa cả **ví dụ copy-paste** ở §1 + checklist (nơi operator thực sự dùng).
+- **3 phát hiện từ docs chính chủ:** (1) header `X-Accel-Buffering: no` app đã set = **phòng thủ lớp 2** nếu operator quên directive (nginx còn ẩn header này khỏi client); (2) `proxy_read_timeout` mặc định **60s** ⇒ heartbeat SSE 15s có **lý do định lượng**; MJPEG nguồn-chết bị cắt 60s rồi client backoff reload = đúng; (3) **BẪY** `proxy_ignore_client_abort on` → giữ kết nối upstream sau khi viewer rời ⇒ slot bulkhead bị giữ tới `channel_timeout` 120s ⇒ mất dung lượng ~2 phút/lần đóng tab.
+- **Cái giá / hạn chế:** vẫn CHƯA chạy nginx thật (Docker daemon chưa bật; AI không tự bật dịch vụ hệ thống) ⇒ phần "toàn chuỗi qua proxy" giữ 🔴. Không tự sinh `nginx.conf` mẫu chưa từng chạy (tránh thêm bề mặt drift).
+- **Khi nào KHÔNG áp dụng:** nếu deploy sau proxy có **path-prefix** thì tài liệu này KHÔNG đúng — app hiện chỉ chạy ở gốc `/` (client dựng URL từ `location.origin`, D-153); phải dùng subdomain riêng.
