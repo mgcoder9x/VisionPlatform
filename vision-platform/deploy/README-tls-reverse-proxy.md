@@ -12,6 +12,7 @@
 > | Hành vi **nginx** (`proxy_buffering` mặc định on · tắt được bằng header `X-Accel-Buffering` · `proxy_read_timeout` 60s · `proxy_ignore_client_abort` off · nginx ẩn header `X-Accel-*`) | 📗 **Dựa tài liệu nginx CHÍNH CHỦ đã đọc** (`ngx_http_proxy_module`) — chưa chạy nginx thật trong repo này |
 > | **Toàn chuỗi qua proxy thật** (nginx/Caddy → waitress: SSE live, MJPEG live, trần bulkhead khi proxy giữ kết nối, TLS/HSTS, Basic Auth qua proxy) | 🔴 **[chưa kiểm]** — cần dựng nginx/Caddy (vd Docker) rồi đo lại bằng `tools/web_sse_capacity_probe.py` + Playwright |
 > | Path-prefix (`location /camera1/`) | 🔴 **KHÔNG hỗ trợ** (xem cảnh báo §2d) |
+> | **Log & giám sát web app** (§4): stdout-only · KHÔNG `--log-file` · KHÔNG `--metrics-port` | ✅ **ĐÃ KIỂM bằng đọc code** (#463) — trước đây checklist ghi sai là có `--metrics-port` |
 >
 > Khi ai đó dựng được proxy thật: đo theo §2c/§2d rồi **cập nhật bảng này** + ghi LOG entry mới.
 
@@ -166,7 +167,7 @@ số viewer ≈ trần / 2                ⇒   muốn N viewer:  --threads >= 2
 - [ ] Security headers `X-Frame-Options: DENY` / `X-Content-Type-Options: nosniff` / `Referrer-Policy` — **app đã
       tự thêm** (SecurityHeadersMiddleware, Wave 3) → proxy chuyển tiếp; không cần cấu hình lại.
 - [ ] RTSP URL chứa credential camera → coi là secret (không log; app đã `mask_rtsp` khi in).
-- [ ] Giám sát: (tuỳ) bật `--metrics-port` sau proxy nội bộ để Prometheus scrape.
+- [ ] Giám sát: xem **§4 Log & giám sát** (web app ghi **stdout**; `--metrics-port` **KHÔNG có** ở web app).
 - [ ] **`--threads >= 2N + 2`** cho N viewer đồng thời (mặc định 8 = ~3 viewer). Xem §2d.
 - [ ] **`proxy_buffering off` + `proxy_read_timeout` dài** áp cho CẢ `/stream` (MJPEG) **và `/events` (SSE)** — §2c.
 - [ ] **KHÔNG bật `proxy_ignore_client_abort`** (giữ mặc định `off`) — nếu bật, slot streaming bị giữ ~2 phút sau
@@ -174,6 +175,37 @@ số viewer ≈ trần / 2                ⇒   muốn N viewer:  --threads >= 2
 - [ ] App phải được proxy ở **gốc `/`** của host/subdomain — **không** dùng path-prefix (`/camera1/`). Nhiều camera
       → subdomain riêng cho mỗi app. Xem cảnh báo §2d.
 - [ ] Sau khi deploy: `GET /stats` xem `streams=<đang dùng>/<trần>` để biết mức bão hoà (và phát hiện rò rỉ slot).
+
+## 4) Log & giám sát web app (đọc kỹ — dễ hiểu sai, #463)
+
+**Sự thật hiện tại (đã kiểm bằng đọc code):** `vision_web_app` ghi mọi tín hiệu vận hành ra **stdout** bằng `print()`.
+Nó **KHÔNG** có `--log-file`, **KHÔNG** dùng `ProductionLogHandle` (non-blocking + rotating), **KHÔNG** có
+`--metrics-port`. *(Những thứ đó chỉ có ở app headless `vision_slice_app` — đừng nhầm hai app.)*
+
+⇒ **Bắt buộc chạy web app dưới một supervisor có bắt + xoay stdout** (12-factor: app ghi stdout, hạ tầng lo lưu trữ):
+
+| Cách chạy | Log đi đâu | Xoay log |
+|---|---|---|
+| `docker compose` / container | log driver của Docker | có (`--log-opt max-size/max-file`) |
+| systemd unit | journald | có (`SystemMaxUse`, …) |
+| Chạy tay trong terminal | terminal | **không** — mất khi đóng |
+| Chạy detached, stdout không ai đọc | ⚠️ **nguy hiểm** | — |
+
+> ⚠️ **Rủi ro cụ thể của cách cuối:** nếu stdout là pipe mà **không ai đọc** (hoặc đĩa đầy), `print()` sẽ **BLOCK** →
+> block chính thread đang xử lý request. Đừng chạy detached mà bỏ trôi stdout; luôn để supervisor/container thu log.
+
+### Tín hiệu cần theo dõi trong log web app (biết ngay khi sai)
+
+| Dòng log / endpoint | Ý nghĩa vận hành |
+|---|---|
+| `[device] onnx yêu cầu='auto' → dùng='cpu\|cuda…'` | chạy đúng thiết bị mong đợi chưa (CPU vs GPU) |
+| `[web] bulkhead streaming: trần N … ≈M viewer` | **trần dung lượng lúc khởi động** — đối chiếu số viewer thật |
+| `[web] TỪ CHỐI /events\|/stream: đạt trần …` (+ `đã nén K lần`) | **ĐANG bão hoà** → cần tăng `--threads` (§2d). Log đã có trần 1 dòng/5s nhưng `đã nén K` cho biết cường độ thật |
+| `GET /stats` → `streams=<đang dùng>/<trần>` | mức bão hoà theo thời gian thực + phát hiện rò rỉ slot |
+| `GET /overlay` → `health.source` / `health.detector` | nguồn/detector còn sống không (`LIVE` / `STALE` / `ERROR`) |
+
+**Chưa có (nếu bạn cần thì nói, đây là việc CHƯA làm — không phải đã có):** file log xoay riêng cho web app
+(`--log-file`) · endpoint `/metrics` Prometheus cho web app · alerting. Hiện chỉ dựa stdout + `/stats` + `/overlay`.
 
 ## Ngoài phạm vi (chưa làm — cân nhắc theo nhu cầu thương mại)
 

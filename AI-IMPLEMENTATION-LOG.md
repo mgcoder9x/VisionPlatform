@@ -8719,3 +8719,27 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - **Cách phân biệt lag vs leak (ghi lại để lần sau không đuổi bóng):** đo lại `streams` sau một khoảng chờ — nếu về mốc đầu = trễ; nếu đứng mãi = rò rỉ thật.
 
 **Đã verify:** `scripts\vp.cmd verify` → **919 passed/2 skipped** (911→919: +7 `test_log_throttle.py` +1 guard log-flood) · **import-linter 7 kept/0 broken** · **drift PASS** · get_diagnostics 0. Empiric: 2 lượt churn + đọc log server + 15 mẫu `/stats` (số ở trên). · **Chưa verify:** hành vi log throttle khi chạy qua `RotatingFileHandler` production (#443) — chỉ kiểm ở stdout; toàn chuỗi qua proxy thật vẫn 🔴 (chờ Docker/nginx).
+
+---
+
+### Entry #463 — 2026-07-27 — Đóng nợ `[chưa kiểm]` #462: web app KHÔNG có production log file (bất đối xứng vs slice app) + sửa lỗi doc `--metrics-port` (+K-128) — Kiro-Opus
+
+**Bối cảnh:** #462 tôi để lại `[chưa kiểm]`: "log throttle qua `RotatingFileHandler` production (#443) — mới kiểm ở stdout". Máy này không GPU nên chọn đóng nợ trung thực này trước (CPU-only, rẻ, và nếu sai thì là defect thật).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Trả lời câu `[chưa kiểm]` bằng **đọc code + grep** thay vì thử-và-đoán: `vision_web_app.py` **KHÔNG có** `--log-file`, **KHÔNG** dùng `ProductionLogHandle`, **KHÔNG có** `--metrics-port` (grep 4 mẫu → 0 kết quả); chỉ dùng `logging` để **hạ mức werkzeug**. Mọi tín hiệu vận hành đi ra **stdout bằng `print()`**.
+- **KHÔNG thêm `--log-file` vào web app** (YAGNI + tránh 2 lối làm cùng việc). Chọn con đường **12-factor**: app ghi stdout, **supervisor** (docker log driver / systemd-journald) bắt + xoay — khớp `docker-compose.cpu-demo.yml` đã có. Thay vì code, **ghi tường minh vào tài liệu deploy** + cảnh báo rủi ro.
+- Thêm **§4 "Log & giám sát web app"** vào `deploy/README-tls-reverse-proxy.md`: bảng cách-chạy↔nơi-log↔có-xoay-không · **bảng 5 tín hiệu cần theo dõi** (`[device]` · `bulkhead trần` · `TỪ CHỐI …đã nén K` · `/stats streams=a/b` · `/overlay health`) · mục "CHƯA CÓ" (file log riêng, `/metrics`, alerting).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu (sửa lỗi tài liệu do tôi/#428 để lại):**
+- Checklist deploy ghi *"(tuỳ) bật `--metrics-port` sau proxy nội bộ để Prometheus scrape"* — **SAI**: cờ đó **không tồn tại** trong web app (chỉ có ở `vision_slice_app`). Tài liệu đang hướng dẫn một việc **không thể làm được** → đã sửa + ghi vào bảng trạng thái kiểm chứng.
+
+**3. Trade-off đã cân nhắc:**
+- **Thêm `--log-file` cho web app** (tái dùng `ProductionLogHandle`, ~15 dòng, đối xứng với slice app) **vs chỉ tài liệu hoá stdout+supervisor**: chọn cái sau vì (a) stdout+supervisor là chuẩn 12-factor và là cách repo đã deploy bằng docker-compose; (b) thêm cờ = thêm 2 lối làm cùng việc + thêm bề mặt bảo trì cho một nhu cầu **chưa ai nêu**. **Cái giá:** ai chạy web app KHÔNG có supervisor sẽ mất log khi đóng terminal → đã ghi cảnh báo tường minh, và nếu bạn cần thì thêm cờ là việc nhỏ.
+- **Rủi ro tôi nêu rõ chứ không giấu:** nếu stdout là pipe **không ai đọc** (chạy detached) hoặc đĩa đầy → `print()` **BLOCK** → chặn luôn thread đang xử lý request. Log throttle (1 dòng/5s, #462) làm giảm tần suất nhưng **không khử** rủi ro này. Cách phòng: luôn chạy dưới supervisor/container.
+
+**4. Điều bạn nên biết:**
+- **Bất đối xứng observability (K-128):** app headless `vision_slice_app` có logging production (non-blocking + rotating, #443) + `/metrics` + `--observe`; còn **web app — thứ khách hàng thực sự chạy — không có gì trong số đó**. Đây là khoảng trống thương mại thật, nhưng để **user quyết** có làm hay không (không tự mở rộng phạm vi).
+- Câu `[chưa kiểm]` của #462 nay có câu trả lời **xác định**: không phải "chưa đo được" mà là "**không tồn tại đường đó**" — log throttle chỉ tồn tại trên stdout.
+
+**Đã verify:** grep 4 mẫu (`add_argument("--log`, `ProductionLogHandle`, `FileLoggingObserver`, `--metrics-port`) trên `vision_web_app.py` → **0 kết quả**; đọc `adapters/production_log_handle.py` + `profiles/vision_slice_app.py` xác nhận đường logging production **chỉ** wire cho slice app; `get_diagnostics` doc = 0; `vp verify` chạy trước commit. Doc-only, 0 đụng code. · **Chưa verify:** hành vi `print()` khi stdout bị block thật (chưa dựng thí nghiệm pipe-không-đọc — nêu như rủi ro `[chưa kiểm]`, không tuyên bố đã đo); toàn chuỗi qua proxy thật vẫn 🔴 (chờ Docker/nginx).

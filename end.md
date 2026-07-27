@@ -1,56 +1,80 @@
-# end.md — HANDOFF chuyển máy (KHÔNG phải trạng thái; frontier THẬT xác định qua `scripts\vp.cmd check`)
+# end.md — HANDOFF sang MÁY CÓ GPU (không phải trạng thái; frontier THẬT xác định qua `scripts\vp.cmd check`)
 
-> ⚠️ K-064: file này là HANDOFF người-đọc, KHÔNG phải nguồn sự thật. Nguồn thật = `vp check` +
-> `AI-IMPLEMENTATION-LOG.md` + `ai-decision-journal/00-INDEX.md` + `memory-bank/activeContext.md`.
-> ⚠️ K-098: **frontier có thể NHẢY giữa phiên** (đa máy đẩy chéo + workspace auto-sync). LUÔN chạy
-> `git status` + `vp check` TRƯỚC khi làm; nghi ngờ → `git fetch` + đối chiếu, đừng append trên base cũ.
+> ⚠️ K-064: file này là handoff người-đọc. Nguồn sự thật = `vp check` + `AI-IMPLEMENTATION-LOG.md` +
+> `ai-decision-journal/00-INDEX.md` + `memory-bank/activeContext.md`.
+> ⚠️ K-098: frontier **có thể NHẢY giữa phiên** (đa máy đẩy chéo + workspace auto-sync). LUÔN `git status` +
+> `vp check` TRƯỚC; nghi ngờ → `git fetch` + đối chiếu; **KHÔNG append lên base cũ** (đã từng gây trùng số, #433/#453).
+> 🔒 K-126 (v18): **tường lửa/kiểm soát mạng công ty — CẤM VƯỢT.** Bị chặn → DỪNG + BÁO user. Không đổi/tắt
+> VPN·firewall·AV·proxy·DNS·hosts, không tunnel, không `--insecure`, không mirror lách. Chặn = kết quả đo hợp lệ.
 
-## 0. ĐẦU PHIÊN BẮT BUỘC (copy chạy ngay)
+## 0. ĐẦU PHIÊN BẮT BUỘC
 ```
 git status
-scripts\vp.cmd check      :: drift-check nhanh (C1-C9 + RULES sync + self-test)
+scripts\vp.cmd check
 ```
-Đọc 5 entry cuối `AI-IMPLEMENTATION-LOG.md` + block trên cùng `activeContext.md` + `00-INDEX.md` header.
-FAIL drift → SỬA cho khớp thực tế TRƯỚC khi làm. Behind upstream → `git pull --ff-only` rồi đối chiếu lại.
+Đọc 5 entry cuối LOG + block trên cùng `activeContext.md`. FAIL drift → SỬA trước khi làm. Behind upstream →
+`git pull --ff-only` rồi đối chiếu lại.
 
-## 1. FRONTIER THẬT (chốt lúc viết handoff, đã `vp check` PASS)
-- **LOG #453 · Σ329 (D149 · C24 · T35 · K121) · HEAD=origin=`8dc44ee` · nhánh `chore/dev-env-launcher-portable-hooks`**
-- drift PASS · C8=40 Verify-Symbol · RULES_VERSION 16 (5 mirror khớp).
-- `vp verify` = test + import-linter + drift · `vp check` = chỉ drift (nhanh) · `vp install-hooks` = đặt git pre-commit (D-148, `.githooks/`).
+## 1. FRONTIER THẬT (lúc viết handoff)
+- **LOG #463 · Σ343 (D156 · C24 · T35 · K128) · RULES_VERSION 18 (7 file) · nhánh `chore/dev-env-launcher-portable-hooks`**
+- baseline: **`vp verify` 919 passed / 2 skipped · import-linter 7 kept/0 broken · drift PASS · C8 = 46 Verify-Symbol**
+- Máy vừa làm: `k.nguyen.manh.toan` — **CPU only**, có webcam, có Docker **(daemon CHƯA bật)**.
 
-## 2. VIỆC VỪA XONG PHIÊN NÀY (#453, máy `k.nguyen.manh.toan` CPU)
-- **Đóng K-014 🔴→✅ (D-149):** perf-harness `vision-platform/benchmarks/measure_ring_drop.py` đo FRAME-DROP@fps
-  THẬT của SHM ring (in-process 2-thread keep-latest; tách `drop_ring_full` backpressure vs `drop_superseded`).
-  **Số THẬT (CPU, 30fps producer, 480×640, variance≈0):** consume 33ms→drop 0.0%·30fps · 50ms→34.0%·19.8 ·
-  100ms(YOLO-CPU)→66.2%·10.0. Quan hệ `drop% ≈ 1 − consumer_rate/producer_rate`; `consumer_fps=1000/consume_ms`
-  bất kể producer → keep-latest **latency-bounded** (consumer full-tốc không backlog, drop=frame cũ, không tích
-  luỹ trễ) = hành vi ĐÚNG real-time, SLA nguồn KHÔNG phải lỗi. Ghép #452 (detector GPU 36/s · CPU 17/s) = SLA đầu-cuối.
-- **RECONCILE K-098:** phiên khởi base cũ `1b645a5` (#440); giữa phiên workspace-sync + máy `toann` GPU push
-  origin tới `8dc44ee` #452 (Σ328: onnx-cuda gating / production logging / cardinality / fleet-profile spec /
-  SSE-transport spec / RTSP-verify). Bookkeeping #441/D-142 tôi soạn trên base cũ TRÙNG số máy kia → `git restore`
-  + `git pull --ff-only` #452 → làm lại #453/D-149 trên base mới (bài học #433: KHÔNG append trên base cũ).
-- **§3.1 — đề nghị user thêm Trusted Command:** `python -m benchmarks.measure_ring_drop *` (dev-tool CHỈ-ĐỌC/đo).
+## 2. LÀM GÌ NGAY TRÊN MÁY GPU (thứ tự ưu tiên, kèm LÝ DO)
 
-## 3. TRẠNG THÁI NỀN (từ #441-#452, máy `toann` GPU + #453 máy này)
-- **Web/overlay:** sạch (verify Playwright MCP nhiều lần); production-hardening Wave 1+2+3 XONG (waitress + BasicAuth + security-headers + TLS-doc).
-- **Detector device policy:** hợp nhất qua `onnx_providers_for`/`resolve_device` (#437/D-139 + onnx-cuda gating D-142); GPU verify THẬT trên RTSP (#450/#451); capacity GPU 36/s vs CPU 17/s yolov8n@640 (#452/K-121).
-- **Observability production:** logging non-blocking+rotating (#443/K-018) + cardinality budget (#444/K-019) + wire TOML (#445).
-- **Chống-drift:** `vp check` (C1-C9 + self-test) + git pre-commit hook versioned (#449/D-148) = phòng-thủ-3-lớp agentStop→pre-commit→CI.
-- **SHM ring SLA:** bound ≤ n_slots (đã CM) + drop@fps đo (#453/K-014 ✅) → SLA nguồn định lượng đầy đủ cho 1-consumer/stream.
+### (A) Verify SSE + bulkhead trên GPU/RTSP thật — cao nhất, vì mọi số hiện có đều từ CPU
+Toàn bộ spec `overlay-sse-transport` (#454-#462) được đo trên **CPU + webcam**. Trên GPU, detect nhanh hơn ~2×
+(#452: 36 vs 17 infer/s) ⇒ **`eventRevision` đổi nhanh hơn ⇒ SSE phát event dày hơn** ⇒ cần đo lại:
+```
+:: 1) chạy web app (GPU + RTSP thật; đổi <PORT>, giữ --threads đủ cho số viewer: >= 2N+2)
+vision-platform\.venv\Scripts\python.exe -m vision_platform.profiles.vision_web_app ^
+  --rtsp "<RTSP_URL>" --onnx models/yolov8n.onnx --yolo v8 --model-size 640 --coco-labels ^
+  --device auto --overlay-motion --overlay-display-lease-ms 350 --overlay-create-conf 0.45 ^
+  --overlay-sustain-conf 0.30 --server waitress --threads 8 --host 127.0.0.1 --port <PORT>
+:: kỳ vọng dòng log: [device] onnx yêu cầu='auto' → dùng='cuda...'  (nếu ra 'cpu' → GPU chưa dùng được, DỪNG điều tra)
 
-## 4. SPEC ĐANG MỞ (design-first, CHỜ USER VALID — chưa code)
-- `.kiro/specs/architecture-review/design.md` — bản đánh giá kiến trúc CỰC SÂU (Phần E = 9 câu chốt để suy requirements).
-- `.kiro/specs/multicamera-fleet-profile/` (requirements+design) — profile fleet đa-cam đa-process; A2 nay có số 36 detect/s.
-- `.kiro/specs/overlay-sse-transport/design.md` — khử tận gốc console-noise browser bằng SSE (thay MJPEG poll).
+:: 2) trần thread + starve (kỳ vọng: trần 6, #7+ = 503, /stats luôn OK 0-16ms)
+vision-platform\.venv\Scripts\python.exe -m tools.web_sse_capacity_probe --port <PORT> --max-long 12 --threads-hint 8
 
-## 5. BƯỚC KẾ = CẦN USER CHỐT (không tự làm speculative — nguyên tắc YAGNI của user)
-- **(A) ANPR .pt** (cài torch / export ONNX) — nghiệp vụ biển số.
-- **(B) valid 1 trong 3 spec design-first** ở §4 → requirements → tasks → code TDD.
-- **(C) soak 24/7 / đo end-to-end fps** (decode+letterbox+NMS+overlay) — nối tiếp #452/#453.
-- **🔴 còn mở:** K-001 (ARM chưa verify — cần HW Jetson) · K-031 (rotate secret production).
+:: 3) rò rỉ slot (kỳ vọng: mọi chu kỳ active -> 0/N, verdict KHÔNG RÒ RỈ)
+vision-platform\.venv\Scripts\python.exe -m tools.web_sse_capacity_probe --port <PORT> --churn 10 --churn-conns 12
+```
+Rồi **browser (Playwright MCP)** trên URL SẠCH: kỳ vọng `sseFails=0` · `degraded=false` · box vẽ · 0 console error;
+đo lại **gap giữa các event SSE** (CPU cho median ~50.8ms = đúng tick) xem GPU có làm dày hơn/nặng CPU hơn.
+> ⚠️ K-124: **KHÔNG** verify bằng URL `http://user:pass@host/` (làm chết mọi `fetch` trong trang) → dùng
+> `page.route` tiêm header `Authorization` với URL sạch.
 
-## 6. RÀNG BUỘC VẬN HÀNH (lặp lại để máy sau khỏi vấp)
-- Python qua `vision-platform\.venv\Scripts\python.exe` hoặc `scripts\vp.cmd`; lệnh routine qua launcher cố định (§3.1); `python -c` chỉ thăm-dò 1-lần.
-- Shell cmd nuốt `&`-chaining / PowerShell nuốt `$`/`;` → lệnh ĐƠN. LOG entry heading = **`### Entry #N`** (3 dấu #, drift C1 mới nhận).
-- DỪNG server nền TRƯỚC `vp verify` (đốt CPU → flaky giả). Port TIME_WAIT → đổi port. git: không `add -A`, không force/reset, push nhánh hiện tại.
-- Verify browser = Playwright MCP trên webcam/RTSP thật. Máy này: CPU, có Docker + webcam, KHÔNG GPU. Máy `toann`: GPU + RTSP cam Dahua `.106`.
+### (B) Đo end-to-end fps trên GPU (nợ tự nêu ở #452)
+#452 chỉ đo **detector-throughput** (36 infer/s). Chưa có **fps đầu-cuối** (decode + letterbox + NMS + overlay).
+Ghép với #453 (drop@fps của SHM ring: `drop% ≈ 1 − consumer/producer`) sẽ ra **SLA đầu-cuối định lượng** —
+đây là số khách hàng hỏi ("chạy được mấy cam?").
+
+### (C) Nếu bật được Docker trên máy đó → đóng 🔴 reverse-proxy
+`vision-platform/deploy/README-tls-reverse-proxy.md` có **bảng TRẠNG THÁI KIỂM CHỨNG**: phần "toàn chuỗi qua proxy
+thật" vẫn 🔴. Cần dựng nginx → đo: SSE qua proxy còn live? MJPEG live? trần bulkhead khi proxy giữ kết nối riêng?
+`proxy_ignore_client_abort` để mặc định off có trả slot đúng? Rồi **cập nhật bảng đó + ghi LOG mới**.
+
+### (D) ANPR `.pt` (nếu là hướng nghiệp vụ bạn muốn): cài torch CUDA hoặc export sang ONNX.
+
+## 3. VIỆC KHÔNG CẦN GPU (làm được ở bất kỳ máy nào — nếu muốn tiếp trên máy CPU)
+- **Cưỡng chế secret bằng máy** (liên quan 🔴 K-031 + sự cố in biến môi trường #457): quét secret ở pre-commit
+  thay vì trông vào kỷ luật. **CHƯA làm** — tôi đã đề xuất, chờ bạn duyệt.
+- `--log-file` / `/metrics` cho **web app** (K-128: hiện web app chỉ có stdout, bất đối xứng với slice app). CHƯA làm.
+- Soak 24/7 · network-partition thật (cần 2 máy/firewall drop, xem K-125).
+
+## 4. TRẠNG THÁI CÁC 🔴 CÒN MỞ
+| Mục | Vì sao còn mở |
+|---|---|
+| K-001 (ARM/Jetson chưa verify HW atomicity) | cần hardware Jetson |
+| K-031 (rotate secret) | user thao tác; **thêm lý do**: #457 có lệnh sai cú pháp làm `cmd set` in TOÀN BỘ biến môi trường vào log phiên, gồm 3 biến chứa API key (`OPENAI_API_KEY`, `openAI_key`, `HUNGNGUYEN_API_KEY`) → **nên rotate** |
+| Toàn chuỗi qua reverse-proxy thật | chờ Docker/nginx (chặn bởi tiền đề, KHÔNG phải mạng) |
+| `print()` block khi stdout không ai đọc (K-128) | chưa dựng thí nghiệm pipe-không-đọc |
+
+## 5. RÀNG BUỘC VẬN HÀNH (để máy sau khỏi vấp)
+- Python qua `vision-platform\.venv\Scripts\python.exe` hoặc `scripts\vp.cmd`; lệnh routine qua launcher cố định (§3.1).
+- LOG entry heading phải là **`### Entry #N`** (3 dấu `#`) — drift C1 mới nhận.
+- Shell: cmd nuốt `&`-chaining, PowerShell nuốt `$`/`;`/`|` trong chuỗi → dùng **lệnh ĐƠN**; `set VAR=v && ...` **nhồi
+  khoảng trắng** vào giá trị (đã gây 401 giả ở #457) → viết `set VAR=v&&...` không có space.
+- **DỪNG server nền TRƯỚC `vp verify`** (đốt CPU → flaky giả). Port TIME_WAIT → đổi port.
+- git: không `add -A` (chọn file cụ thể), không force/reset, push nhánh hiện tại.
+- Đo trạng-thái-sau-sự-kiện-có-độ-trễ-phụ-thuộc-tải → **KHÔNG sleep cố định**, dùng poll-tới-điều-kiện + deadline (K-127).

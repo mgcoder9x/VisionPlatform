@@ -1318,3 +1318,20 @@ CẬP NHẬT 2026-07-27:
 - **LUẬT RÚT RA (áp cho mọi phép đo tương lai):** khi đo một trạng thái đến **SAU MỘT SỰ KIỆN có độ trễ phụ thuộc
   tải** (release, reconnect, flush, restart) → **KHÔNG dùng sleep cố định**; dùng poll-tới-điều-kiện + deadline.
 - **Cách phân biệt LAG vs LEAK:** đo lại sau một khoảng — về mốc đầu = lag; đứng mãi = leak thật.
+
+### K-128 — 🟡 BẤT ĐỐI XỨNG observability: web app (khách hàng chạy) chỉ có **stdout**; slice app mới có log-file + `/metrics`
+Scope: `profiles/vision_web_app.py` vs `profiles/vision_slice_app.py` · vận hành 24/7
+Nguồn: LOG Entry #463 · grep xác nhận (`--log-file`/`ProductionLogHandle`/`FileLoggingObserver`/`--metrics-port` → **0 kết quả** trong web app) · `adapters/production_log_handle.py` (#443) · trả lời `[chưa kiểm]` của #462
+CẬP NHẬT 2026-07-27:
+- **Sự thật:** web app ghi MỌI tín hiệu ra **stdout bằng `print()`** — KHÔNG `--log-file`, KHÔNG `ProductionLogHandle`
+  (non-blocking + rotating), KHÔNG `--metrics-port`. Những thứ đó **chỉ có** ở `vision_slice_app` (headless).
+  ⇒ Câu `[chưa kiểm]` của #462 ("log throttle qua RotatingFileHandler?") có đáp án xác định: **đường đó KHÔNG tồn tại**.
+- **Hệ quả vận hành:** phải chạy web app dưới **supervisor bắt + xoay stdout** (docker log driver / systemd-journald).
+  Chạy tay trong terminal → mất log khi đóng. **Chạy detached mà stdout không ai đọc (hoặc đĩa đầy) → `print()` BLOCK
+  → chặn thread đang xử lý request** (`[chưa kiểm]` empiric — nêu như rủi ro, chưa dựng thí nghiệm pipe-không-đọc).
+  Log throttle (#462) giảm tần suất nhưng KHÔNG khử rủi ro này.
+- **Lỗi tài liệu đã sửa cùng entry:** checklist deploy từng ghi "bật `--metrics-port` sau proxy" cho web app — cờ đó
+  KHÔNG tồn tại ⇒ hướng dẫn một việc bất khả thi. Nay §4 của `deploy/README-tls-reverse-proxy.md` nói đúng sự thật.
+- **CHƯA làm (chờ user quyết, KHÔNG tự mở rộng):** `--log-file` cho web app (tái dùng `ProductionLogHandle`, ~15 dòng)
+  · `/metrics` Prometheus cho web app · alerting. Lý do hoãn: stdout+supervisor là chuẩn 12-factor và khớp
+  `docker-compose.cpu-demo.yml`; thêm cờ = 2 lối làm cùng việc cho nhu cầu chưa ai nêu.

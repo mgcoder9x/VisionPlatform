@@ -1,7 +1,19 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-27)
-**Cập nhật lúc:** 2026-07-27T16:00:00+07:00.
+**Cập nhật lúc:** 2026-07-27T16:50:00+07:00.
+**[✅ #463 — Đóng nợ `[chưa kiểm]` #462: web app KHÔNG có production log file (+K-128) + sửa lỗi doc + handoff GPU]**
+- User: máy này KHÔNG có GPU, một lát nữa mới sang máy có GPU → chọn việc CPU-only có giá trị: (1) đóng nợ trung thực của #462; (2) chuẩn bị handoff GPU.
+- **Trả lời `[chưa kiểm]` của #462 bằng ĐỌC CODE + grep (đáp án XÁC ĐỊNH, không phải "chưa đo được"):** `vision_web_app.py` **KHÔNG có** `--log-file`, **KHÔNG** dùng `ProductionLogHandle`, **KHÔNG có** `--metrics-port` (grep 4 mẫu → 0 kết quả; `logging` chỉ dùng để hạ mức werkzeug). ⇒ log throttle **chỉ tồn tại trên stdout**; **đường RotatingFileHandler KHÔNG tồn tại** cho web app.
+- **K-128 — BẤT ĐỐI XỨNG observability (khoảng trống thương mại thật):** app headless `vision_slice_app` có logging production non-blocking+rotating (#443) + `/metrics` + `--observe`; còn **web app — thứ khách hàng THỰC SỰ chạy — không có gì trong số đó**.
+- **Quyết định KHÔNG code (YAGNI, tránh 2 lối làm cùng việc):** chọn đường **12-factor** (app ghi stdout, supervisor bắt+xoay) vì khớp `docker-compose.cpu-demo.yml` đã có; thay vì thêm cờ, **ghi tường minh vào tài liệu** + cảnh báo rủi ro. Nếu bạn muốn `--log-file`/`/metrics` cho web app thì nói — việc nhỏ (~15 dòng, tái dùng adapter sẵn có).
+- **Sửa LỖI TÀI LIỆU (do #428 để lại):** checklist deploy ghi *"bật `--metrics-port` sau proxy"* cho web app — **cờ đó không tồn tại** ⇒ hướng dẫn việc bất khả thi. Đã sửa + thêm **§4 "Log & giám sát web app"**: bảng cách-chạy↔nơi-log↔có-xoay-không · **5 tín hiệu cần theo dõi** (`[device]` · `bulkhead trần` · `TỪ CHỐI …đã nén K` · `/stats streams=a/b` · `/overlay health`) · mục "CHƯA CÓ" · cập nhật bảng TRẠNG THÁI KIỂM CHỨNG.
+- **Rủi ro nêu rõ (không giấu):** stdout là pipe mà **không ai đọc** (chạy detached) hoặc đĩa đầy → `print()` **BLOCK** → chặn thread đang xử lý request. Log throttle (#462) giảm tần suất nhưng KHÔNG khử. `[chưa kiểm]` empiric (chưa dựng thí nghiệm pipe-không-đọc).
+- **Viết lại `end.md` = HANDOFF MÁY GPU** (để phiên GPU không mò): frontier thật · **3 lệnh cố định** cho GPU/RTSP (chạy app kỳ vọng log `dùng='cuda…'` · probe trần thread · probe churn rò rỉ) · cảnh báo K-124 khi verify auth bằng browser · nợ (B) fps end-to-end · (C) proxy nếu bật được Docker · bảng 🔴 còn mở · ràng buộc shell/git/`### Entry #N`.
+- **VERIFY:** grep 4 mẫu = 0 kết quả (bằng chứng cho K-128) · đọc `production_log_handle.py` + `vision_slice_app.py` xác nhận đường logging chỉ wire cho slice app · `get_diagnostics` doc = 0 · doc-only, **0 đụng code** → baseline 919/2 giữ.
+- **Ghi sổ:** LOG #463 · +K-128 (🟡) · INDEX #462→#463 · Σ342→343 (K128).
+- **Bước kế:** sang máy GPU → làm theo `end.md` §2 (A→B→C). Còn ở máy CPU thì hướng tôi khuyến nghị là **cưỡng chế secret bằng máy** (liên quan 🔴 K-031 + sự cố #457) — chờ bạn duyệt.
+---
 **[✅ #462 — TỰ SOI RA 2 DEFECT trong việc của CHÍNH TÔI: log-amplification (D-156) + probe báo-động-giả (+K-127)]**
 - Khuyến nghị #1 (nginx thật) **vẫn chặn bởi tiền đề**: Docker daemon chưa bật; **KHÔNG tự cài** nginx/Caddy qua winget/scoop vì đó là cài phần mềm vào máy công ty (tinh thần K-126 — cần user cho phép rõ). ⇒ chuyển sang **soi đối kháng code mình vừa viết** (#456-#458).
 - **DEFECT 1 — LOG AMPLIFICATION (do tôi gây ở #456):** `_admit_or_503` in log MỖI lần từ chối ⇒ **lượng ghi log do CLIENT điều khiển** (client bị 503 → retry backoff #436; hoặc bị hammer) ⇒ log lỗi THẬT bị chìm + `RotatingFileHandler` (#443) xoay mất log cũ sớm. Cùng LOẠI lỗi với starve thread: **kênh log không có trần**.
