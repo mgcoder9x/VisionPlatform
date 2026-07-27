@@ -1,7 +1,19 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
-## Trạng thái hiện tại (2026-07-19)
-**Cập nhật lúc:** 2026-07-19T23:15:00+07:00.
+## Trạng thái hiện tại (2026-07-27)
+**Cập nhật lúc:** 2026-07-27T10:15:00+07:00.
+**[✅ #456 — ĐO trần thread + FIX GỐC starve kết nối streaming: bulkhead + graceful degradation (D-152, +K-123)]**
+- Không để 2 rủi ro `[chưa kiểm]` của #454 treo (= fix ngọn). Đo thread-budget trước (định lượng ngay trên CPU). Browser KHÔNG đủ (giới hạn ~6 kết nối/origin) → viết probe **`tools/web_sse_capacity_probe.py`** (chỉ-đọc: mở N kết nối dài, sau mỗi lần đo `/stats` timeout 4s).
+- **2 DEFECT phơi ra (số thật, waitress `--threads 8`):** **F-A (CÓ TRƯỚC SSE)** không admission-control → 8 kết nối dài là **MỌI request ngắn TREO VÔ HẠN** (`/stats` TimeoutError; cả trang `/` của viewer mới) = hang ÂM THẦM, client không có tín hiệu. **F-B (do #454)** SSE thêm 1 kết nối dài/viewer → trần viewer **8→4** (regression tôi tự gây, phải nhận).
+- **D-152 fix GỐC = bulkhead + graceful degradation** (triết lý D-091 bulkhead ZMQ + K-014 keep-latest): `runtime/stream_admission.py` (THUẦN: `try_acquire/release` + `capacity_from_threads(threads, reserve=2)`) + wire `/stream`,`/events` (release trong `finally`) + vượt trần **503 + Retry-After NGAY** + CLI `--max-stream-conns`/`--stream-reserve-threads` + LOG trần lúc startup + client `degradeToPoll()`.
+- **SỐ SAU FIX:** trần 6 (=8−2); kết nối #7…#12 **503 ngay**; `/stats` **OK 0–16ms ở MỌI bước** → P8/P9/P10 đạt. **P11:** trần=1 → `/events` 503 → degrade sau ĐÚNG 1 lỗi: poll 220 lần/8s, box=1, canvas vẽ, badge ẩn, video 640×480 vẫn chạy. **Happy-path** (trần 6): SSE dùng (`degraded=false`,`sseFails=0`), box=2, health LIVE, rev 1375 advancing, **0 console error**.
+- **+K-123 (tôi TỰ SỬA MÌNH):** ngưỡng "3 lỗi liên tiếp mới fallback" SAI — ĐO: `EventSource` nhận **HTTP status lỗi (503)** thì thử **đúng 1 lần rồi im 59s** (`readyState=CLOSED`, KHÔNG reconnect như khi server chết) ⇒ ngưỡng không bao giờ đạt ⇒ overlay **chết vĩnh viễn** dù server sống. Sửa: `readyState===2` → fallback NGAY; ngưỡng chỉ cho lỗi TẠM.
+- **Phương án LOẠI + lý do:** tăng `--threads` (chỉ **dịch bức tường**, tới trần vẫn hang) · ASGI/uvicorn (khử tận gốc nhưng refactor transport = Non-Goal) · gộp video+overlay 1 kết nối (phá `<img src=/stream>`, chỉ ×2) · bỏ SSE về poll (mất fix K-119 đã đo giảm ~8×).
+- **Công thức vận hành:** `trần = threads − reserve`; `viewer ≈ trần/2` ⇒ muốn N viewer đặt **`--threads ≥ 2N+2`**.
+- **VERIFY:** `vp verify` **908 passed/2 skipped** (896→908: +10 `test_stream_admission.py`, +2 route 503/release) · **lint 7 kept/0 broken** · **drift PASS** · get_diagnostics 0 (4 file) · probe trước/sau + browser MCP. Thiết kế Wave 2 đã ghi vào `.kiro/specs/overlay-sse-transport/design.md` TRƯỚC khi code (design-first).
+- **Ghi sổ:** LOG #456 · +D-152 +K-123 · INDEX #455→#456 · Σ332→334 (D152·K123) · Verify-Symbol `StreamAdmission` (C8 42→43). **§3.1 đề nghị Trusted Command:** `python -m tools.web_sse_capacity_probe *` (chỉ-đọc HTTP GET, không ghi repo).
+- **Bước kế (còn hở, ưu tiên):** (a) **Property 4 — SSE + Basic Auth** (`EventSource` không set custom header → cần cookie-session hoặc URL-cred; nếu không xử lý thì bật auth = overlay rơi về poll ÂM THẦM) — đo được ngay trên máy này; (b) trần dưới reverse-proxy nginx/Caddy (pool riêng của proxy); (c) soak 24/7 kiểm rò rỉ slot; (d) đo SSE trên máy `toann` GPU/RTSP; (e) 🔴 K-001 (ARM) · K-031 (rotate secret).
+---
 **[✅ #455 — LUẬT MỚI "Tư duy & Trả lời" → steering file riêng + RULES_VERSION 16→17 (D-151)]**
 - User cấp bộ rules A(tư duy ngầm)/B(cách trả lời)/C(mode gọi riêng) + "đưa hết vào rules" → ĐỔI LUẬT → §2.5 buộc bump version + sync mọi mirror.
 - **D-151:** tạo `.kiro/steering/05-tu-duy-va-tra-loi.md` (`inclusion: always`, giữ NGUYÊN VĂN A/B/C) — **file RIÊNG, KHÔNG gộp `00-core-rules.md`** vì 2 trách nhiệm TRỰC GIAO (quy-trình-repo vs cách-nghĩ/văn-phong; gộp → phình + khó sync + rủi ro mirror lệch). + template kit portable `ai-learning-os-kit/kiro-steering-tu-duy-va-tra-loi.template.md` (giữ kit==repo). + bump **v17** ở AGENTS.md (§0.1 con trỏ) · GEMINI.md · copilot-instructions · 00-core-rules · kit AGENTS.template.

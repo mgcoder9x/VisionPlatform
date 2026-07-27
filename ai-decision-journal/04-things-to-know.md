@@ -1243,3 +1243,16 @@ Connection is a "hop-by-hop" header; it cannot be used by a WSGI application (se
 quản, app KHÔNG được set. Streaming (SSE/MJPEG) chỉ cần yield đều + `Cache-Control:no-cache` (+ `X-Accel-Buffering:no`
 cho nginx). **Verify dưới server SẢN XUẤT (waitress), KHÔNG chỉ dev-server** — dev-server dễ dãi che giấu lỗi
 PEP 3333 + buffering. (Cùng tinh thần #427 verify MJPEG dưới waitress.) Fix = bỏ header `Connection`.
+
+### K-123 — ✅ `EventSource` KHÔNG tự reconnect khi server trả HTTP status lỗi (503) — chỉ reconnect khi đứt tầng-mạng
+Scope: web client SSE (`profiles/vision_web_app.py` `_PAGE`) / thiết kế fallback
+Nguồn: LOG Entry #456 · ĐO Playwright MCP (`--max-stream-conns 1`, port 8037) + console log `.playwright-mcp/console-2026-07-27T02-51-16-947Z.log`
+CẬP NHẬT 2026-07-27 (D-152): khi `/events` trả **503** (đạt trần bulkhead), browser log 1 lỗi rồi **KHÔNG thử lại**:
+đo được `eventsAttempts=1` tại 112ms, im suốt ~59s, `sseFails` đứng ở 1 (khác hẳn trường hợp **server chết** —
+lúc đó `EventSource` tự reconnect, đo ở #454: 3 lỗi/12s cách nhau ~3.5s). Trạng thái sau đó = `readyState CLOSED(2)`.
+**Hệ quả BẪY THIẾT KẾ:** fallback kiểu "sau N lỗi liên tiếp mới rơi về poll" **không bao giờ kích hoạt** với lỗi
+HTTP-status → overlay CHẾT VĨNH VIỄN (0 box, canvas trắng, badge đỏ) dù server hoàn toàn sống. Chính là failure
+mode "hang âm thầm" bị đẩy từ server sang client.
+**LUẬT RÚT RA:** phân biệt 2 loại lỗi SSE — **vĩnh viễn** (`readyState===2`: HTTP status lỗi, MIME sai) → phải
+fallback NGAY; **tạm** (`readyState===0` CONNECTING: đứt mạng, browser sẽ tự thử lại) → mới dùng ngưỡng đếm.
+Verify sau fix: trần=1 → degrade sau ĐÚNG 1 lỗi → poll 220 lần/8s, box vẽ lại, badge tắt.

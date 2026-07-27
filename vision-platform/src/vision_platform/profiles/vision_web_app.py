@@ -43,6 +43,7 @@ from vision_platform.application.config_loader import load_detection_config
 from vision_platform.domain.detect_cadence import should_detect
 from vision_platform.domain.motion_gate import MotionGate
 from vision_platform.runtime.overlay_state_store import OverlayStateStore
+from vision_platform.runtime.stream_admission import StreamAdmission, capacity_from_threads
 from vision_platform.runtime.overlay_expiry_scheduler import OverlayExpiryScheduler
 from vision_platform.runtime.overlay_projection import project_overlay
 from vision_platform.runtime.overlay_health import derive_health
@@ -61,6 +62,8 @@ _stop = threading.Event()
 
 # --- overlay (fix flicker) — khởi tạo trong main() trước khi phục vụ ---
 _store: Optional[OverlayStateStore] = None
+# Bulkhead kết nối streaming (Wave 2, ĐO #456) — khởi tạo trong main(); None = không giới hạn (đường test/legacy)
+_admission: Optional[StreamAdmission] = None
 _cfg = OverlayConfig()
 _cadence_cfg = DetectionCadenceConfig()   # mặc định = hành vi hiện tại; main() build lại từ CLI + assert P5
 
@@ -117,12 +120,18 @@ function applyOverlay(o, rtt){
 }
 // ---- SSE (transport ưu tiên): 1 kết nối dài server-push → outage = ~1 lỗi + EventSource TỰ reconnect
 //      (thay vòng poll flood mỗi fetch hỏng, fix gốc K-119). ----
+let sseFails=0, degraded=false;   // SSE lỗi liên tiếp → rơi về poll (vd server trả 503 vì đạt trần bulkhead)
+function degradeToPoll(es){ if(degraded) return; degraded=true; try{es.close();}catch(e){} poll(); }   // 1 lần duy nhất
 function startSSE(){
   try{
     const es=new EventSource('/events');
-    es.addEventListener('overlay',ev=>{ if(pollFails>0){imgFails=0;reloadStream();} pollFails=0; setConn(true); applyOverlay(JSON.parse(ev.data),0); });
-    es.onopen=()=>{ pollFails=0; setConn(true); };
-    es.onerror=()=>{ pollFails++; setConn(false); };   // server down: 1 lỗi + EventSource tự reconnect (KHÔNG flood)
+    es.addEventListener('overlay',ev=>{ if(pollFails>0){imgFails=0;reloadStream();} pollFails=0; sseFails=0; setConn(true); applyOverlay(JSON.parse(ev.data),0); });
+    es.onopen=()=>{ pollFails=0; sseFails=0; setConn(true); };
+    es.onerror=()=>{ pollFails++; sseFails++; setConn(false);            // server down: 1 lỗi + ES tự reconnect (KHÔNG flood)
+      // readyState CLOSED(2) = lỗi VĨNH VIỄN (HTTP status lỗi như 503 đạt trần bulkhead, hoặc MIME sai):
+      // trình duyệt KHÔNG tự reconnect nữa (ĐO #456: /events 503 → đúng 1 lần thử, im 59s) → phải rơi về poll
+      // NGAY. Chờ ngưỡng ở đây = overlay chết vĩnh viễn dù server sống. Ngưỡng chỉ dành cho lỗi TẠM (CONNECTING).
+      if(es.readyState===2 || sseFails>=3) degradeToPoll(es); };
     return true;
   }catch(e){ return false; }
 }
@@ -349,9 +358,37 @@ def favicon():
     return Response(status=204)   # No Content — tránh 404 favicon mỗi lần load (polish thương mại)
 
 
+def _admit_or_503(kind: str):
+    """Bulkhead (Wave 2): xin slot streaming. Trả `None` nếu được phép; ngược lại trả Response **503 NGAY**.
+
+    Vì sao 503 chứ KHÔNG cứ stream: WSGI sync = 1 thread/kết nối, `/stream`+`/events` vô hạn → nhận quá trần là
+    cạn pool ⇒ MỌI request ngắn treo vô hạn (ĐO #456). 503 = tín hiệu tường minh để client suy giảm (SSE→poll,
+    ảnh→retry backoff) thay vì hang âm thầm."""
+    if _admission is None or _admission.try_acquire():
+        return None
+    resp = Response(f"streaming busy: dat tran {_admission.max_streams} ket noi dong thoi\n",
+                    status=503, mimetype="text/plain")
+    resp.headers["Retry-After"] = "5"
+    print(f"[web] TỪ CHỐI {kind}: đạt trần {_admission.max_streams} kết nối streaming đồng thời "
+          f"(tăng --threads / --max-stream-conns nếu cần nhiều viewer hơn)")
+    return resp
+
+
+def _released_after(gen):
+    """Bọc generator streaming: LUÔN `release()` slot khi kết nối đóng/lỗi (client rời, server dừng)."""
+    try:
+        yield from gen
+    finally:
+        if _admission is not None:
+            _admission.release()
+
+
 @app.route("/stream")
 def stream():
-    return Response(_mjpeg(), mimetype="multipart/x-mixed-replace; boundary=frame")
+    busy = _admit_or_503("/stream")
+    if busy is not None:
+        return busy
+    return Response(_released_after(_mjpeg()), mimetype="multipart/x-mixed-replace; boundary=frame")
 
 
 @app.route("/overlay")
@@ -399,8 +436,11 @@ def _sse_overlay_stream():
 def events():
     """SSE transport: 1 kết nối dài server-push (thay vòng poll `/overlay` ~14/s) → khi mất kết nối, trình
     duyệt chỉ log ~1 lỗi + `EventSource` tự reconnect (thay vì flood mỗi fetch hỏng, fix gốc K-119).
-    ADDITIVE: `/overlay` poll GIỮ nguyên làm fallback (client tự chọn)."""
-    resp = Response(stream_with_context(_sse_overlay_stream()), mimetype="text/event-stream")
+    ADDITIVE: `/overlay` poll GIỮ nguyên làm fallback (client tự chọn — cũng là đường suy giảm khi 503)."""
+    busy = _admit_or_503("/events")
+    if busy is not None:
+        return busy
+    resp = Response(stream_with_context(_released_after(_sse_overlay_stream())), mimetype="text/event-stream")
     resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     resp.headers["X-Accel-Buffering"] = "no"   # tắt buffering reverse-proxy (nginx) cho streaming
     # KHÔNG set "Connection" — hop-by-hop header bị PEP 3333 CẤM trong WSGI app (waitress cưỡng chế,
@@ -450,7 +490,7 @@ def _merge_detection(cli: dict, toml_det: Optional[DetectionCadenceConfig]) -> D
 
 
 def main() -> int:
-    global _store
+    global _store, _admission
     p = argparse.ArgumentParser(prog="vision_platform.profiles.vision_web_app")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
@@ -459,6 +499,13 @@ def main() -> int:
                    help="WSGI server: auto (waitress nếu cài, else dev+cảnh báo) | waitress (production, fail-fast) "
                         "| dev (werkzeug dev-server, chỉ local). Mặc định auto.")
     p.add_argument("--threads", type=int, default=8, help="số thread của waitress (chỉ khi --server waitress/auto).")
+    # --- bulkhead kết nối streaming (Wave 2, ĐO #456): WSGI sync = 1 thread/kết nối; /stream + /events KHÔNG
+    #     bao giờ kết thúc → cạn pool là MỌI request ngắn treo vô hạn. Trần tường minh + reserve → 503 thay hang.
+    p.add_argument("--max-stream-conns", type=int, default=None,
+                   help="trần kết nối streaming ĐỒNG THỜI (/stream + /events). Mặc định = --threads − reserve "
+                        "(chừa thread cho /stats,/overlay,/). Vượt trần → 503 + Retry-After (client rơi về poll).")
+    p.add_argument("--stream-reserve-threads", type=int, default=2,
+                   help="số thread CHỪA cho request ngắn khi tự suy trần streaming (mặc định 2).")
     p.add_argument("--insecure", action="store_true",
                    help="CHO PHÉP bind non-loopback KHÔNG xác thực (rủi ro: ai cũng xem được camera). "
                         "Mặc định: phơi mạng bắt buộc đặt VP_WEB_USER/VP_WEB_PASS.")
@@ -550,6 +597,14 @@ def main() -> int:
     assert_cadence_fits_lease(_cadence_cfg, display_lease_ms=_cfg.displayLeaseMs)   # P5 fail-fast startup
 
     _store = OverlayStateStore(_PROCESS_EPOCH, 1, _cfg)
+
+    # --- bulkhead streaming (Wave 2): trần tường minh + reserve thread cho request ngắn (ĐO #456) ---
+    _max_streams = (args.max_stream_conns if args.max_stream_conns is not None
+                    else capacity_from_threads(args.threads, reserve=args.stream_reserve_threads))
+    _admission = StreamAdmission(_max_streams)
+    print(f"[web] bulkhead streaming: trần {_max_streams} kết nối đồng thời "
+          f"(threads={args.threads}, chừa {args.stream_reserve_threads} cho request ngắn) → "
+          f"≈{max(1, _max_streams // 2)} viewer (mỗi viewer dùng /stream + /events); vượt trần → 503 + client rơi về poll")
 
     src_name = (f"rtsp={mask_rtsp(args.rtsp)}" if args.rtsp else
                 f"video={args.video}" if args.video else

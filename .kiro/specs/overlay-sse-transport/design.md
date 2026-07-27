@@ -355,6 +355,60 @@ Module phục vụ `/events` KHÔNG import count/sink/tracker (Property 10 cũ).
 - Không thêm kênh client→server (SSE một chiều là đủ — lý do ở §Architecture).
 - Không nhúng TLS (vẫn qua reverse-proxy như Wave 3).
 
+## Wave 2 — Admission control cho kết nối streaming (ĐÃ ĐO, thiết kế trước khi code)
+
+### Số ĐO THẬT (đóng "Kịch bản 5" từ [suy đoán] → sự thật) — `tools/web_sse_capacity_probe.py`, waitress `--threads 8`
+
+| Cấu hình kết nối dài | Giữ được | STARVE `/stats` tại | Trần viewer |
+|---|---|---|---|
+| chỉ `/stream` (trạng thái TRƯỚC SSE) | 8 | kết nối thứ **8** | ~8 viewer |
+| `/events` + `/stream` (SAU SSE Wave 1) | 8 | kết nối thứ **8** | **~4 viewer** |
+
+Cách đo: mở lần lượt N kết nối dài, sau MỖI kết nối đo 1 request NGẮN `/stats` với timeout 4s; lần timeout đầu
+tiên = trần thực tế. (Browser KHÔNG đủ để đo — giới hạn ~6 kết nối/origin ⇒ phải dùng probe nhiều client.)
+
+### Hai defect ĐỘC LẬP (bản chất, không phải ngọn)
+
+- **F-A (có TRƯỚC SSE — nghiêm trọng nhất): KHÔNG có admission control.** WSGI sync (waitress) cấp 1 thread cho
+  mỗi kết nối; `/stream` và `/events` KHÔNG bao giờ kết thúc ⇒ nhận đến khi cạn pool, sau đó **MỌI request treo
+  vô hạn KHÔNG thông báo** (`/stats`, `/overlay`, cả `/` của viewer mới). Failure mode tệ nhất: hang âm thầm,
+  client không có tín hiệu để phản ứng.
+- **F-B (do Wave 1 gây ra):** SSE thêm 1 kết nối dài/viewer ⇒ trần viewer **giảm ½** (8→4). Wave 1 đã đánh đổi
+  capacity mà chưa khai báo — phải sửa cùng F-A.
+
+### Giải pháp chọn: **bulkhead (giới hạn có chủ đích) + graceful degradation**
+
+Cùng triết lý đã dùng trong repo: bulkhead io-thread ZMQ (D-091) và keep-latest drop (K-014) — **giới hạn tài
+nguyên tường minh + suy giảm có kiểm soát**, thay vì để cạn tài nguyên rồi treo.
+
+1. `StreamAdmission` **(MỚI, THUẦN)** @`runtime/` — bộ đếm có khoá + trần `max_streams`; `try_acquire()/release()`;
+   helper `capacity_from_threads(threads, reserve)` (reserve = số thread CHỪA cho request ngắn).
+2. Wire `profiles`: `/stream` và `/events` **acquire trước khi stream**, `release` trong `finally` của generator.
+   Vượt trần → **`503` + `Retry-After` NGAY** (không treo).
+3. Client: `EventSource` lỗi liên tiếp ≥ ngưỡng → **đóng SSE, rơi về `poll()`** (đường lui đã có sẵn từ Wave 1).
+   Video: `img.onerror` backoff reload (đã có #436).
+4. Startup LOG in trần đã tính (operator biết trước, không phải đoán).
+
+### Phương án BỊ LOẠI + lý do
+
+| Phương án | Vì sao KHÔNG chọn |
+|---|---|
+| Tăng `--threads` (8→32) | Chỉ **dịch bức tường**; tới trần vẫn hang âm thầm (F-A còn nguyên). Có thể làm THÊM, không phải fix. |
+| Chuyển ASGI/async (uvicorn) | Khử thread-per-connection tận gốc NHƯNG refactor transport lớn = Non-Goal spec này. Ghi lại làm hướng dài hạn nếu cần >100 viewer. |
+| Gộp video + overlay vào 1 kết nối | Đổi protocol lớn, phá `<img src=/stream>`; lợi ích chỉ ×2 capacity. |
+| Bỏ SSE, quay lại poll | Mất fix K-119 (đã verify giảm ~8× lỗi). Đảo ngược tiến bộ. |
+
+### Correctness Properties (Wave 2)
+
+- **P8 — reserve luôn được bảo toàn:** ∀ số kết nối streaming đang mở, request NGẮN (`/stats`, `/overlay`, `/`)
+  vẫn được phục vụ (không timeout). *(test được — probe: mở quá trần rồi đo `/stats`.)*
+- **P9 — vượt trần trả 503 NGAY, không treo:** kết nối streaming thứ `max_streams+1` nhận `503` + `Retry-After`
+  trong < 1s. *(test được — probe + unit route.)*
+- **P10 — release đúng:** đóng kết nối streaming → slot được trả lại (mở lại thành công).
+  *(test được — unit `StreamAdmission` + probe mở/đóng/mở.)*
+- **P11 — client degrade:** SSE bị 503 liên tiếp ≥ ngưỡng → client rơi về `poll()`, overlay VẪN cập nhật.
+  *(test được — browser MCP với trần =0/1.)*
+
 ## Rủi ro cần validate (chưa khẳng định — nêu CÁCH kiểm)
 
 | Rủi ro | Trạng thái | Cách kiểm |

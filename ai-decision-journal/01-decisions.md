@@ -1748,3 +1748,15 @@ Quyết định + lý do (bản chất):
 - **Fix GỐC lỗ máy-kiểm:** file KHAI BÁO RULES_VERSION mà NGOÀI `test_rules_sync.FILES` = nguồn drift âm thầm (chính dạng D-083 bắt: kit 15 vs repo 16) → đưa 2 file mới vào FILES NGAY khi tạo (5→7 file). Cưỡng chế bằng máy, không bằng kỷ luật.
 - **Cái giá:** bump version giờ phải sửa 7 chỗ (ma sát ↑) + `inclusion: always` tốn context mỗi lượt. Chấp nhận: drift âm thầm đắt hơn; luật văn phong phải áp mọi câu hỏi nên `always` đúng ngữ nghĩa.
 - **Khi nào KHÔNG dùng cách này:** nếu luật mới CHỈ áp cho 1 loại việc (vd chỉ khi dạy code) → dùng `inclusion: fileMatch`/`manual` thay `always` để khỏi đốt context.
+
+### D-152 — 2026-07-27 — Bulkhead kết nối streaming (`StreamAdmission` + 503 + client degrade) — fix GỐC starve thread WSGI
+Status: ✅ (908/2 · lint 7 kept/0 broken · drift PASS · probe trước/sau + browser MCP P11)
+Scope: `vision-platform/src/vision_platform/runtime/stream_admission.py` (MỚI) · `profiles/vision_web_app.py` (routes `/stream`,`/events` + CLI `--max-stream-conns`/`--stream-reserve-threads` + client `degradeToPoll`) · `tools/web_sse_capacity_probe.py` (MỚI, đo) · `tests/test_stream_admission.py` (MỚI, 10) + 2 test route
+Nguồn: LOG Entry #456 · spec `overlay-sse-transport` §Wave 2 (đã ghi thiết kế trước khi code) · D-091 (bulkhead ZMQ, tiền lệ triết lý)
+Verify-Symbol: vision-platform/src/vision_platform/runtime/stream_admission.py::StreamAdmission
+Quyết định + lý do (bản chất):
+- **Vấn đề ĐO ĐƯỢC (không suy đoán):** WSGI sync (waitress) = 1 thread/kết nối; `/stream` (MJPEG) + `/events` (SSE) là vòng lặp VÔ HẠN ⇒ với `--threads 8`, mở 8 kết nối dài là **MỌI request ngắn treo vô hạn** (`/stats` TimeoutError) — kể cả trang `/` của viewer mới. **F-A** (có trước SSE): không admission control, cạn pool → hang ÂM THẦM. **F-B** (do #454): SSE thêm 1 kết nối dài/viewer → trần viewer 8→**4** (giảm ½).
+- **Giải pháp:** trần tường minh `max_streams = threads − reserve` (reserve=2 CHỪA cho request ngắn) → `/stats`,`/overlay`,`/` KHÔNG bao giờ starve; vượt trần → **503 + Retry-After NGAY**; client SSE 503 → **rơi về poll**. Cùng triết lý bulkhead D-091 + keep-latest drop K-014: **giới hạn tài nguyên + suy giảm có kiểm soát**, không để cạn rồi treo.
+- **Số thật:** trước = starve tại kết nối #8 (treo vô hạn); sau = trần 6, #7-#12 nhận 503, `/stats` OK 0–16ms mọi bước; client trần=1 → degrade sau ĐÚNG 1 lỗi, poll 220/8s, box vẽ bình thường.
+- **Cái giá:** trần viewer thấp hơn (≈3 viewer @threads=8) và phải khai báo `--threads ≥ 2N+2` cho N viewer. Đổi lại: trần BIẾT TRƯỚC + log startup + không sập toàn hệ.
+- **Khi nào KHÔNG dùng cách này:** nếu cần hàng trăm viewer đồng thời → bulkhead sẽ chặn sớm; lúc đó phải đổi sang server ASGI/async (khử thread-per-connection) hoặc đẩy fan-out ra CDN/media-relay — refactor lớn, ngoài phạm vi spec.

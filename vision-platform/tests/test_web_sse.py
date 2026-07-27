@@ -67,3 +67,41 @@ def test_sse_stream_emits_retry_then_overlay_event(monkeypatch):
     assert payload["processEpoch"] == "proc-1"
     assert "eventRevision" in payload
     assert payload["display"]["boxes"][0]["label"] == "person"   # box chảy qua SSE (Property 1 freshness)
+
+
+# --- Wave 2 (bulkhead, ĐO #456): vượt trần → 503 + Retry-After NGAY, KHÔNG treo (P9); release trả slot (P10) ---
+def test_stream_and_events_return_503_when_admission_full(monkeypatch):
+    """Đạt trần kết nối streaming → route trả 503 + Retry-After (client suy giảm: SSE→poll, ảnh→retry)."""
+    from vision_platform.runtime.stream_admission import StreamAdmission
+
+    adm = StreamAdmission(1)
+    assert adm.try_acquire() is True          # slot duy nhất đã bị chiếm
+    monkeypatch.setattr(web, "_admission", adm)
+    monkeypatch.setattr(web, "_store", _store_with_box())
+
+    with web.app.test_request_context("/events"):
+        r_events = web.events()
+    with web.app.test_request_context("/stream"):
+        r_stream = web.stream()
+
+    for r in (r_events, r_stream):
+        assert r.status_code == 503
+        assert r.headers.get("Retry-After") == "5"
+
+
+def test_streaming_releases_slot_when_generator_closed(monkeypatch):
+    """Generator streaming đóng (client rời) → slot ĐƯỢC TRẢ (nếu không, trần rò rỉ dần → treo lại)."""
+    from vision_platform.runtime.stream_admission import StreamAdmission
+
+    adm = StreamAdmission(1)
+    monkeypatch.setattr(web, "_admission", adm)
+    monkeypatch.setattr(web, "_store", _store_with_box())
+
+    with web.app.test_request_context("/events"):
+        resp = web.events()
+    assert resp.status_code == 200 and adm.active == 1        # đã chiếm slot
+    gen = resp.response
+    next(iter(gen))                                          # lấy 1 chunk (retry:) rồi đóng
+    resp.close()                                             # client rời → generator close → finally release
+    assert adm.active == 0
+    assert adm.try_acquire() is True                         # slot dùng lại được

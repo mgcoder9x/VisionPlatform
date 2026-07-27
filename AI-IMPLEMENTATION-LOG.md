@@ -8534,3 +8534,34 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - RULES_VERSION giờ là **17**; máy kiểm **7 file** (trước 5).
 
 **Đã verify:** `py tests/test_rules_sync.py` → **7 file đều 17, PASS** (đọc output thật); `scripts\vp.cmd check` → **DRIFT-CHECK PASS** (C1-C9 + RULES sync 7 dòng + 14 self-test). Steering file đã được hệ thống nạp thật (xuất hiện trong context lượt kế). · **Chưa verify:** hiệu quả hành vi dài hạn của §D (không đo được bằng máy — thuộc kỷ luật); `vp verify` full-suite chưa chạy lại sau khi sửa `tests/test_rules_sync.py` (sẽ chạy trước khi commit).
+
+---
+
+### Entry #456 — 2026-07-27 — ĐO trần thread + FIX GỐC starve kết nối streaming: bulkhead + graceful degradation (D-152, +K-123) — Kiro-Opus
+
+**Bối cảnh:** #454 ship SSE nhưng để lại 2 rủi ro `[chưa kiểm]` của spec (§Kịch bản 5 thread-budget · Property 4 auth). Để nguyên = fix ngọn. Chọn đo thread-budget trước (định lượng được ngay trên CPU, khả năng lộ defect cao). Browser KHÔNG đủ để đo (giới hạn ~6 kết nối/origin) → viết probe nhiều-client.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Tool đo CỐ ĐỊNH `tools/web_sse_capacity_probe.py` (chỉ-đọc, §3.1): mở lần lượt N kết nối dài (`/events`,`/stream` xen kẽ = mô hình 1 viewer), sau MỖI kết nối đo 1 request NGẮN `/stats` timeout 4s → lần timeout đầu = TRẦN thực tế.
+- `runtime/stream_admission.py` (MỚI, THUẦN): `StreamAdmission.try_acquire/release` + `capacity_from_threads(threads, reserve=2)`. Đặt ở `runtime` (stdlib, không framework) → test xác định không cần server.
+- CLI `--max-stream-conns` (mặc định = threads − reserve) + `--stream-reserve-threads` (mặc định 2) + LOG trần lúc startup.
+- Client: `degradeToPoll()` — SSE không dùng được → rơi về `poll()` (đường lui Wave 1).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu (2 lần tự sửa mình):**
+- Design Wave 1 ghi "mỗi viewer 1 kết nối SSE — rủi ro thread budget [suy đoán]". ĐO ra: đó là **defect thật, 2 tầng** → phải làm Wave 2 ngay, không hoãn.
+- **Ngưỡng fallback 3-lỗi-liên-tiếp của tôi SAI:** đo thấy `/events` nhận 503 → EventSource thử **đúng 1 lần rồi im 59s** (`readyState=CLOSED`, KHÔNG tự reconnect như khi mất mạng) ⇒ ngưỡng 3 KHÔNG BAO GIỜ đạt ⇒ overlay **chết vĩnh viễn** (0 box, canvas trắng, badge đỏ) dù server sống. Sửa: degrade NGAY khi `readyState===2`, ngưỡng chỉ dùng cho lỗi TẠM (CONNECTING). (+K-123)
+
+**3. Trade-off đã cân nhắc (phương án bị loại + lý do):**
+- **Tăng `--threads` 8→32:** chỉ DỊCH bức tường; tới trần vẫn hang âm thầm (F-A còn nguyên) → không phải fix, chỉ là tham số.
+- **Chuyển ASGI/async (uvicorn):** khử thread-per-connection tận gốc NHƯNG refactor transport lớn = Non-Goal spec; giữ làm hướng nếu cần >100 viewer.
+- **Gộp video+overlay 1 kết nối:** phá `<img src=/stream>`, lợi ích chỉ ×2.
+- **Bỏ SSE về poll:** mất fix K-119 (đã đo giảm ~8× lỗi) = đảo tiến bộ.
+- Chọn **bulkhead + 503 + degrade** (cùng triết lý D-091 bulkhead ZMQ, K-014 keep-latest drop): giới hạn tường minh + suy giảm có kiểm soát. **Cái giá:** trần viewer THẤP HƠN (6 kết nối = ~3 viewer với threads=8) — nhưng là trần BIẾT TRƯỚC + có log + nâng được bằng `--threads`, thay cho "8 viewer rồi sập toàn bộ".
+
+**4. Điều bạn nên biết (SỐ ĐO THẬT):**
+- **TRƯỚC fix (waitress `--threads 8`):** chỉ `/stream` → starve tại kết nối #8 (~8 viewer); `/events`+`/stream` → starve tại #8 nhưng chỉ **~4 viewer** (SSE làm giảm ½ capacity — regression do #454). Starve = `/stats` **TimeoutError**, treo vô hạn, không lỗi cho client.
+- **SAU fix:** trần 6 (=8−2); kết nối #7…#12 bị **503 ngay**; `/stats` **OK ở MỌI bước (0–16ms)**, STARVE = không bao giờ (P8/P9/P10 đạt).
+- **P11 client:** trần=1 → `/events` 503 → **degrade sau đúng 1 lỗi**: poll 220 lần/8s, boxes=1, canvas vẽ, badge ẩn, video 640×480 vẫn chạy. Happy-path (trần 6): `degraded=false`, `sseFails=0`, boxes=2, health LIVE, rev 1375 advancing, **0 console error**.
+- Công thức vận hành: `trần = threads − reserve`; `viewer ≈ trần / 2`. Muốn N viewer → `--threads ≥ 2N + 2`.
+
+**Đã verify:** `scripts\vp.cmd verify` → **908 passed/2 skipped** (896→908: +10 `test_stream_admission.py` +2 route 503/release) · **import-linter 7 kept/0 broken** · **drift PASS** · get_diagnostics 0 (4 file). Empiric: probe trước/sau fix (số trên) + browser MCP P11 + happy-path. · **Chưa verify:** (a) Property 4 SSE+Basic Auth (còn nguyên, việc kế); (b) hành vi trần dưới reverse-proxy (nginx/Caddy có pool riêng); (c) soak 24/7 xem slot có rò rỉ sau hàng nghìn lần connect/disconnect (đã test release ở unit + probe, chưa test dài hạn).
