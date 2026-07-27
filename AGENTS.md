@@ -4,7 +4,7 @@
 > này trước khi làm việc. Đây là nguồn sự thật duy nhất; các file luật riêng của từng tool
 > (`.github/copilot-instructions.md`, `GEMINI.md`, `.kiro/steering/`) trỏ về đây.
 >
-> **RULES_VERSION: 17** (2026-07-19) — đổi luật phải BUMP số này + đồng bộ MỌI mirror lên cùng
+> **RULES_VERSION: 18** (2026-07-27) — đổi luật phải BUMP số này + đồng bộ MỌI mirror lên cùng
 > version (xem §2.5). Kiểm tra lệch: `py tests/test_rules_sync.py`.
 >
 > **§0.1 — Luật TƯ DUY & TRẢ LỜI (v17):** cách nghĩ + văn phong áp cho MỌI câu hỏi nằm ở
@@ -203,7 +203,17 @@ Người dùng có thể hỏi ngoài luồng. Khi đó: dòng chế độ là *
 - `docs/00-COMPANION-REPO-VA-LO-TRINH.md` — repo học nội dung kiến thức.
 - `AI-IMPLEMENTATION-LOG.md` (gốc repo) — hộp đen quyết định (LUÔN cập nhật).
 
-## 8. Ngôn ngữ & Git-safety
+## 8. Ngôn ngữ & Git-safety & 🔒 KIỂM SOÁT MẠNG CÔNG TY (TUYỆT ĐỐI)
+- **🔒 TƯỜNG LỬA / KIỂM SOÁT MẠNG DOANH NGHIỆP — CẤM VƯỢT, PHẢI BÁO (ràng buộc tối cao, user nêu rõ:
+  "nếu vượt sẽ gây ảnh hưởng lớn"):** khi một truy cập bị CHẶN (firewall/proxy công ty/DNS/policy/cert
+  inspection/registry nội bộ), AI **DỪNG NGAY + BÁO người dùng + đề xuất cách hợp lệ** (xin mở quyền, dùng
+  mirror nội bộ được duyệt, làm offline). **TUYỆT ĐỐI KHÔNG**: đổi/tắt VPN-firewall-antivirus-proxy-DNS,
+  dùng proxy/tunnel/VPN khác, `--insecure`/`--no-check-certificate`/tắt xác thực TLS, đổi `hosts`, tìm
+  domain-mirror lách chặn, hay bất kỳ cách "đi đường khác" để lấy được nội dung bị chặn. Chặn = **kết quả
+  hợp lệ của phép đo**, ghi `[bị chặn — chưa kiểm]`, KHÔNG coi là chướng ngại phải phá.
+  (Cùng tinh thần K-117: AI KHÔNG tắt VPN của user; xem K-126.)
+- **Phân biệt trước khi kết luận "bị chặn":** dịch vụ chưa bật (vd Docker daemon chưa chạy) / thiếu gói /
+  sai cấu hình ≠ tường lửa. Nêu **thông điệp lỗi nguyên văn** rồi mới phân loại — không gán nhãn "bị chặn" mù.
 - **Ngôn ngữ:** trả lời bằng **tiếng Việt** (ngôn ngữ người dùng) trừ khi được yêu cầu khác.
 - **Git (checkpoint):** commit từng task, message ngắn rõ. KHÔNG commit secret/`.env`/khóa.
   KHÔNG `force push` / `reset --hard` / xóa nhánh trừ khi được cho phép rõ. `external/` đã gitignore.

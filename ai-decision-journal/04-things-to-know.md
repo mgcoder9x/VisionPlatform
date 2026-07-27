@@ -1285,3 +1285,20 @@ CẬP NHẬT 2026-07-27:
 - **Hệ quả vận hành:** trần bulkhead có thể tạm bị chiếm bởi viewer đã "chết" tối đa ~2,5 phút. Muốn nhanh hơn →
   hạ `channel_timeout` của waitress (app CHƯA expose cờ; chỉ thêm khi có nhu cầu thật — YAGNI).
 - **Cách đo lại:** `python -m tools.web_sse_capacity_probe --hold-conns N --hold-seconds 300` rồi kill process, đọc `/stats`.
+
+### K-126 — 🔒 RÀNG BUỘC TỐI CAO: tường lửa/kiểm soát mạng công ty — CẤM VƯỢT, phải DỪNG + BÁO
+Scope: mọi truy cập mạng của AI (fetch tài liệu · tải gói · pull image · push git · gọi API)
+Nguồn: LOG Entry #460 · chỉ thị trực tiếp của user 2026-07-27 ("nếu chặn tường lửa tuyệt đối không được vượt mà
+báo lại… nếu vượt sẽ gây ảnh hưởng lớn cho tôi") · cùng nhóm K-117 (AI KHÔNG tắt VPN của user) · AGENTS §8 (v18)
+**LUẬT:** truy cập bị CHẶN (firewall/proxy công ty/DNS/policy/TLS-inspection/registry nội bộ) → **DỪNG NGAY +
+BÁO user + đề xuất cách HỢP LỆ** (xin mở quyền · dùng mirror nội bộ đã được duyệt · làm offline · bỏ bước đó).
+**TUYỆT ĐỐI KHÔNG:** đổi/tắt VPN·firewall·antivirus·proxy·DNS·`hosts`; dùng tunnel/VPN/proxy khác; `--insecure`
+/`--no-check-certificate`/tắt xác thực TLS; tìm domain-mirror để lách; retry vòng vo nhằm "lọt".
+**Vì sao (bản chất):** vượt kiểm soát = vi phạm chính sách bảo mật doanh nghiệp → hậu quả pháp lý/kỷ luật cho
+USER, KHÔNG phải cho AI. Giá trị của một phép đo KHÔNG bao giờ lớn hơn rủi ro đó. **Chặn là KẾT QUẢ HỢP LỆ của
+phép đo** → ghi nhãn `[bị chặn — chưa kiểm]` và báo, đúng tinh thần §5 ("không kiểm được + việc quan trọng → DỪNG, HỎI").
+**Phân loại TRƯỚC khi gán nhãn (chống kết luận sai):** dịch vụ chưa bật / thiếu gói / sai cấu hình **≠** tường lửa.
+Nêu **thông điệp lỗi NGUYÊN VĂN** rồi mới phân loại. Ví dụ thật (#460): `open //./pipe/dockerDesktopLinuxEngine:
+The system cannot find the file specified` = **Docker Desktop chưa bật**, KHÔNG phải bị chặn mạng.
+**Ghi nhận trạng thái phiên #460:** chưa gặp lần chặn nào; `nginx.org` fetch được; hoạt động mạng chỉ gồm `git push`
+lên repo của user + đọc docs chính chủ. AI KHÔNG tự bật Docker Desktop (dịch vụ mức hệ thống → để user quyết định).

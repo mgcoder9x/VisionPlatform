@@ -4,7 +4,7 @@ inclusion: always
 
 # Rules: Tư duy & Trả lời (áp dụng cho MỌI câu hỏi)
 
-> **RULES_VERSION: 17** — phải khớp `AGENTS.md` (`py tests/test_rules_sync.py`).
+> **RULES_VERSION: 18** — phải khớp `AGENTS.md` (`py tests/test_rules_sync.py`).
 > Gồm 3 phần: **A. Tư duy ngầm** (làm trong đầu, không in ra) · **B. Cách trả lời** (thứ hiện ra) ·
 > **C. Mode gọi riêng**. Quan hệ với luật gốc: xem §D (thứ tự ưu tiên) — file này chi phối **CÁCH nghĩ +
 > CÁCH viết**, KHÔNG được dùng để cắt bỏ nghĩa vụ sư phạm (`AGENTS.md` §1) hay bằng chứng verify (§5).

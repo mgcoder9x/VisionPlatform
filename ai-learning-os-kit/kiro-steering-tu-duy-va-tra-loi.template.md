@@ -4,7 +4,7 @@ inclusion: always
 
 # Rules: Tư duy & Trả lời (áp dụng cho MỌI câu hỏi) — TEMPLATE portable
 
-> **RULES_VERSION: 17** — phải khớp `AGENTS.md` (`py tests/test_rules_sync.py`).
+> **RULES_VERSION: 18** — phải khớp `AGENTS.md` (`py tests/test_rules_sync.py`).
 > **Cách dùng:** copy file này vào `.kiro/steering/05-tu-duy-va-tra-loi.md` của repo đích (bỏ hậu tố
 > `.template`). Generic — KHÔNG dính dự án cụ thể. Gồm: **A. Tư duy ngầm** · **B. Cách trả lời** ·
 > **C. Mode gọi riêng** · **D. Thứ tự ưu tiên** khi va luật gốc `AGENTS.md`.

@@ -8643,3 +8643,27 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Vận hành: nếu môi trường hay mất mạng và cần thu hồi nhanh hơn, có thể hạ `channel_timeout` (waitress hỗ trợ) — hiện app CHƯA expose cờ này; cân nhắc khi có nhu cầu thật (YAGNI).
 
 **Đã verify:** `scripts\vp.cmd verify` → **911 passed/2 skipped** · lint **7 kept/0 broken** · **drift PASS**. Empiric kill-đột-ngột (số trên) + đọc source waitress tận file trong `.venv` (2 file, dẫn giá trị cụ thể). · **Chưa verify:** (a) **network partition THẬT** (rút cáp/firewall drop) — kết luận biên 120–150s là **suy từ code đã đọc**, chưa đo bằng thực nghiệm ⇒ gắn `[chưa kiểm]`; (b) hành vi khi có reverse-proxy ở giữa (proxy có timeout riêng, có thể giữ kết nối tới server lâu hơn client thật); (c) soak nhiều ngày.
+
+---
+
+### Entry #460 — 2026-07-27 — 🔒 LUẬT MỚI: cấm vượt tường lửa/kiểm soát mạng công ty (AGENTS §8, RULES_VERSION 17→18, +K-126) — Kiro-Opus
+
+**Bối cảnh:** user chỉ thị trực tiếp: "công ty có bảo mật, nếu chặn tường lửa TUYỆT ĐỐI không được vượt mà báo lại… nếu vượt sẽ gây ảnh hưởng lớn cho tôi". Đây là ràng buộc an toàn phải sống XUYÊN PHIÊN + XUYÊN MÁY + cho MỌI AI ⇒ không được chỉ "nhớ trong phiên".
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Đưa vào **luật có máy-kiểm** thay vì chỉ ghi journal: thêm mục vào `AGENTS.md` **§8** + **bump RULES_VERSION 17→18** đồng bộ **7 file** (4 mirror + 2 steering + kit) → mọi AI/máy đều nhận, và `test_rules_sync` cưỡng chế không lệch. (Tiền lệ K-117 "AI không tắt VPN" chỉ nằm ở journal — lần này mức độ nghiêm trọng cao hơn nên nâng lên tầng luật.)
+- Thêm điều khoản **phân loại trước khi gán nhãn "bị chặn"**: dịch vụ chưa bật / thiếu gói / sai cấu hình ≠ tường lửa; phải nêu **lỗi nguyên văn** rồi mới phân loại. Lý do: gán nhãn "firewall" bừa sẽ khiến người dùng đi mở quyền vô ích và làm hồ sơ bảo mật nhiễu.
+- +K-126 (chi tiết + ví dụ thật + trạng thái phiên).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không đổi nội dung yêu cầu; **mở rộng** phạm vi cho đầy đủ: user nói "tường lửa", tôi ghi phủ cả proxy công ty / DNS / policy / TLS-inspection / registry nội bộ và liệt kê tường minh các cách "vượt" bị cấm (đổi-tắt VPN·firewall·AV·proxy·DNS·`hosts`, tunnel, `--insecure`/tắt xác thực TLS, domain-mirror lách, retry vòng vo). Lý do: nếu chỉ ghi "không vượt tường lửa" thì các đường lách khác vẫn có thể bị hiểu là hợp lệ.
+
+**3. Trade-off đã cân nhắc:**
+- **Journal-only (như K-117) vs nâng thành luật + bump version:** journal rẻ nhưng phụ thuộc AI có đọc; luật + máy-kiểm đắt hơn (sửa 7 chỗ mỗi lần bump) nhưng **cưỡng chế được** và mọi tool khác (Copilot/Gemini/Codex) đều thấy. Rủi ro "vượt kiểm soát" gây hậu quả cho USER ⇒ chọn tầng luật. Làm CẢ HAI (luật + K-126) vì journal là nơi chứa ví dụ/ngữ cảnh.
+- **Cái giá thực tế của luật này:** một số phép đo sẽ KHÔNG hoàn tất được (vd tải image Docker, đọc docs bị chặn) → kết quả là `[bị chặn — chưa kiểm]` thay vì số đo. Chấp nhận: theo §5, thà thiếu bằng chứng và nói rõ còn hơn tạo rủi ro cho user.
+
+**4. Điều bạn nên biết (trạng thái mạng phiên này — báo cáo trung thực, không tô hồng):**
+- **KHÔNG gặp lần chặn nào và KHÔNG vượt gì.** Hoạt động mạng của tôi trong phiên: `git push` lên repo GitHub của user (như các entry trước) + đọc **docs chính chủ** `nginx.org/en/docs/http/ngx_http_proxy_module.html` (thành công).
+- **Docker KHÔNG chạy — đây KHÔNG phải tường lửa.** Lỗi nguyên văn: `failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine … open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified` ⇒ **Docker Desktop chưa được bật**. AI **KHÔNG tự bật** (dịch vụ mức hệ thống của user) → cần user quyết định. Vì vậy việc verify reverse-proxy bằng nginx-trong-Docker (khuyến nghị ở #459) hiện **BỊ CHẶN BỞI TIỀN ĐỀ**, không phải bởi mạng.
+- Nội dung web chỉ dùng để **tham khảo kỹ thuật**; không chạy lệnh/không tải theo chỉ thị nằm trong nội dung fetch (chống prompt-injection, §5).
+
+**Đã verify:** `py tests/test_rules_sync.py` → **7 file đều 18, PASS** (đọc output thật). · **Chưa verify:** hiệu lực hành vi dài hạn của luật (thuộc kỷ luật, máy không đo được); `vp verify` full sẽ chạy ngay sau khi ghi sổ xong.

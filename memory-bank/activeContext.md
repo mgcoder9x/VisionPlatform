@@ -1,7 +1,20 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-27)
-**Cập nhật lúc:** 2026-07-27T13:20:00+07:00.
+**Cập nhật lúc:** 2026-07-27T14:10:00+07:00.
+**[🔒 #460 — LUẬT MỚI: CẤM VƯỢT tường lửa/kiểm soát mạng công ty (AGENTS §8 · RULES_VERSION 17→18 · +K-126)]**
+- User chỉ thị trực tiếp: "công ty có bảo mật, nếu chặn tường lửa TUYỆT ĐỐI không được vượt mà báo lại; nếu vượt sẽ gây ảnh hưởng lớn cho tôi" → ràng buộc phải sống XUYÊN PHIÊN + XUYÊN MÁY + cho MỌI AI ⇒ nâng lên **tầng LUẬT có máy-kiểm** (không chỉ nhớ trong phiên; tiền lệ K-117 "AI không tắt VPN" chỉ ở journal, lần này nghiêm trọng hơn).
+- **Nội dung luật (AGENTS §8):** bị CHẶN (firewall/proxy công ty/DNS/policy/TLS-inspection/registry nội bộ) → **DỪNG NGAY + BÁO user + đề xuất cách HỢP LỆ** (xin mở quyền · mirror nội bộ đã duyệt · làm offline · bỏ bước). **CẤM tường minh:** đổi/tắt VPN·firewall·AV·proxy·DNS·`hosts`; tunnel/VPN khác; `--insecure`/`--no-check-certificate`/tắt xác thực TLS; domain-mirror lách; retry vòng vo để "lọt". Chặn = **KẾT QUẢ HỢP LỆ của phép đo** → nhãn `[bị chặn — chưa kiểm]` (khớp §5).
+- **Điều khoản chống-gán-nhãn-bừa (AI tự thêm):** dịch vụ chưa bật / thiếu gói / sai cấu hình **≠** tường lửa → phải nêu **lỗi NGUYÊN VĂN** rồi mới phân loại (nếu không, user đi mở quyền vô ích + nhiễu hồ sơ bảo mật).
+- **Đồng bộ:** bump **RULES_VERSION 17→18** ở **7 file** (AGENTS · GEMINI · copilot-instructions · 00-core-rules · 05-tu-duy-va-tra-loi · kit AGENTS.template · kit steering template) → `test_rules_sync` **7/7 = 18, PASS**.
+- **TRẠNG THÁI MẠNG PHIÊN NÀY (báo cáo trung thực):** **không gặp lần chặn nào, không vượt gì.** Hoạt động mạng chỉ gồm `git push` lên repo GitHub của user + đọc **docs chính chủ** nginx.org (thành công). Nội dung web chỉ dùng tham khảo kỹ thuật, KHÔNG làm theo chỉ thị trong nội dung fetch (chống prompt-injection).
+- **Docker CHƯA BẬT — KHÔNG phải tường lửa:** lỗi nguyên văn `open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified` ⇒ Docker Desktop chưa chạy. AI **KHÔNG tự bật** (dịch vụ mức hệ thống). ⇒ khuyến nghị #459 (verify reverse-proxy bằng nginx-trong-Docker) đang **chặn bởi TIỀN ĐỀ**, chờ user bật Docker HOẶC chọn hướng khác.
+- **Ghi sổ:** LOG #460 · +K-126 (🔒) · INDEX #459→#460 · Σ338→339 (K126) · AGENTS §8 + 6 mirror.
+- **Bước kế — CẦN USER CHỌN 1 trong 3 (tôi không tự quyết vì đều cần tiền đề của bạn):**
+  1. **Bật Docker Desktop** → tôi verify `deploy/README-tls-reverse-proxy.md` bằng nginx thật (SSE qua proxy · MJPEG · trần bulkhead khi proxy giữ kết nối riêng · path-prefix ảnh hưởng `BASE` của D-153). Đây là chỗ doc↔thực tế lệch lớn nhất.
+  2. **Không bật Docker** → tôi CẬP NHẬT tài liệu theo hiểu biết đã ground từ **docs chính chủ nginx** (đã đọc: `proxy_buffering` mặc định **on**; tắt được bằng directive HOẶC header `X-Accel-Buffering: no` — app đã tự set; `proxy_read_timeout` mặc định **60s** → stream dài PHẢI nâng) + bổ sung mục **SSE `/events`** và **sizing thread** (`--threads ≥ 2N+2`, `--max-stream-conns`) mà doc hiện THIẾU vì viết trước #454/#456 — và ghi rõ phần nào `[chưa kiểm empiric]`.
+  3. Hướng khác: đo SSE trên máy `toann` GPU/RTSP · ANPR .pt · 🔴 K-001 (ARM) · 🔴 K-031 (rotate secret — nay có thêm lý do từ sự cố in env ở #457).
+---
 **[✅ #459 — Ca biên viewer NGẮT BẤT THƯỜNG: slot trả <1s (ĐO) + biên ~120–150s khi mất mạng (đọc source) (+K-125)]**
 - Lỗ tôi tự nêu ở #458: client ngắt BẤT THƯỜNG (tắt máy/kill/rút mạng). Nếu `finally` không chạy → bulkhead **khoá dần cả hệ** = lỗi 24/7 khó quy trách. Không suy đoán, phải đo.
 - **Thêm `--hold-seconds`/`--hold-conns`** vào probe TÊN CỐ ĐỊNH (§3.1, không tạo lệnh mới): mở N kết nối rồi ngủ để bên ngoài kill, rồi đọc `/stats streams` (trường phơi từ D-154 — đúng lúc phát huy tác dụng).

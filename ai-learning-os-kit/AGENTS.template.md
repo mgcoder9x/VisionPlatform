@@ -4,7 +4,13 @@
 > làm việc. Nguồn sự thật duy nhất; file luật từng tool (`.github/copilot-instructions.md`,
 > `GEMINI.md`, `.kiro/steering/`) trỏ về đây.
 >
-> **RULES_VERSION: 17** — đổi luật phải BUMP + đồng bộ mọi mirror lên cùng version (kiểm `tests/test_rules_sync.py`).
+> **RULES_VERSION: 18** — đổi luật phải BUMP + đồng bộ mọi mirror lên cùng version (kiểm `tests/test_rules_sync.py`).
+>
+> **🔒 §8.1 — KIỂM SOÁT MẠNG DOANH NGHIỆP (TUYỆT ĐỐI):** truy cập bị CHẶN (firewall/proxy công ty/DNS/policy/
+> TLS-inspection) → AI **DỪNG NGAY + BÁO người dùng + đề xuất cách hợp lệ** (xin mở quyền / mirror nội bộ được
+> duyệt / làm offline). **TUYỆT ĐỐI KHÔNG** đổi-tắt VPN/firewall/AV/proxy/DNS/`hosts`, không `--insecure` hay tắt
+> xác thực TLS, không tunnel/VPN khác, không tìm mirror lách. Chặn = **kết quả hợp lệ của phép đo** → ghi
+> `[bị chặn — chưa kiểm]`. Phân biệt: dịch vụ chưa bật/thiếu gói ≠ tường lửa (nêu lỗi NGUYÊN VĂN trước khi phân loại).
 >
 > **§0.1 — Luật TƯ DUY & TRẢ LỜI (v17):** tách file riêng `.kiro/steering/05-tu-duy-va-tra-loi.md`
 > (A. tư duy ngầm: first-principles · nhiều-hướng-rồi-chọn · tự-phản-biện · premortem/inversion · steelman ·

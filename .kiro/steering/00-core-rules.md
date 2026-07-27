@@ -5,8 +5,12 @@ inclusion: always
 # Core Rules (Kiro) — trỏ về AGENTS.md
 
 > Nguồn sự thật đầy đủ: `AGENTS.md` ở gốc repo. File này nhắc các luật quan trọng nhất.
-> **RULES_VERSION: 17** — phải khớp AGENTS.md (`py tests/test_rules_sync.py`).
-> **Luật TƯ DUY & TRẢ LỜI (v17):** file song song `05-tu-duy-va-tra-loi.md` (A tư duy ngầm: first-principles,
+> **RULES_VERSION: 18** — phải khớp AGENTS.md (`py tests/test_rules_sync.py`).
+> **🔒 v18 — KIỂM SOÁT MẠNG CÔNG TY (TUYỆT ĐỐI):** truy cập bị CHẶN (firewall/proxy/DNS/policy) → **DỪNG NGAY +
+> BÁO user + đề xuất cách hợp lệ**. TUYỆT ĐỐI KHÔNG vượt: không đổi/tắt VPN-firewall-AV-proxy-DNS-`hosts`, không
+> `--insecure`/tắt xác thực TLS, không tunnel/mirror lách. Chặn = **kết quả đo hợp lệ** → ghi `[bị chặn — chưa kiểm]`.
+> Phân biệt: dịch vụ chưa bật (vd Docker daemon) / thiếu gói ≠ tường lửa — nêu lỗi NGUYÊN VĂN trước khi phân loại. (AGENTS §8 · K-126)
+> **Luật TƯ DUY & TRẢ LỜI:** file song song `05-tu-duy-va-tra-loi.md` (A tư duy ngầm: first-principles,
 > nhiều-hướng, tự-phản-biện, premortem, steelman, root-cause · B văn phong: kết-luận-trước, gọn, không-tô-hồng ·
 > C mode `/godmode` `/socratic`…). Va nhau → §D file đó: §5 validate + §1 sư phạm + §2/§2.5 ghi sổ THẮNG B.
 
