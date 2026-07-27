@@ -1,7 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-19)
-**Cập nhật lúc:** 2026-07-19T22:30:00+07:00.
+**Cập nhật lúc:** 2026-07-19T23:15:00+07:00.
+**[✅ #455 — LUẬT MỚI "Tư duy & Trả lời" → steering file riêng + RULES_VERSION 16→17 (D-151)]**
+- User cấp bộ rules A(tư duy ngầm)/B(cách trả lời)/C(mode gọi riêng) + "đưa hết vào rules" → ĐỔI LUẬT → §2.5 buộc bump version + sync mọi mirror.
+- **D-151:** tạo `.kiro/steering/05-tu-duy-va-tra-loi.md` (`inclusion: always`, giữ NGUYÊN VĂN A/B/C) — **file RIÊNG, KHÔNG gộp `00-core-rules.md`** vì 2 trách nhiệm TRỰC GIAO (quy-trình-repo vs cách-nghĩ/văn-phong; gộp → phình + khó sync + rủi ro mirror lệch). + template kit portable `ai-learning-os-kit/kiro-steering-tu-duy-va-tra-loi.template.md` (giữ kit==repo). + bump **v17** ở AGENTS.md (§0.1 con trỏ) · GEMINI.md · copilot-instructions · 00-core-rules · kit AGENTS.template.
+- **AI TỰ THÊM §D THỨ-TỰ-ƯU-TIÊN** (user không nêu — giải xung đột ĐÃ phát hiện): B3 "gọn" ⟂ chỉ thị thường trực "không tiết kiệm token" + §5 verify-labels · B1 "kết luận trước" ⟂ §1 sư phạm-Socratic khi học · B4 "không tự thuật" ⟂ §2/§2.5 ghi sổ → chốt **§5+§1+§2/§2.5+§1.7 THẮNG B**, chỉ-thị-trong-lượt THẮNG B3. Không có §D = 2 bộ luật đá nhau âm thầm (drift hành vi, máy không bắt được).
+- **FIX GỐC lỗ máy-kiểm:** file KHAI BÁO `RULES_VERSION` mà NGOÀI `tests/test_rules_sync.FILES` = **drift âm thầm** (đúng dạng D-083 từng bắt kit 15-vs-16) → đưa 2 file mới vào FILES NGAY khi tạo → máy kiểm **7 file** (trước 5).
+- **VERIFY:** `py tests/test_rules_sync.py` → **7 file đều 17, PASS** (output thật) · `vp check` → **drift PASS**. Steering file đã được hệ thống nạp thật (xuất hiện trong context lượt kế).
+- **Ghi sổ:** LOG #455 · +D-151 · INDEX #454→#455 · Σ331→332 (D151) · Verify-Symbol `test_rules_sync.py::versions` (C8 41→42).
+- **Bước kế:** chạy `vp verify` full (đã sửa `tests/test_rules_sync.py`) → commit + push. Rồi các hướng CHỜ USER ở block #454.
+---
 **[✅ #454 — FIX GỐC "cực nhiều lỗi" browser = SSE transport thay poll (D-150, +K-122) — máy k.nguyen CPU]**
 - User lặp "mở web browser phát hiện cực nhiều lỗi". Verify web base mới #452 (browser MCP webcam CPU): server-UP **0 lỗi** (frontier bền + onnx-cuda gating D-142 chạy đúng CPU) → xác nhận "cực nhiều lỗi" chỉ lúc OUTAGE (K-119: poll flood). Fix BẢN CHẤT (spec overlay-sse-transport #448 design-first sẵn) = đổi transport poll→SSE.
 - **D-150 (Wave 1 SSE, ADDITIVE):** endpoint `/events` (`text/event-stream`, `_sse_overlay_stream` PUSH khi eventRevision đổi + heartbeat 15s) + client `EventSource` (tách `applyOverlay(o,rtt)` dùng chung, GIỮ `poll()` fallback). Chọn SSE≠WebSocket (luồng 1 chiều, EventSource auto-reconnect sẵn, 0 dependency).

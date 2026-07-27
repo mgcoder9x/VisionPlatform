@@ -5,7 +5,10 @@ inclusion: always
 # Core Rules (Kiro) — trỏ về AGENTS.md
 
 > Nguồn sự thật đầy đủ: `AGENTS.md` ở gốc repo. File này nhắc các luật quan trọng nhất.
-> **RULES_VERSION: 16** — phải khớp AGENTS.md (`py tests/test_rules_sync.py`).
+> **RULES_VERSION: 17** — phải khớp AGENTS.md (`py tests/test_rules_sync.py`).
+> **Luật TƯ DUY & TRẢ LỜI (v17):** file song song `05-tu-duy-va-tra-loi.md` (A tư duy ngầm: first-principles,
+> nhiều-hướng, tự-phản-biện, premortem, steelman, root-cause · B văn phong: kết-luận-trước, gọn, không-tô-hồng ·
+> C mode `/godmode` `/socratic`…). Va nhau → §D file đó: §5 validate + §1 sư phạm + §2/§2.5 ghi sổ THẮNG B.
 
 ## 0. ĐẦU MỖI PHIÊN (bắt buộc trước khi làm)
 CHẠY `git status` + `git diff` TRƯỚC; đọc 5 entry cuối `AI-IMPLEMENTATION-LOG.md` (gốc repo) +

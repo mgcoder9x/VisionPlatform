@@ -1736,3 +1736,15 @@ Quyết định + lý do (bản chất):
 - **Bug lộ nhờ verify-trước:** design phác `Connection: keep-alive` → PEP 3333 CẤM (hop-by-hop) → waitress AssertionError (werkzeug-dev che giấu) → BỎ header (xem K-122).
 - **Số thật (browser waitress):** flush 3.7ms/gap 50.8ms (không buffer); outage overlay-channel 3 lỗi vs poll ~24 (giảm ~8×); P1/P3/P5/P6/P7 đạt.
 - **Cái giá / chưa phủ:** SSE+Basic Auth (EventSource không set custom header — cần cookie/URL-cred) [chưa kiểm]; thread-budget mỗi viewer 1 kết nối dài [chưa kiểm]; đo máy GPU/RTSP thật. → Wave sau.
+
+### D-151 — 2026-07-19 — Luật "Tư duy & Trả lời" = steering file RIÊNG + vào máy-kiểm (RULES_VERSION 16→17, 7 file)
+Status: ✅ (test_rules_sync 7 file đều 17 PASS · drift PASS)
+Scope: `.kiro/steering/05-tu-duy-va-tra-loi.md` (MỚI) · `ai-learning-os-kit/kiro-steering-tu-duy-va-tra-loi.template.md` (MỚI) · `tests/test_rules_sync.py` (FILES 5→7) · bump v17 ở AGENTS.md + 4 mirror
+Nguồn: LOG Entry #455 · yêu cầu user (bộ rules A/B/C) · tiền lệ D-083 (kit ngoài máy-kiểm → drift âm thầm)
+Verify-Symbol: tests/test_rules_sync.py::versions
+Quyết định + lý do (bản chất):
+- **File RIÊNG, không gộp `00-core-rules.md`:** hai trách nhiệm TRỰC GIAO — core-rules = quy trình/kỷ luật repo (mirror AGENTS.md); file mới = cách nghĩ + văn phong. Gộp → phình + khó sync + tăng rủi ro mirror lệch.
+- **+§D thứ-tự-ưu-tiên (user không nêu, AI tự thêm):** giải xung đột ĐÃ phát hiện: B3 "gọn" ⟂ "không tiết kiệm token"/§5 verify-labels; B1 "kết luận trước" ⟂ §1 sư phạm-Socratic; B4 "không tự thuật" ⟂ §2/§2.5 ghi sổ. Chốt §5+§1+§2/§2.5+§1.7 THẮNG B; chỉ thị-trong-lượt THẮNG B3. Không có §D = 2 bộ luật đá nhau âm thầm (drift hành vi, không máy nào bắt).
+- **Fix GỐC lỗ máy-kiểm:** file KHAI BÁO RULES_VERSION mà NGOÀI `test_rules_sync.FILES` = nguồn drift âm thầm (chính dạng D-083 bắt: kit 15 vs repo 16) → đưa 2 file mới vào FILES NGAY khi tạo (5→7 file). Cưỡng chế bằng máy, không bằng kỷ luật.
+- **Cái giá:** bump version giờ phải sửa 7 chỗ (ma sát ↑) + `inclusion: always` tốn context mỗi lượt. Chấp nhận: drift âm thầm đắt hơn; luật văn phong phải áp mọi câu hỏi nên `always` đúng ngữ nghĩa.
+- **Khi nào KHÔNG dùng cách này:** nếu luật mới CHỈ áp cho 1 loại việc (vd chỉ khi dạy code) → dùng `inclusion: fileMatch`/`manual` thay `always` để khỏi đốt context.

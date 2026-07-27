@@ -14,6 +14,10 @@ FILES = [
     ".kiro/steering/00-core-rules.md",
     # Kit portable: §2.5 buộc kit cùng version — máy-kiểm để KHÔNG drift âm thầm (trước đây ngoài check → lệch 15 vs 16).
     "ai-learning-os-kit/AGENTS.template.md",
+    # v17: luật TƯ DUY & TRẢ LỜI tách file steering riêng + template kit. File KHAI BÁO RULES_VERSION mà
+    # NGOÀI danh sách này = nguồn drift âm thầm (bài học D-083) → đưa vào máy-kiểm ngay khi tạo.
+    ".kiro/steering/05-tu-duy-va-tra-loi.md",
+    "ai-learning-os-kit/kiro-steering-tu-duy-va-tra-loi.template.md",
 ]
 PAT = re.compile(r"RULES_VERSION:\s*(\d+)")
 

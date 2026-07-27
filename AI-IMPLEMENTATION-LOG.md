@@ -8507,3 +8507,30 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - SecurityHeadersMiddleware bọc `/events` OK. K-119 essence-fix ĐÃ landed (không còn phải chờ WS).
 
 **Đã verify:** `scripts\vp.cmd verify` → **896 passed/2 skipped** (+2 test `test_web_sse.py`: header WSGI-safe [guard bug Connection] + khung SSE) · **import-linter 7 kept/0 broken** · **drift PASS** · get_diagnostics 0. Browser MCP đo 6 property dưới waitress (số thật ở trên). · **Chưa verify:** (a) SSE + Basic Auth (Wave 2 — `EventSource` không set custom header dễ; cần cookie-session hoặc URL-cred, [chưa kiểm]); (b) thread-budget nhiều viewer SSE đồng thời [chưa kiểm]; (c) đo trên máy `toann` GPU/RTSP thật.
+
+---
+
+### Entry #455 — 2026-07-19 — Luật TƯ DUY & TRẢ LỜI thành steering file + bump RULES_VERSION 16→17 (7 file vào máy-kiểm) — Kiro-Opus
+
+**Bối cảnh:** User cung cấp bộ rules "Tư duy & Trả lời" (A. tư duy ngầm · B. cách trả lời · C. mode gọi riêng) + yêu cầu "đưa hết cái này vào rules". Đây là ĐỔI LUẬT → §2.5 buộc bump RULES_VERSION + đồng bộ MỌI mirror.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **File RIÊNG, không nhét vào `00-core-rules.md`** (D-151): tạo `.kiro/steering/05-tu-duy-va-tra-loi.md` (`inclusion: always`). Lý do: `00-core-rules.md` là mirror-nén của AGENTS.md (luật quy-trình/kỷ-luật repo); bộ mới là luật **CÁCH NGHĨ + VĂN PHONG** (trực giao). Trộn → file phình, khó sync, tăng rủi ro drift mirror. Tách file = mỗi file 1 trách nhiệm, sync độc lập.
+- **Thêm §D "THỨ TỰ ƯU TIÊN"** (user không nêu): giải xung đột luật đã PHÁT HIỆN được — B3 "gọn" ⟂ chỉ thị thường trực "KHÔNG tiết kiệm token" + §5 (verify labels); B1 "kết luận trước" ⟂ §1 (sư phạm Socratic khi học); B4 "không tự thuật" ⟂ §2/§2.5 (ghi sổ). Chốt: §5 + §1 + §2/§2.5 + §1.7 **THẮNG** phần văn phong B; chỉ thị trong lượt THẮNG B3. Không có §D thì 2 bộ luật đá nhau âm thầm = nguồn drift hành vi.
+- **FIX GỐC lỗ máy-kiểm:** file mới KHAI BÁO `RULES_VERSION` nhưng nằm NGOÀI `tests/test_rules_sync.FILES` = **drift âm thầm** (đúng dạng D-083 từng bắt: kit lệch 15 vs 16). → đưa NGAY 2 file mới vào `FILES` (steering + template kit) → máy kiểm 7 file thay 5. Không dựa kỷ luật, dựa máy.
+- **Kit portable song song:** `ai-learning-os-kit/kiro-steering-tu-duy-va-tra-loi.template.md` (generic, copy-được sang repo khác) — giữ kit == repo (§2.5).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Giữ NGUYÊN VĂN toàn bộ A/B/C của user (không cắt/diễn giải lại). **THÊM** §D thứ-tự-ưu-tiên + header RULES_VERSION (bắt buộc để vào máy-kiểm). Đây là bổ sung, không phải sửa nội dung user.
+
+**3. Trade-off đã cân nhắc:**
+- File riêng vs gộp `00-core-rules.md`: riêng → +1 file phải sync mỗi lần bump (chi phí), nhưng đổi lại trách-nhiệm-đơn + máy-kiểm phủ được. Chọn riêng.
+- Đưa 2 file mới vào `FILES` → mỗi lần bump phải sửa 7 chỗ (ma sát tăng) vs để ngoài (dễ nhưng drift âm thầm). Chọn ma-sát-có-kiểm-soát: drift âm thầm đắt hơn nhiều (tiền lệ D-083).
+- `inclusion: always` (luôn nạp) vs `manual`: always → tốn context mỗi lượt, nhưng luật văn phong phải áp cho MỌI câu hỏi (yêu cầu user) → always là đúng ngữ nghĩa.
+
+**4. Điều bạn nên biết:**
+- Bộ rules này áp cho **mọi AI** trong repo (Kiro/Codex/Gemini/Copilot) vì 4 mirror + AGENTS.md §0.1 đều trỏ tới.
+- Xung đột thực tế đáng chú ý: user thường xuyên yêu cầu "không tiết kiệm token / cực sâu" — theo §D.5 chỉ thị đó THẮNG B3, nên câu trả lời dài-sâu KHÔNG vi phạm luật gọn.
+- RULES_VERSION giờ là **17**; máy kiểm **7 file** (trước 5).
+
+**Đã verify:** `py tests/test_rules_sync.py` → **7 file đều 17, PASS** (đọc output thật); `scripts\vp.cmd check` → **DRIFT-CHECK PASS** (C1-C9 + RULES sync 7 dòng + 14 self-test). Steering file đã được hệ thống nạp thật (xuất hiện trong context lượt kế). · **Chưa verify:** hiệu quả hành vi dài hạn của §D (không đo được bằng máy — thuộc kỷ luật); `vp verify` full-suite chưa chạy lại sau khi sửa `tests/test_rules_sync.py` (sẽ chạy trước khi commit).

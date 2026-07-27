@@ -1,7 +1,9 @@
 # Copilot Instructions — trỏ về AGENTS.md
 
 > **Luôn đọc `AGENTS.md` ở gốc repo trước** — nguồn sự thật đầy đủ.
-> **RULES_VERSION: 16** — phải khớp AGENTS.md (`py tests/test_rules_sync.py`).
+> **RULES_VERSION: 17** — phải khớp AGENTS.md (`py tests/test_rules_sync.py`).
+> **Luật TƯ DUY & TRẢ LỜI (v17):** `.kiro/steering/05-tu-duy-va-tra-loi.md` (A tư duy ngầm · B văn phong
+> kết-luận-trước/gọn/không-tô-hồng · C mode). Va nhau → §D file đó: §5 validate + §1 sư phạm + §2 ghi sổ THẮNG B.
 
 ## 0. ĐẦU MỖI PHIÊN (bắt buộc)
 CHẠY `git status` + `git diff` TRƯỚC; đọc 5 entry cuối `AI-IMPLEMENTATION-LOG.md` (gốc repo) +

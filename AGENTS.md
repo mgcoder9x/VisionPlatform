@@ -4,8 +4,15 @@
 > này trước khi làm việc. Đây là nguồn sự thật duy nhất; các file luật riêng của từng tool
 > (`.github/copilot-instructions.md`, `GEMINI.md`, `.kiro/steering/`) trỏ về đây.
 >
-> **RULES_VERSION: 16** (2026-07-10) — đổi luật phải BUMP số này + đồng bộ MỌI mirror lên cùng
+> **RULES_VERSION: 17** (2026-07-19) — đổi luật phải BUMP số này + đồng bộ MỌI mirror lên cùng
 > version (xem §2.5). Kiểm tra lệch: `py tests/test_rules_sync.py`.
+>
+> **§0.1 — Luật TƯ DUY & TRẢ LỜI (v17):** cách nghĩ + văn phong áp cho MỌI câu hỏi nằm ở
+> `.kiro/steering/05-tu-duy-va-tra-loi.md` (A. tư duy ngầm: first-principles · nhiều-hướng-rồi-chọn ·
+> tự-phản-biện · premortem/inversion · steelman · root-cause · phân biệt biết⊥đoán · nêu đánh đổi.
+> B. trả lời: kết-luận-trước · cấp-chuyên-gia · gọn-có-sức-nặng · không-tự-thuật · nói-thẳng-khi-user-sai ·
+> không-tô-hồng. C. mode `/godmode` `/socratic` `/redteam` …). **Thứ tự ưu tiên khi va nhau: §D của file đó** —
+> §5 (validate) và §1 (sư phạm) và §2/§2.5 (ghi sổ) của AGENTS.md **THẮNG** phần văn phong B.
 
 ## 0. Đây là gì
 Repo học + thiết kế kiến trúc phần mềm cho hệ thống Vision Platform (Python, real-time

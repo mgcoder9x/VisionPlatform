@@ -4,7 +4,13 @@
 > làm việc. Nguồn sự thật duy nhất; file luật từng tool (`.github/copilot-instructions.md`,
 > `GEMINI.md`, `.kiro/steering/`) trỏ về đây.
 >
-> **RULES_VERSION: 16** — đổi luật phải BUMP + đồng bộ mọi mirror lên cùng version (kiểm `tests/test_rules_sync.py`).
+> **RULES_VERSION: 17** — đổi luật phải BUMP + đồng bộ mọi mirror lên cùng version (kiểm `tests/test_rules_sync.py`).
+>
+> **§0.1 — Luật TƯ DUY & TRẢ LỜI (v17):** tách file riêng `.kiro/steering/05-tu-duy-va-tra-loi.md`
+> (A. tư duy ngầm: first-principles · nhiều-hướng-rồi-chọn · tự-phản-biện · premortem/inversion · steelman ·
+> root-cause · phân biệt biết⊥đoán · nêu đánh đổi. B. trả lời: kết-luận-trước · cấp-chuyên-gia · gọn ·
+> không-tự-thuật · nói-thẳng-khi-user-sai · không-tô-hồng. C. mode gọi riêng). **Va nhau → §D file đó:**
+> §5 (validate) + §1 (sư phạm) + §2/§2.5 (ghi sổ) THẮNG phần văn phong B.
 
 ## 0. Đây là gì
 {{PROJECT_DESC — mô tả dự án 2-3 câu}}.
