@@ -1760,3 +1760,15 @@ Quyết định + lý do (bản chất):
 - **Số thật:** trước = starve tại kết nối #8 (treo vô hạn); sau = trần 6, #7-#12 nhận 503, `/stats` OK 0–16ms mọi bước; client trần=1 → degrade sau ĐÚNG 1 lỗi, poll 220/8s, box vẽ bình thường.
 - **Cái giá:** trần viewer thấp hơn (≈3 viewer @threads=8) và phải khai báo `--threads ≥ 2N+2` cho N viewer. Đổi lại: trần BIẾT TRƯỚC + log startup + không sập toàn hệ.
 - **Khi nào KHÔNG dùng cách này:** nếu cần hàng trăm viewer đồng thời → bulkhead sẽ chặn sớm; lúc đó phải đổi sang server ASGI/async (khử thread-per-connection) hoặc đẩy fan-out ra CDN/media-relay — refactor lớn, ngoài phạm vi spec.
+
+### D-153 — 2026-07-27 — Client web dùng URL TUYỆT ĐỐI `BASE=location.origin` cho mọi request (diệt bẫy URL-có-credential)
+Status: ✅ (909/2 · lint 7 kept/0 broken · drift PASS · browser MCP trước/sau trên đúng kịch bản bẫy)
+Scope: `vision-platform/src/vision_platform/profiles/vision_web_app.py` (`_PAGE` client JS: `/overlay`,`/stats`,`/events`,`/stream` + bỏ `src="/stream"` cứng) · `tests/test_web_sse.py` (+guard)
+Nguồn: LOG Entry #457 · K-124 · Property 4 spec `overlay-sse-transport`
+Verify-Symbol: vision-platform/tests/test_web_sse.py::test_client_uses_absolute_urls_not_relative_paths
+Quyết định + lý do (bản chất):
+- **Vấn đề ĐO ĐƯỢC:** mở UI bằng `http://user:pass@host/` → `document.URL`/`document.baseURI` GIỮ credential → path tương đối resolve thành URL-có-credential → **mọi `fetch()` ném TypeError** (Fetch spec cấm) ⇒ `/stats` trống + **đường lui poll chết**, trong khi SSE + `<img>` vẫn chạy ⇒ **hỏng ÂM THẦM một phần**, rất khó chẩn đoán.
+- **Fix SAI lần đầu (tự sửa):** `location.replace` về URL sạch — redirect chạy được nhưng `document.baseURI` VẪN có credential ⇒ `fetch` vẫn lỗi. Đó là sửa `location` (ngọn), không sửa **base URL resolve** (gốc).
+- **Fix ĐÚNG:** dựng URL từ `location.origin` (không bao giờ chứa credential) ⇒ miễn nhiễm baseURI. Đối chứng đo: absolute → 200; tương đối → TypeError. Sau fix, cùng kịch bản: `statsFails=0`, `/stats` có data, `sseFails=0`, `img.src` sạch credential, poll-fallback 200/health LIVE.
+- **Guard chống hồi quy:** test khẳng định `_PAGE` có `const BASE=location.origin;` + 4 URL tuyệt đối và KHÔNG còn `fetch('/`, `new EventSource('/`, `img.src='/`, `src="/stream"`.
+- **Cái giá / khi nào KHÔNG dùng:** nếu sau này deploy dưới reverse-proxy có **path-prefix** (vd `/camera1/`) thì `location.origin` thiếu prefix → phải dựng base từ prefix thật (hiện app không có prefix nào, mọi route ở gốc `/`).

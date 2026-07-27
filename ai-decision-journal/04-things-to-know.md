@@ -1256,3 +1256,17 @@ mode "hang âm thầm" bị đẩy từ server sang client.
 **LUẬT RÚT RA:** phân biệt 2 loại lỗi SSE — **vĩnh viễn** (`readyState===2`: HTTP status lỗi, MIME sai) → phải
 fallback NGAY; **tạm** (`readyState===0` CONNECTING: đứt mạng, browser sẽ tự thử lại) → mới dùng ngưỡng đếm.
 Verify sau fix: trần=1 → degrade sau ĐÚNG 1 lỗi → poll 220 lần/8s, box vẽ lại, badge tắt.
+
+### K-124 — ✅ URL kiểu `http://user:pass@host/` làm CHẾT mọi `fetch()` trong trang (Fetch spec) — hỏng ÂM THẦM một phần
+Scope: web client (`profiles/vision_web_app.py` `_PAGE`) / kỹ thuật verify browser có Basic Auth
+Nguồn: LOG Entry #457 · ĐO Playwright MCP port 8042/8043 (`document.baseURI` vs `location.origin`)
+CẬP NHẬT 2026-07-27 (D-153):
+- **Hiện tượng:** mở UI bằng URL nhúng credential → `fetch('/stats')` ném `TypeError: Request cannot be constructed
+  from a URL that includes credentials`. `EventSource` và `<img>` **KHÔNG** bị hạn chế này ⇒ SSE + video vẫn chạy
+  ⇒ trang **trông bình thường** nhưng `/stats` trống và **đường lui poll chết** = hỏng âm thầm MỘT PHẦN.
+- **Gốc (đo chính xác):** `location.href` có thể sạch nhưng **`document.URL`/`document.baseURI` GIỮ credential** →
+  path tương đối resolve thành URL-có-credential. `location.replace` về URL sạch KHÔNG chữa được (chỉ sửa `location`).
+- **Fix:** dựng URL từ **`location.origin`** (không bao giờ chứa credential) cho mọi request. Đối chứng: absolute → 200; tương đối → TypeError.
+- **Ảnh hưởng tới CÁCH VERIFY (điểm mù đã lộ):** dùng URL-nhúng-credential để né dialog Basic Auth (kỹ thuật #428)
+  làm mọi `fetch` trong trang chết ⇒ số đo `/stats`, `/overlay` bị nhiễu, dễ kết luận sai là "server lỗi".
+  **Cách đúng:** tiêm header `Authorization` bằng `page.route(...)` với URL SẠCH (đã dùng ở #457, cho Property 4 ✅).

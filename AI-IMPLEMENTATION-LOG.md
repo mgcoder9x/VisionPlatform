@@ -8565,3 +8565,32 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Công thức vận hành: `trần = threads − reserve`; `viewer ≈ trần / 2`. Muốn N viewer → `--threads ≥ 2N + 2`.
 
 **Đã verify:** `scripts\vp.cmd verify` → **908 passed/2 skipped** (896→908: +10 `test_stream_admission.py` +2 route 503/release) · **import-linter 7 kept/0 broken** · **drift PASS** · get_diagnostics 0 (4 file). Empiric: probe trước/sau fix (số trên) + browser MCP P11 + happy-path. · **Chưa verify:** (a) Property 4 SSE+Basic Auth (còn nguyên, việc kế); (b) hành vi trần dưới reverse-proxy (nginx/Caddy có pool riêng); (c) soak 24/7 xem slot có rò rỉ sau hàng nghìn lần connect/disconnect (đã test release ở unit + probe, chưa test dài hạn).
+
+---
+
+### Entry #457 — 2026-07-27 — ĐÓNG Property 4 (SSE + Basic Auth ✅) + FIX GỐC bẫy URL-có-credential làm chết `fetch` (D-153, +K-124) — Kiro-Opus
+
+**Bối cảnh:** rủi ro `[chưa kiểm]` cuối của spec SSE = Property 4 (SSE + Basic Auth). Quan trọng vì nếu `EventSource` không mang được credential thì BẬT auth = overlay âm thầm rơi về poll (mất fix K-119) hoặc chết hẳn. Đo được ngay trên máy này.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Đo Property 4 bằng **2 đường độc lập** để không bị nhiễu bởi kỹ thuật test: (a) URL nhúng credential `http://u:p@host/` (né dialog Basic Auth chặn Playwright — K của #428); (b) **tiêm header `Authorization` qua `page.route`** (mô phỏng phiên đã xác thực qua dialog, URL sạch). Kết quả (b) mới là bằng chứng cho ngữ cảnh production.
+- **D-153:** client dựng **URL TUYỆT ĐỐI `BASE=location.origin`** cho MỌI request (`/overlay`,`/stats`,`/events`,`/stream`) + `<img>` không còn `src="/stream"` cứng (nạp qua `reloadStream()`), + test guard `test_client_uses_absolute_urls_not_relative_paths` chống hồi quy.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu (tự sửa mình 1 lần nữa):**
+- Fix ĐẦU của tôi cho bẫy URL-credential là **redirect về URL sạch** (`location.replace`). ĐO ra: redirect chạy (`location.href` sạch, không bị dialog) **NHƯNG `fetch` VẪN lỗi** vì `document.URL`/`document.baseURI` **vẫn giữ credential** → path tương đối vẫn resolve thành URL-có-credential. Tức tôi sửa `location` = **cái ngọn**; gốc là **base URL dùng để resolve**. → BỎ redirect, chuyển sang URL tuyệt đối (miễn nhiễm baseURI).
+- Spec Property 4 ghi "[chưa kiểm] — EventSource không set custom header dễ": thực tế **không cần** set header — browser tự gửi credential Basic đã cache cho cả SSE. Đính chính.
+
+**3. Trade-off đã cân nhắc:**
+- **Redirect URL sạch** (đã thử, LOẠI): không sửa được baseURI → vô ích cho `fetch`, lại thêm 1 lần điều hướng + rủi ro dialog. Giữ lại chỉ để "ẩn credential khỏi address bar" là lợi ích phụ, không đáng.
+- **Dùng XHR thay `fetch` cho poll:** có thể lách hạn chế NHƯNG phải viết lại 2 vòng lặp + mất API hiện đại; URL tuyệt đối rẻ hơn và diệt gốc.
+- **Bỏ qua vì "ai lại mở URL có credential":** không chấp nhận — người dùng có bookmark kiểu đó, và failure mode là **hỏng âm thầm MỘT PHẦN** (SSE + video vẫn chạy nên trông như bình thường, chỉ `/stats` trống và đường lui poll chết) → cực khó chẩn đoán tại hiện trường.
+- Cái giá của URL tuyệt đối: nếu deploy sau reverse-proxy đổi path-prefix thì `location.origin` vẫn đúng origin nhưng KHÔNG mang prefix — hiện app không có path-prefix nào (`/`), nên an toàn; nếu sau này thêm prefix phải dùng `document.location.pathname` gốc (ghi lại để không quên).
+
+**4. Điều bạn nên biết (SỐ ĐO THẬT):**
+- **Server-side auth phủ SSE:** không credential → `/events`, `/stream`, `/overlay` đều **401** + `WWW-Authenticate: Basic realm="VisionPlatform"`; có credential → `/events` **200 `text/event-stream`**.
+- **Property 4 ✅ (URL sạch + header tiêm):** `sseFails=0`, `degraded=false`, `statsFails=0`, `/stats` 200 (`video=5585 · detect=3756 · overlay_rev=3757`), boxes=2, canvas vẽ, badge ẩn, video 640×480 → **SSE hoạt động dưới Basic Auth**, poll fallback vẫn khả dụng.
+- **Bẫy K-124 (đo được):** mở bằng URL có credential → `fetch('/stats')` ném `TypeError: Request cannot be constructed from a URL that includes credentials`; `statsFails` tăng liên tục; `fetch(location.origin+'/stats')` → **200**. Sau fix D-153 (cùng kịch bản URL-credential): `statsFails=0` · `/stats` có data thật · `sseFails=0` · `img.src` **không còn credential** · **poll fallback probe 200 + health LIVE** (trước fix: chết).
+- Ghi chú trung thực: 1 warning `Canvas2D willReadFrequently` trong phiên đo là do **code đo của tôi** (`getImageData` lặp), KHÔNG phải app; app 0 lỗi console.
+- Sự cố vận hành của tôi (đã báo user): một lệnh soạn sai cú pháp lồng nháy làm `cmd set` in **toàn bộ biến môi trường** vào log phiên, trong đó có 3 biến chứa API key (`OPENAI_API_KEY`, `openAI_key`, `HUNGNGUYEN_API_KEY`) → đã khuyến nghị **rotate** (thuộc nhóm K-031 🔴). Không nhắc lại giá trị.
+
+**Đã verify:** `scripts\vp.cmd verify` → **909 passed/2 skipped** (908→909: +1 guard URL tuyệt đối) · **import-linter 7 kept/0 broken** · **drift PASS** · get_diagnostics 0. Empiric: 401-không-credential (urllib), 200-có-credential, browser MCP 2 đường (header tiêm + URL-credential) trước/sau fix. · **Chưa verify:** (a) auth qua **dialog thật** của trình duyệt (Playwright bị chặn — dùng header tiêm thay thế, tương đương ở tầng HTTP nhưng KHÔNG phải cùng cơ chế cache credential của browser); (b) hành vi sau reverse-proxy có path-prefix; (c) soak 24/7; (d) SSE trên máy `toann` GPU/RTSP.

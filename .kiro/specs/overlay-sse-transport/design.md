@@ -414,7 +414,7 @@ nguyên tường minh + suy giảm có kiểm soát**, thay vì để cạn tài
 | Rủi ro | Trạng thái | Cách kiểm |
 |---|---|---|
 | **waitress buffer `text/event-stream`** → event không flush ngay (tương tự lo ngại MJPEG proxy_buffering #427/#428) | **[chưa kiểm]** | Chạy `--server waitress` thật + đo mốc thời gian event tới client qua Playwright/EventSource; thử `X-Accel-Buffering:no`, flush per-event |
-| **SSE + Basic Auth (Wave 2):** `EventSource` KHÔNG gửi custom header dễ → auth qua cookie/session hay Basic Auth trong URL? | **[chưa kiểm]** | Kiểm middleware `BasicAuthMiddleware` với request SSE; xác định cơ chế credential khả thi (cookie sau login, hay Basic Auth ở URL — có ràng buộc bảo mật) |
+| **SSE + Basic Auth (Wave 2)** | **✅ ĐÃ KIỂM (#457)** — KHÔNG cần custom header: browser tự gửi credential Basic đã cache cho request SSE. Đo: không-credential → `/events` **401**; phiên đã xác thực → `/events` **200 `text/event-stream`**, `sseFails=0`, overlay chạy. **CẢNH BÁO K-124:** đừng verify bằng URL `http://u:p@host/` (làm chết mọi `fetch` trong trang) — tiêm header `Authorization` qua `page.route` với URL sạch. |
 | **SecurityHeaders (Wave 3)** ảnh hưởng stream? | **[chưa kiểm]** | Bật middleware + kiểm header trên response `/events` không phá streaming |
 | **Thread budget** (`threads=8`): mỗi viewer 1 connection dài | **[suy đoán]** cần đo | Mở N tab SSE, quan sát `/stream` còn phục vụ không; cân nhắc tăng threads / giới hạn kết nối |
 | **Heartbeat interval** hợp lý (giữ proxy idle không đóng, không tốn CPU) | **[chưa kiểm]** | Thử `_SSE_HEARTBEAT_S` (vd 15s) + `_SSE_TICK_S` (vd 0.05–0.1s), đo CPU + độ trễ |

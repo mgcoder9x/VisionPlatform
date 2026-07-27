@@ -72,10 +72,18 @@ _PAGE = """<!doctype html><html><head><meta charset="utf-8"><title>Vision Platfo
 #wrap{position:relative;display:inline-block;border:1px solid #444;font-size:0}#v{max-width:98vw;display:block}
 #c{position:absolute;left:0;top:0;pointer-events:none}#s{font:12px monospace;color:#9f9}</style></head>
 <body><h3>Vision Platform — video + overlay (freshness/lease, fix flicker)</h3>
-<div id="wrap"><img id="v" src="/stream"><canvas id="c"></canvas></div>
+<div id="wrap"><img id="v"><canvas id="c"></canvas></div>
 <p id="s"></p>
 <div id="conn" style="display:none;position:fixed;top:8px;right:8px;background:#a00;color:#fff;padding:6px 10px;border-radius:4px;font:12px sans-serif;z-index:9">⚠ mất kết nối — đang thử lại…</div>
 <script>
+// MỌI request dựng URL TUYỆT ĐỐI từ `location.origin` (KHÔNG dùng path tương đối).
+// LÝ DO ĐO ĐƯỢC (#457/K-124): mở UI bằng URL kiểu http://user:pass@host/ (bookmark tiện tay) thì
+// `document.baseURI`/`document.URL` GIỮ credential ⇒ path tương đối resolve thành URL-có-credential ⇒ **mọi
+// `fetch()` NÉM LỖI** ("Request cannot be constructed from a URL that includes credentials") ⇒ `/stats` + ĐƯỜNG
+// LUI poll chết, mà SSE + <img> vẫn chạy nên trông như bình thường = hỏng ÂM THẦM một phần. `location.origin`
+// KHÔNG bao giờ chứa credential ⇒ miễn nhiễm. (Đối chứng đã đo: absolute BASE+"/stats" → 200 · path tương đối
+// "/stats" → TypeError. Guard chống hồi quy: tests/test_web_sse.py::test_client_uses_absolute_urls_not_relative_paths.)
+const BASE=location.origin;
 const img=document.getElementById('v'),cv=document.getElementById('c'),ctx=cv.getContext('2d');
 // KIẾN TRÚC: TÁCH poll (dữ liệu) ⊥ render (vẽ). poll SELF-RESCHEDULING (tối đa 1 fetch in-flight →
 // KHÔNG pile-up → hết ERR_INSUFFICIENT_RESOURCES khi /overlay chậm lúc CPU tải, #415). render qua
@@ -124,7 +132,7 @@ let sseFails=0, degraded=false;   // SSE lỗi liên tiếp → rơi về poll (
 function degradeToPoll(es){ if(degraded) return; degraded=true; try{es.close();}catch(e){} poll(); }   // 1 lần duy nhất
 function startSSE(){
   try{
-    const es=new EventSource('/events');
+    const es=new EventSource(BASE+'/events');
     es.addEventListener('overlay',ev=>{ if(pollFails>0){imgFails=0;reloadStream();} pollFails=0; sseFails=0; setConn(true); applyOverlay(JSON.parse(ev.data),0); });
     es.onopen=()=>{ pollFails=0; sseFails=0; setConn(true); };
     es.onerror=()=>{ pollFails++; sseFails++; setConn(false);            // server down: 1 lỗi + ES tự reconnect (KHÔNG flood)
@@ -139,7 +147,7 @@ function startSSE(){
 async function poll(){
   try{
     const t0=performance.now(); let o=null, fetchOk=false;
-    try{o=await(await fetch('/overlay',{cache:'no-store'})).json();fetchOk=true;}catch(e){o=null;}
+    try{o=await(await fetch(BASE+'/overlay',{cache:'no-store'})).json();fetchOk=true;}catch(e){o=null;}
     if(fetchOk){if(pollFails>0){imgFails=0;reloadStream();}pollFails=0;setConn(true);}else{pollFails++;setConn(false);}   // backoff+badge; poll hồi phục → nối lại stream NGAY (#436)
     applyOverlay(o, performance.now()-t0);
   }finally{ setTimeout(poll, pollFails===0?80:Math.min(80*Math.pow(2,pollFails),2000)); }   // reschedule DÙ lỗi; BACKOFF khi lỗi liên tiếp (80ms→cap 2s) → giảm flood console lúc outage; ≤1 in-flight (#415/#436)
@@ -162,16 +170,18 @@ function render(){
 // ---- STATS: self-rescheduling (1 in-flight) ----
 async function statsLoop(){
   let ok=false;
-  try{document.getElementById('s').innerText=await(await fetch('/stats',{cache:'no-store'})).text();ok=true;}catch(e){}
+  try{document.getElementById('s').innerText=await(await fetch(BASE+'/stats',{cache:'no-store'})).text();ok=true;}catch(e){}
   finally{ statsFails=ok?0:statsFails+1; setTimeout(statsLoop, statsFails===0?1000:Math.min(1000*Math.pow(2,statsFails),5000)); }   // backoff (#436)
 }
 // ---- MJPEG resilience: tab nền → trình duyệt treo/hủy stream <img> + KHÔNG tự nối lại (video đen tới khi
 // reload). Nối lại khi tab HIỆN lại (visibilitychange) + tự reconnect khi stream lỗi. ?t= ép kết nối mới. ----
-function reloadStream(){ img.src='/stream?t='+Date.now(); }
+function reloadStream(){ img.src=BASE+'/stream?t='+Date.now(); }
 img.addEventListener('load',()=>{ imgFails=0; });   // stream nhận frame → reset backoff (#436)
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ imgFails=0; reloadStream(); } });
 img.addEventListener('error',()=>{ imgFails++; setTimeout(reloadStream, Math.min(500*Math.pow(2,imgFails-1),5000)); });   // BACKOFF reconnect (500ms→cap 5s) giảm flood outage (#436)
-// khởi động: ưu tiên SSE (push — ít lỗi lúc outage); fallback poll nếu trình duyệt không hỗ trợ EventSource
+// khởi động: ảnh nạp qua URL TUYỆT ĐỐI (K-124) → SSE ưu tiên (push, ít lỗi lúc outage) → fallback poll nếu
+// trình duyệt không hỗ trợ EventSource.
+reloadStream();
 if(window.EventSource){ if(!startSSE()){ poll(); } } else { poll(); }
 requestAnimationFrame(render); statsLoop();
 </script></body></html>"""

@@ -105,3 +105,18 @@ def test_streaming_releases_slot_when_generator_closed(monkeypatch):
     resp.close()                                             # client rời → generator close → finally release
     assert adm.active == 0
     assert adm.try_acquire() is True                         # slot dùng lại được
+
+
+# --- K-124 GUARD: client PHẢI dùng URL tuyệt đối `BASE=location.origin`, KHÔNG path tương đối ---
+def test_client_uses_absolute_urls_not_relative_paths():
+    """Mở UI bằng URL http://user:pass@host/ → `document.baseURI` GIỮ credential ⇒ path tương đối resolve thành
+    URL-có-credential ⇒ MỌI `fetch()` NÉM LỖI (Fetch spec) ⇒ `/stats` + đường lui poll chết ÂM THẦM (SSE/<img>
+    vẫn chạy nên trông như bình thường). `location.origin` không bao giờ chứa credential ⇒ miễn nhiễm.
+    Test này chặn việc ai đó (kể cả AI) vô tình viết lại thành path tương đối."""
+    page = web._PAGE
+    assert "const BASE=location.origin;" in page
+    for absolute in ("BASE+'/overlay'", "BASE+'/stats'", "BASE+'/events'", "BASE+'/stream?t='"):
+        assert absolute in page, f"thiếu URL tuyệt đối: {absolute}"
+    for relative in ("fetch('/", "new EventSource('/", "img.src='/"):
+        assert relative not in page, f"còn URL tương đối (bẫy K-124): {relative}"
+    assert 'src="/stream"' not in page          # <img> nạp qua reloadStream() dùng BASE
