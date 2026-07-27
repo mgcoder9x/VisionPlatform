@@ -1232,3 +1232,14 @@ Nội dung (số thật cho sizing/SLA, KHÔNG đoán):
 Vì sao (bản chất): yolov8n là model NHỎ → GPU chỉ ~2× CPU (không phải 10×) vì kernel launch overhead + model chưa bão hoà GPU; muốn tăng nữa = batch nhiều cam (F3.3 batch-mux) hoặc input nhỏ hơn (416)/INT8 (deploy-time, K-115). Đây là C_inf batch=1; batch-mux có thể nâng throughput/GPU.
 Cross-ref: K-014 (ring-drop@fps — KHÁC scope, vẫn 🔴 chưa đo drop dưới tải sustained), D-142 (GPU fix), K-115 (deploy-time levers), F3.3 (batch-mux), multicamera-fleet-profile A2.
 [chưa kiểm]: fps end-to-end (gồm decode+letterbox+NMS+overlay, không chỉ infer); soak 24/7; TensorRT provider (có thể nhanh hơn CUDA nhưng build engine lâu — chưa thử).
+
+### K-122 — ✅ `Connection` header là hop-by-hop → CẤM trong WSGI app (PEP 3333); waitress cưỡng chế, werkzeug-dev che giấu
+Scope: web serving / WSGI streaming (SSE, MJPEG)
+Nguồn: LOG Entry #454 · traceback waitress `task.py::start_response` `AssertionError` · PEP 3333
+CẬP NHẬT 2026-07-19 (D-150): khi thêm endpoint SSE `/events`, set `resp.headers["Connection"]="keep-alive"` →
+dưới `--server dev` (werkzeug) chạy OK, nhưng dưới `--server waitress` (production WSGI) → `AssertionError:
+Connection is a "hop-by-hop" header; it cannot be used by a WSGI application (see PEP 3333)` → SSE KHÔNG mở được.
+**Bài học:** hop-by-hop header (`Connection`, `Keep-Alive`, `Transfer-Encoding`, `Upgrade`...) do WSGI SERVER
+quản, app KHÔNG được set. Streaming (SSE/MJPEG) chỉ cần yield đều + `Cache-Control:no-cache` (+ `X-Accel-Buffering:no`
+cho nginx). **Verify dưới server SẢN XUẤT (waitress), KHÔNG chỉ dev-server** — dev-server dễ dãi che giấu lỗi
+PEP 3333 + buffering. (Cùng tinh thần #427 verify MJPEG dưới waitress.) Fix = bỏ header `Connection`.

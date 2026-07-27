@@ -1723,3 +1723,16 @@ Quyết định + lý do (bản chất):
 - **Vì sao in-process (không đo qua web/subprocess):** cô lập ĐÚNG cơ chế ring, không lẫn nhiễu decode/YOLO/HTTP → số tái lập variance≈0 (khác probe thread #422 nhiễu CPU-contention 2-3×). Là số học produce-rate vs consume-rate.
 - **Kết luận SLA (số thật, 30fps producer, 480×640):** consume 33ms→drop 0.0% · 50ms→34.0% · 100ms→66.2%; quan hệ drop% ≈ 1 − consumer_rate/producer_rate; consumer_fps LUÔN = 1000/consume_ms → keep-latest **latency-bounded** (consumer không bị backlog kéo chậm; drop = frame cũ bỏ, không tích luỹ trễ). Hành vi ĐÚNG cho real-time.
 - **Cái giá / khi nào KHÔNG đủ:** mô hình 1 consumer/stream (khớp đường web/inference chính); đa-reader fan-out >1 consumer cùng ring là topology khác — chưa phủ (ngoài đường chính hiện tại).
+
+### D-150 — 2026-07-19 — SSE transport Wave 1 (`/events`) fix gốc console-flood browser (K-119)
+Status: ✅ (896/2 · lint 7 kept/0 broken · drift PASS · browser MCP 6 property dưới waitress)
+Scope: `vision-platform/src/vision_platform/profiles/vision_web_app.py` (+`/events` route + `_sse_overlay_stream` + client EventSource) · `tests/test_web_sse.py` (MỚI)
+Nguồn: LOG Entry #454 · spec `.kiro/specs/overlay-sse-transport/design.md` (#448) · K-119
+Verify-Symbol: vision-platform/src/vision_platform/profiles/vision_web_app.py::_sse_overlay_stream
+Quyết định + lý do (bản chất):
+- **Vấn đề:** poll `/overlay` ~14/s → outage = flood console (browser tự log mỗi fetch hỏng, JS không chặn được); #436 backoff chỉ hãm ngọn.
+- **Giải pháp:** SSE server-push — 1 kết nối dài `EventSource`, outage = ~1 lỗi + auto-reconnect. Chọn SSE (KHÔNG WebSocket): luồng 1 chiều server→client, EventSource auto-reconnect sẵn, 0 dependency mới, chạy qua reverse-proxy.
+- **Additive:** giữ `/overlay` poll làm fallback (trình duyệt cũ / SSE lỗi); tách `applyOverlay(o,rtt)` dùng chung SSE+poll (không nhân đôi logic epoch/lease/boxes).
+- **Bug lộ nhờ verify-trước:** design phác `Connection: keep-alive` → PEP 3333 CẤM (hop-by-hop) → waitress AssertionError (werkzeug-dev che giấu) → BỎ header (xem K-122).
+- **Số thật (browser waitress):** flush 3.7ms/gap 50.8ms (không buffer); outage overlay-channel 3 lỗi vs poll ~24 (giảm ~8×); P1/P3/P5/P6/P7 đạt.
+- **Cái giá / chưa phủ:** SSE+Basic Auth (EventSource không set custom header — cần cookie/URL-cred) [chưa kiểm]; thread-budget mỗi viewer 1 kết nối dài [chưa kiểm]; đo máy GPU/RTSP thật. → Wave sau.

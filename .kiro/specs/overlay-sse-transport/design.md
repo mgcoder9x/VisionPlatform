@@ -1,6 +1,15 @@
 # Design Document: overlay-sse-transport
 
-> Tài liệu thiết kế (design-first). **CHƯA code.** Ngôn ngữ: tiếng Việt; ví dụ code Python/JS bám codebase thật.
+> Tài liệu thiết kế (design-first). Ngôn ngữ: tiếng Việt; ví dụ code Python/JS bám codebase thật.
+>
+> **TRẠNG THÁI TRIỂN KHAI (cập nhật 2026-07-19, LOG #454 / D-150):** **Wave 1 ĐÃ CODE + VERIFY** —
+> endpoint `/events` + `_sse_overlay_stream` + client `EventSource` (tách `applyOverlay`, giữ poll fallback)
+> trong `vision_web_app.py`; test `tests/test_web_sse.py`; `vp verify` 896/2 · lint 7 kept/0 broken · drift PASS.
+> **Verify browser MCP dưới waitress (số thật):** rủi ro **waitress-buffer = BÁC BỎ** (flush first 3.7ms /
+> gap median 50.8ms = đúng tick, không gom); **P2** outage overlay-channel **3 lỗi vs poll ~24** (giảm ~8×);
+> P1/P3/P5/P6/P7 đạt. **Bug đã sửa (K-122):** header `Connection: keep-alive` (design phác ở Component 1) là
+> **hop-by-hop PEP 3333 CẤM** → waitress `AssertionError` → ĐÃ BỎ header. **CÒN [chưa kiểm] → Wave sau:**
+> SSE+Basic Auth (Property 4) + thread-budget nhiều viewer (Kịch bản 5) + đo trên máy GPU/RTSP thật.
 > Quy ước chống bịa (luật repo §5): thành phần **(MỚI)** = chưa tồn tại; **[chưa kiểm]** = hành vi runtime chưa
 > đo; **[suy đoán]** = suy luận chưa xác nhận. Mọi path/symbol "tái dùng" đã được ĐỌC file xác nhận tồn tại.
 

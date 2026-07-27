@@ -8481,3 +8481,29 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Quan hệ **drop% ≈ 1 − consumer_rate/producer_rate** (xác nhận harness đo đúng bản chất, không bịa). **consumer_fps LUÔN = 1000/consume_ms** bất kể producer 30fps → chứng minh keep-latest **latency-bounded**: consumer chạy full tốc độ của nó, KHÔNG bị backlog kéo chậm, drop = frame CŨ bị bỏ (không tích luỹ độ trễ). Hành vi ĐÚNG cho real-time (box bám frame mới nhất) — số này là SLA nguồn KHÔNG phải lỗi. Bổ trợ #452 (đo detector-throughput GPU/CPU): #452 cho biết consumer_rate khả dĩ (inference/s), #453 cho biết drop-nguồn ứng với consumer_rate đó → ghép lại = SLA đầu-cuối định lượng được.
 
 **Đã verify:** chạy THẬT `python -m benchmarks.measure_ring_drop` (+ `--consume-ms 33/50`) 3 vòng/kịch bản trên base #452, variance≈0, số khớp lý thuyết keep-latest; `scripts\vp.cmd check` drift PASS. · **Chưa verify:** đa-reader fan-out (>1 consumer cùng ring) — ngoài mô hình harness này, ngoài đường chính (1 consumer/stream). K-014 đóng cho phần drop@fps đơn-consumer keep-latest (tiêu chí "perf harness đo drop@30fps thật" ĐÃ đạt).
+
+---
+
+### Entry #454 — 2026-07-19 — FIX GỐC "cực nhiều lỗi" browser: SSE transport thay poll (spec overlay-sse-transport, D-150) — Kiro-Opus
+
+**Bối cảnh:** User lặp "mở web browser phát hiện cực nhiều lỗi". #435/K-119 đã root-cause = console flood khi outage (poll `/overlay` ~14/s, mỗi fetch hỏng = 1 dòng đỏ trình duyệt tự log); #436 backoff chỉ HÃM ~2.7-3× (fix-ngọn). Fix BẢN CHẤT (spec overlay-sse-transport #448, design-first sẵn) = đổi transport overlay poll→SSE server-push. Verify web trên base mới #452 máy CPU này: server-UP 0 lỗi (frontier bền), đúng như dự đoán "cực nhiều lỗi" chỉ lúc outage → triển khai fix gốc.
+
+**1. Quyết định AI tự ra (spec không nói cụ thể):**
+- Triển khai Wave 1 SSE (D-150): endpoint `/events` (`text/event-stream`, `_sse_overlay_stream` generator PUSH khi eventRevision đổi + heartbeat 15s) + client `EventSource` (tách `applyOverlay(o,rtt)` dùng chung, giữ `poll()` fallback). ADDITIVE: `/overlay` poll GIỮ nguyên (backward-compat + fallback trình duyệt không hỗ trợ EventSource).
+- **VERIFY RỦI RO TRƯỚC KHI TIN (nguyên tắc user):** cài waitress vào venv máy này + chạy `--server waitress` THẬT để kiểm 3 rủi ro [chưa kiểm] của design — quan trọng nhất là "waitress có buffer text/event-stream không".
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Design phác `resp.headers["Connection"]="keep-alive"` → **BỎ**: `Connection` là **hop-by-hop header**, PEP 3333 CẤM WSGI app set → waitress raise `AssertionError` (werkzeug-dev BỎ QUA nên che giấu). Đây là bug thật LỘ nhờ verify-dưới-waitress (đúng lý do phải kiểm chứng trước khi triển khai).
+
+**3. Trade-off đã cân nhắc:**
+- SSE vs WebSocket: chọn SSE — overlay là luồng MỘT CHIỀU server→client; `EventSource` có auto-reconnect sẵn, không thêm dependency, chạy qua reverse-proxy. WS (song công) thừa. (giữ đúng định hướng design #448).
+- Additive (giữ poll) vs thay hẳn: giữ poll fallback → rủi ro thấp, đảo được, phủ trình duyệt cũ. Cái giá: 2 đường code (giảm bằng `applyOverlay` dùng chung).
+- Mỗi viewer SSE giữ 1 kết nối dài (thread budget waitress) — ghi nhận rủi ro quy mô (fleet nhỏ-vừa A2), chưa chạm trần hiện tại.
+
+**4. Điều bạn nên biết (SỐ ĐO THẬT — browser Playwright MCP, `--server waitress` port 8033/8034, webcam CPU):**
+- **Rủi ro waitress-buffer SSE = BÁC BỎ:** first event tới sau **3.7ms**, gap median **50.8ms = đúng tick 50ms** (flush TỪNG event ngay, KHÔNG gom) — 118 event/6s, 0 lỗi.
+- **P2 (fix gốc, số THẬT outage 12s):** kênh overlay `/events` chỉ **3 lỗi** (cách ~3.5s, EventSource tự reconnect) vs poll `/overlay` **~24 lỗi/12s** (#436) = **giảm ~8×** + degrade mượt. (Còn 2 `/stats`+1 `/stream` = kênh riêng ngoài phạm vi.)
+- **P1 freshness:** payload SSE = CÙNG `project_overlay` như `/overlay` (health LIVE, boxes đúng). **P3 fallback:** tắt `window.EventSource` → poll (44 poll/4s, boxes live). **P5 recovery:** restart → badge ẩn, boxes resume, rev advancing. **P6 additive:** `/overlay` poll vẫn 200. **P7:** module `/events` không import analytics (import-linter 7 kept/0 broken).
+- SecurityHeadersMiddleware bọc `/events` OK. K-119 essence-fix ĐÃ landed (không còn phải chờ WS).
+
+**Đã verify:** `scripts\vp.cmd verify` → **896 passed/2 skipped** (+2 test `test_web_sse.py`: header WSGI-safe [guard bug Connection] + khung SSE) · **import-linter 7 kept/0 broken** · **drift PASS** · get_diagnostics 0. Browser MCP đo 6 property dưới waitress (số thật ở trên). · **Chưa verify:** (a) SSE + Basic Auth (Wave 2 — `EventSource` không set custom header dễ; cần cookie-session hoặc URL-cred, [chưa kiểm]); (b) thread-budget nhiều viewer SSE đồng thời [chưa kiểm]; (c) đo trên máy `toann` GPU/RTSP thật.

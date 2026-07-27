@@ -16,6 +16,7 @@ buộc có credential (hoặc `--insecure`). TLS = reverse-proxy (Wave 3, chưa 
 from __future__ import annotations
 
 import argparse
+import json
 import threading
 import time
 import uuid
@@ -23,7 +24,7 @@ from typing import Optional
 
 import cv2
 
-from flask import Flask, Response, jsonify
+from flask import Flask, Response, jsonify, stream_with_context
 
 from vision_platform.profiles.vision_demo_app import moving_square_frame, _build_detector
 from vision_platform.adapters.video_file_frame_source import VideoFileFrameSource
@@ -85,36 +86,53 @@ let pollFails=0, statsFails=0, imgFails=0;  // đếm lỗi-liên-tiếp → bac
 const _connBadge=document.getElementById('conn');
 function setConn(ok){ if(_connBadge) _connBadge.style.display = ok ? 'none' : 'block'; }
 // ---- POLL: cập nhật STATE (không vẽ), tự hẹn lần kế SAU khi xong → 1 in-flight ----
+// ---- APPLY: 1 payload overlay → cập nhật STATE (epoch-rollback + per-track lease + boxes Map). DÙNG CHUNG
+//      cho SSE (rtt≈0) lẫn poll-fallback → logic đồng nhất, không nhân đôi (spec overlay-sse-transport). ----
+function applyOverlay(o, rtt){
+  const now=performance.now();
+  if(o&&o.processEpoch){
+    if(procEpoch===null){procEpoch=o.processEpoch;}
+    else if(o.processEpoch!==procEpoch){
+      if(!retired.has(o.processEpoch)){retired.add(procEpoch);procEpoch=o.processEpoch;srcEpoch=null;boxes.clear();}
+      else{o=null;}
+    }
+    if(o&&o.processEpoch===procEpoch){
+      if(srcEpoch===null){srcEpoch=o.sourceEpoch;}
+      else if(o.sourceEpoch<srcEpoch){o=null;}
+      else if(o.sourceEpoch>srcEpoch){srcEpoch=o.sourceEpoch;boxes.clear();}
+    }
+    if(o&&o.display&&o.sourceEpoch===srcEpoch){
+      const present=new Set();
+      for(const b of o.display.boxes){
+        present.add(b.displayId);
+        const prev=boxes.get(b.displayId);
+        if(!prev||b.trackRevision>prev.rev){
+          const rem=Math.max(0,b.remainingLeaseMs-rtt);
+          boxes.set(b.displayId,{rev:b.trackRevision,deadline:now+rem,b:b,updatedAt:now});
+        }else{prev.b=b;prev.updatedAt=now;}   // same rev: cập nhật toạ độ + mốc (GIỮ deadline)
+      }
+      for(const id of [...boxes.keys()]) if(!present.has(id)) boxes.delete(id);
+    }
+  }
+}
+// ---- SSE (transport ưu tiên): 1 kết nối dài server-push → outage = ~1 lỗi + EventSource TỰ reconnect
+//      (thay vòng poll flood mỗi fetch hỏng, fix gốc K-119). ----
+function startSSE(){
+  try{
+    const es=new EventSource('/events');
+    es.addEventListener('overlay',ev=>{ if(pollFails>0){imgFails=0;reloadStream();} pollFails=0; setConn(true); applyOverlay(JSON.parse(ev.data),0); });
+    es.onopen=()=>{ pollFails=0; setConn(true); };
+    es.onerror=()=>{ pollFails++; setConn(false); };   // server down: 1 lỗi + EventSource tự reconnect (KHÔNG flood)
+    return true;
+  }catch(e){ return false; }
+}
+// ---- POLL (fallback khi trình duyệt không có EventSource): self-rescheduling ≤1 in-flight + backoff ----
 async function poll(){
   try{
     const t0=performance.now(); let o=null, fetchOk=false;
     try{o=await(await fetch('/overlay',{cache:'no-store'})).json();fetchOk=true;}catch(e){o=null;}
     if(fetchOk){if(pollFails>0){imgFails=0;reloadStream();}pollFails=0;setConn(true);}else{pollFails++;setConn(false);}   // backoff+badge; poll hồi phục → nối lại stream NGAY (#436)
-    const rtt=performance.now()-t0, now=performance.now();
-    if(o&&o.processEpoch){
-      if(procEpoch===null){procEpoch=o.processEpoch;}
-      else if(o.processEpoch!==procEpoch){
-        if(!retired.has(o.processEpoch)){retired.add(procEpoch);procEpoch=o.processEpoch;srcEpoch=null;boxes.clear();}
-        else{o=null;}
-      }
-      if(o&&o.processEpoch===procEpoch){
-        if(srcEpoch===null){srcEpoch=o.sourceEpoch;}
-        else if(o.sourceEpoch<srcEpoch){o=null;}
-        else if(o.sourceEpoch>srcEpoch){srcEpoch=o.sourceEpoch;boxes.clear();}
-      }
-      if(o&&o.display&&o.sourceEpoch===srcEpoch){
-        const present=new Set();
-        for(const b of o.display.boxes){
-          present.add(b.displayId);
-          const prev=boxes.get(b.displayId);
-          if(!prev||b.trackRevision>prev.rev){
-            const rem=Math.max(0,b.remainingLeaseMs-rtt);
-            boxes.set(b.displayId,{rev:b.trackRevision,deadline:now+rem,b:b,updatedAt:now});
-          }else{prev.b=b;prev.updatedAt=now;}   // same rev: cập nhật toạ độ + mốc (GIỮ deadline)
-        }
-        for(const id of [...boxes.keys()]) if(!present.has(id)) boxes.delete(id);
-      }
-    }
+    applyOverlay(o, performance.now()-t0);
   }finally{ setTimeout(poll, pollFails===0?80:Math.min(80*Math.pow(2,pollFails),2000)); }   // reschedule DÙ lỗi; BACKOFF khi lỗi liên tiếp (80ms→cap 2s) → giảm flood console lúc outage; ≤1 in-flight (#415/#436)
 }
 // ---- RENDER: vẽ mỗi animation-frame; ngoại suy pos+vel*dt nếu có vx/vy (Wave A); hết hạn → xóa ----
@@ -144,7 +162,9 @@ function reloadStream(){ img.src='/stream?t='+Date.now(); }
 img.addEventListener('load',()=>{ imgFails=0; });   // stream nhận frame → reset backoff (#436)
 document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ imgFails=0; reloadStream(); } });
 img.addEventListener('error',()=>{ imgFails++; setTimeout(reloadStream, Math.min(500*Math.pow(2,imgFails-1),5000)); });   // BACKOFF reconnect (500ms→cap 5s) giảm flood outage (#436)
-poll(); requestAnimationFrame(render); statsLoop();
+// khởi động: ưu tiên SSE (push — ít lỗi lúc outage); fallback poll nếu trình duyệt không hỗ trợ EventSource
+if(window.EventSource){ if(!startSSE()){ poll(); } } else { poll(); }
+requestAnimationFrame(render); statsLoop();
 </script></body></html>"""
 
 
@@ -341,6 +361,50 @@ def overlay():
         return jsonify({"schemaVersion": 1, "rawResult": None, "display": {"boxes": []}})
     resp = jsonify(project_overlay(snap, time.monotonic_ns(), _cfg.ghostSlaMs))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
+    return resp
+
+
+# --- SSE transport (spec overlay-sse-transport #448): PUSH thay poll → outage ~1 lỗi thay flood ---
+_SSE_TICK_S = 0.05        # nhịp quét store (50ms) — cân freshness ⊥ CPU (≈ cadence poll cũ)
+_SSE_HEARTBEAT_S = 15.0   # heartbeat ": ping" giữ kết nối sống (proxy idle) khi eventRevision không đổi
+
+
+def _sse_overlay_stream():
+    """Generator SSE: PUSH snapshot overlay khi `eventRevision` đổi + heartbeat định kỳ.
+
+    Đọc `_store` (authority) — KHÔNG mutate. Payload = CÙNG dict `project_overlay(...)` mà `/overlay` trả
+    (không đổi schema/DTO). Freshness (epoch/lease) bảo toàn (Property 1). Bọc khung SSE `event:`/`data:`.
+    """
+    last_rev = None
+    last_ping = time.monotonic()
+    yield "retry: 2000\n\n"   # gợi ý EventSource khoảng reconnect khi đứt
+    while True:
+        emitted = False
+        snap = _store.snapshot() if _store is not None else None
+        if snap is not None:
+            payload = project_overlay(snap, time.monotonic_ns(), _cfg.ghostSlaMs)
+            rev = payload.get("eventRevision")
+            if rev != last_rev:
+                last_rev = rev
+                yield f"event: overlay\ndata: {json.dumps(payload)}\n\n"
+                last_ping = time.monotonic()
+                emitted = True
+        if not emitted and (time.monotonic() - last_ping >= _SSE_HEARTBEAT_S):
+            last_ping = time.monotonic()
+            yield ": ping\n\n"
+        time.sleep(_SSE_TICK_S)
+
+
+@app.route("/events")
+def events():
+    """SSE transport: 1 kết nối dài server-push (thay vòng poll `/overlay` ~14/s) → khi mất kết nối, trình
+    duyệt chỉ log ~1 lỗi + `EventSource` tự reconnect (thay vì flood mỗi fetch hỏng, fix gốc K-119).
+    ADDITIVE: `/overlay` poll GIỮ nguyên làm fallback (client tự chọn)."""
+    resp = Response(stream_with_context(_sse_overlay_stream()), mimetype="text/event-stream")
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["X-Accel-Buffering"] = "no"   # tắt buffering reverse-proxy (nginx) cho streaming
+    # KHÔNG set "Connection" — hop-by-hop header bị PEP 3333 CẤM trong WSGI app (waitress cưỡng chế,
+    # werkzeug-dev bỏ qua). WSGI server tự quản keep-alive cho response streaming.
     return resp
 
 

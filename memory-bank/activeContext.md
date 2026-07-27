@@ -1,7 +1,19 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-19)
-**Cập nhật lúc:** 2026-07-19T20:10:00+07:00.
+**Cập nhật lúc:** 2026-07-19T22:30:00+07:00.
+**[✅ #454 — FIX GỐC "cực nhiều lỗi" browser = SSE transport thay poll (D-150, +K-122) — máy k.nguyen CPU]**
+- User lặp "mở web browser phát hiện cực nhiều lỗi". Verify web base mới #452 (browser MCP webcam CPU): server-UP **0 lỗi** (frontier bền + onnx-cuda gating D-142 chạy đúng CPU) → xác nhận "cực nhiều lỗi" chỉ lúc OUTAGE (K-119: poll flood). Fix BẢN CHẤT (spec overlay-sse-transport #448 design-first sẵn) = đổi transport poll→SSE.
+- **D-150 (Wave 1 SSE, ADDITIVE):** endpoint `/events` (`text/event-stream`, `_sse_overlay_stream` PUSH khi eventRevision đổi + heartbeat 15s) + client `EventSource` (tách `applyOverlay(o,rtt)` dùng chung, GIỮ `poll()` fallback). Chọn SSE≠WebSocket (luồng 1 chiều, EventSource auto-reconnect sẵn, 0 dependency).
+- **VERIFY RỦI RO TRƯỚC (nguyên tắc user):** cài waitress vào venv + chạy `--server waitress` THẬT (browser MCP) đo 3 rủi ro [chưa kiểm] của design:
+  - **waitress-buffer-SSE = BÁC BỎ:** first event 3.7ms, gap median **50.8ms=đúng tick** (flush từng event, KHÔNG gom).
+  - **P2 (fix gốc, số THẬT outage 12s):** overlay-channel `/events` **3 lỗi** vs poll `/overlay` **~24** (#436) = **giảm ~8×** + degrade mượt.
+  - P1 freshness/P3 fallback(tắt EventSource→poll 44/4s)/P5 recovery/P6 additive-poll-200/P7 no-analytics đều đạt.
+- **K-122 (bug lộ nhờ verify-trước):** design phác `Connection: keep-alive` → hop-by-hop PEP 3333 CẤM → waitress `AssertionError` (werkzeug-dev che giấu) → BỎ header. Bài học: VERIFY dưới waitress KHÔNG chỉ dev-server.
+- **VERIFY:** `vp verify` **896/2** (+2 `test_web_sse.py`: header WSGI-safe guard + khung SSE) · **import-linter 7 kept/0 broken** · **drift PASS** · get_diagnostics 0. Cài waitress (optional-extra `web-prod`, đảo bằng pip uninstall). **§3.1 Trusted Command đề nghị:** `python -m pytest *` đã có; browser verify thủ công.
+- **Ghi sổ:** LOG #454 · +D-150 +K-122 · K-119 ✅ (essence-fix landed) · INDEX #453→#454 · Σ329→331 (D150·K122) · Verify-Symbol `_sse_overlay_stream` (C8 40→41).
+- **Bước kế = CHỜ USER chốt (Wave sau SSE + hướng khác):** (a) **SSE+Basic Auth** (EventSource không set custom header → cookie-session hoặc URL-cred, [chưa kiểm]) + **thread-budget** nhiều viewer SSE; (b) đo SSE trên máy `toann` GPU/RTSP thật; (c) ANPR .pt / valid spec multicamera-fleet-profile (A2 có số 36 detect/s); (d) 🔴 còn: K-001 (ARM) · K-031 (rotate secret).
+---
 **[✅ #453 — perf-harness đo FRAME-DROP@fps THẬT → ĐÓNG K-014 🔴→✅ (D-149) — máy k.nguyen CPU]**
 - User: end.md không còn đúng → đối chiếu frontier THẬT qua `vp check`. **PHÁT HIỆN K-098 drift đa-máy giữa phiên:** khởi base cũ `1b645a5` (#440); workspace auto-sync + máy `toann` GPU đã push origin tới `8dc44ee` #452 (Σ328: onnx-cuda gating D-142 / production logging / cardinality / fleet-profile / SSE-transport / RTSP-verify — **KHÔNG có ring-drop@fps**). Bookkeeping #441/D-142 tôi soạn trên base cũ TRÙNG số máy kia → `git restore` bỏ (harness đã ở commit 1b645a5, số đo giữ trong phiên) → `git pull --ff-only` tới #452 → làm lại #453/D-149 trên base mới (đúng bài học #433: KHÔNG append trên base cũ).
 - **Vấn đề (K-014 mở từ #155, #452 xác nhận vẫn 🔴):** bound drop ≤ n_slots đã chứng minh (deterministic) nhưng drop DƯỚI TẢI fps thật (timing-dependent) CHƯA đo → finding 🔴 SLA. Làm được ngay trên CPU (không cần GPU/target).
