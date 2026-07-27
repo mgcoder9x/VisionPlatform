@@ -1796,3 +1796,15 @@ Quyết định + lý do (bản chất):
 - **3 phát hiện từ docs chính chủ:** (1) header `X-Accel-Buffering: no` app đã set = **phòng thủ lớp 2** nếu operator quên directive (nginx còn ẩn header này khỏi client); (2) `proxy_read_timeout` mặc định **60s** ⇒ heartbeat SSE 15s có **lý do định lượng**; MJPEG nguồn-chết bị cắt 60s rồi client backoff reload = đúng; (3) **BẪY** `proxy_ignore_client_abort on` → giữ kết nối upstream sau khi viewer rời ⇒ slot bulkhead bị giữ tới `channel_timeout` 120s ⇒ mất dung lượng ~2 phút/lần đóng tab.
 - **Cái giá / hạn chế:** vẫn CHƯA chạy nginx thật (Docker daemon chưa bật; AI không tự bật dịch vụ hệ thống) ⇒ phần "toàn chuỗi qua proxy" giữ 🔴. Không tự sinh `nginx.conf` mẫu chưa từng chạy (tránh thêm bề mặt drift).
 - **Khi nào KHÔNG áp dụng:** nếu deploy sau proxy có **path-prefix** thì tài liệu này KHÔNG đúng — app hiện chỉ chạy ở gốc `/` (client dựng URL từ `location.origin`, D-153); phải dùng subdomain riêng.
+
+### D-156 — 2026-07-27 — `LogThrottle` chặn log-amplification ở đường từ-chối-503 + probe chờ-theo-sự-kiện
+Status: ✅ (919/2 · lint 7 kept/0 broken · drift PASS · empiric ~96 lần từ chối → 2 dòng log, có báo "đã nén 55 lần")
+Scope: `vision-platform/src/vision_platform/runtime/log_throttle.py` (MỚI) · `profiles/vision_web_app.py` (`_admit_or_503` + `_busy_log`) · `tools/web_sse_capacity_probe.py` (`_wait_active`, `--release-deadline-s`) · `tests/test_log_throttle.py` (MỚI, 7) + 1 guard trong `test_web_sse.py`
+Nguồn: LOG Entry #462 · D-152 (bulkhead) · tiền lệ `wait_until` #288/#430
+Verify-Symbol: vision-platform/src/vision_platform/runtime/log_throttle.py::LogThrottle
+Quyết định + lý do (bản chất):
+- **Defect 1 (do tôi gây ở #456):** in log MỖI lần từ chối 503 ⇒ **lượng ghi log do CLIENT điều khiển** (503 → client retry backoff #436, hoặc bị hammer) ⇒ log lỗi thật bị chìm; với `RotatingFileHandler` (#443) log cũ bị xoay mất sớm ⇒ mất khả năng chẩn đoán. Cùng LOẠI lỗi với starve thread: **tài nguyên (ở đây là kênh log) không có trần**.
+- **Fix:** `LogThrottle` THUẦN (now_ns tiêm + lock cho waitress đa thread): 1 dòng/5s **và** lần log kế **báo SỐ LẦN đã nén** → giới hạn mà KHÔNG mất thông tin cường độ (triết lý D-152/K-014). Test guard: 20 lần từ chối → 20×503 nhưng 1 dòng log.
+- **Defect 2 (trong TOOL của tôi):** `--churn` dùng `sleep(0.3)` cố định → dưới churn nặng cho **BÁO ĐỘNG GIẢ "RÒ RỈ SLOT"**. Fix = **chờ-theo-sự-kiện** `_wait_active(target, deadline 5s)`; sleep dài hơn chỉ đẩy ngưỡng báo-động-giả (fix ngọn).
+- **Số thật:** churn 8×12 → trước fix probe: `mở được` 6→4, `active cuối=2`, verdict RÒ RỈ (SAI); sau fix: 8/8 chu kỳ mở 6, `active`→0/6, verdict ĐÚNG. Log: ~96 lần từ chối → 2 dòng (+"đã nén 55 lần").
+- **Cái giá:** log không còn mốc thời gian của TỪNG lần từ chối (chỉ còn số lượng/cường độ) — chấp nhận. Cửa sổ 5s là tham số cứng trong code (chưa expose CLI — YAGNI, thêm khi có nhu cầu thật).

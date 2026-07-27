@@ -1302,3 +1302,19 @@ Nêu **thông điệp lỗi NGUYÊN VĂN** rồi mới phân loại. Ví dụ th
 The system cannot find the file specified` = **Docker Desktop chưa bật**, KHÔNG phải bị chặn mạng.
 **Ghi nhận trạng thái phiên #460:** chưa gặp lần chặn nào; `nginx.org` fetch được; hoạt động mạng chỉ gồm `git push`
 lên repo của user + đọc docs chính chủ. AI KHÔNG tự bật Docker Desktop (dịch vụ mức hệ thống → để user quyết định).
+
+### K-127 — ✅ Công cụ đo BÁO ĐỘNG GIẢ còn tệ hơn không có công cụ — `sleep` cố định trong probe ⇒ verdict "RÒ RỈ SLOT" SAI
+Scope: phương pháp đo/verify (probe, test) · `tools/web_sse_capacity_probe.py`
+Nguồn: LOG Entry #462 · D-156 · tiền lệ `wait_until` #288/#430 (đóng flaky bằng chờ-theo-sự-kiện)
+CẬP NHẬT 2026-07-27:
+- **Sự việc:** `--churn` (D-154) đợi `sleep(0.3)` rồi đọc `streams` để kết luận rò rỉ. Với churn NHẸ (6 conns, không
+  có 503) → đúng. Với churn NẶNG (12 conns, vượt trần) → `active cuối=2`, verdict **"RÒ RỈ SLOT — release thiếu!"**
+  ⇒ **SAI**: đo lại `/stats` sau đó thấy `streams=0/6` **suốt 15s** ⇒ chỉ là **TRỄ release** (release xảy ra khi
+  server ghi chunk kế và phát hiện broken pipe — độ trễ PHỤ THUỘC TẢI).
+- **Vì sao nguy hiểm:** verdict giả làm (a) đuổi bóng — sửa thứ không hỏng; (b) tệ hơn: **mất tin vào checker** →
+  lần sau có rò rỉ THẬT thì bị bỏ qua. Đúng như C1-C9 drift-check phải có `self-test` để "guard the guard".
+- **Fix bản chất:** thay `sleep` cố định bằng **chờ-theo-sự-kiện có deadline** (`_wait_active(target, deadline_s)`);
+  chỉ kết luận rò rỉ khi QUÁ deadline mà chưa về mốc đầu. Sleep dài hơn = chỉ **đẩy** ngưỡng báo-động-giả (fix ngọn).
+- **LUẬT RÚT RA (áp cho mọi phép đo tương lai):** khi đo một trạng thái đến **SAU MỘT SỰ KIỆN có độ trễ phụ thuộc
+  tải** (release, reconnect, flush, restart) → **KHÔNG dùng sleep cố định**; dùng poll-tới-điều-kiện + deadline.
+- **Cách phân biệt LAG vs LEAK:** đo lại sau một khoảng — về mốc đầu = lag; đứng mãi = leak thật.

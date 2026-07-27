@@ -1,7 +1,21 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-27)
-**Cập nhật lúc:** 2026-07-27T15:05:00+07:00.
+**Cập nhật lúc:** 2026-07-27T16:00:00+07:00.
+**[✅ #462 — TỰ SOI RA 2 DEFECT trong việc của CHÍNH TÔI: log-amplification (D-156) + probe báo-động-giả (+K-127)]**
+- Khuyến nghị #1 (nginx thật) **vẫn chặn bởi tiền đề**: Docker daemon chưa bật; **KHÔNG tự cài** nginx/Caddy qua winget/scoop vì đó là cài phần mềm vào máy công ty (tinh thần K-126 — cần user cho phép rõ). ⇒ chuyển sang **soi đối kháng code mình vừa viết** (#456-#458).
+- **DEFECT 1 — LOG AMPLIFICATION (do tôi gây ở #456):** `_admit_or_503` in log MỖI lần từ chối ⇒ **lượng ghi log do CLIENT điều khiển** (client bị 503 → retry backoff #436; hoặc bị hammer) ⇒ log lỗi THẬT bị chìm + `RotatingFileHandler` (#443) xoay mất log cũ sớm. Cùng LOẠI lỗi với starve thread: **kênh log không có trần**.
+  - **D-156 fix:** `runtime/log_throttle.py::LogThrottle` THUẦN (`now_ns` tiêm + lock cho waitress đa thread): **1 dòng/5s** và lần log kế **BÁO SỐ LẦN đã nén** ⇒ giới hạn mà KHÔNG mất thông tin cường độ (triết lý D-152 bulkhead / K-014 keep-latest).
+  - **Empiric:** churn 8×12 (trần 6) × 2 lượt = **~96 lần từ chối → 2 dòng log**, dòng 2 ghi *"đã nén **55** lần từ chối tương tự"*. Guard test: 20 lần từ chối → **20×503** (chức năng nguyên vẹn) nhưng **1 dòng log**.
+- **DEFECT 2 — TOOL CỦA TÔI BÁO ĐỘNG GIẢ:** `--churn` (D-154) dùng `sleep(0.3)` cố định → với churn NẶNG (12 conns > trần) verdict **"RÒ RỈ SLOT — release thiếu!"**. Tôi **KHÔNG nhận verdict** mà đo lại: `/stats` giữ `streams=0/6` **suốt 15s** ⇒ chỉ **TRỄ release** (release xảy ra khi server ghi chunk kế + phát hiện broken pipe → độ trễ PHỤ THUỘC TẢI).
+  - **Fix:** **chờ-theo-sự-kiện** `_wait_active(target, deadline_s=5)` + cờ `--release-deadline-s` (tiền lệ `wait_until` #288/#430). Sleep dài hơn chỉ **ĐẨY** ngưỡng báo-động-giả = fix ngọn.
+  - **Trước/sau (cùng lệnh churn 8×12):** trước — `mở được` tụt 6→4, `active cuối=2`, verdict SAI; sau — **8/8 chu kỳ mở đủ 6, `active`→`0/6`**, verdict ĐÚNG.
+  - **+K-127:** tool báo-động-giả còn tệ hơn không có tool vì làm **MẤT TIN vào checker** → rò rỉ THẬT sẽ bị bỏ qua. LUẬT: đo trạng thái đến **SAU sự kiện có độ trễ phụ thuộc tải** (release/reconnect/flush/restart) → **KHÔNG sleep cố định**, dùng poll-tới-điều-kiện + deadline. Phân biệt LAG vs LEAK: đo lại sau một khoảng — về mốc đầu = lag, đứng mãi = leak.
+- **VERIFY:** `vp verify` **919 passed/2 skipped** (911→919: +7 `test_log_throttle.py`, +1 guard log-flood) · **lint 7 kept/0 broken** · **drift PASS** · get_diagnostics 0.
+- **Ghi sổ:** LOG #462 · +D-156 +K-127 · INDEX #461→#462 · Σ340→342 · Verify-Symbol `LogThrottle` (C8 45→46).
+- **CHƯA VERIFY:** log-throttle qua `RotatingFileHandler` production (#443) — mới kiểm ở stdout; **toàn chuỗi qua proxy THẬT** vẫn 🔴 (chờ user bật Docker hoặc cấp máy có nginx).
+- **Bước kế — CẦN USER CHỌN:** (1) **bật Docker Desktop** → tôi đóng 🔴 proxy (SSE/MJPEG/trần bulkhead/TLS/auth qua nginx thật); (2) đo SSE trên máy `toann` GPU/RTSP; (3) ANPR .pt (cài torch / export onnx); (4) 🔴 K-001 (ARM, cần HW) · 🔴 K-031 (rotate secret — thêm lý do từ sự cố in env #457).
+---
 **[✅ #461 — SỬA DRIFT tài liệu deploy reverse-proxy: +SSE, +sizing thread, +bẫy proxy, +bảng trạng thái (D-155)]**
 - Khuyến nghị #459 là verify doc deploy bằng nginx thật, nhưng **Docker daemon chưa bật** (`open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified` — **KHÔNG phải tường lửa**, K-126) và AI không tự bật dịch vụ hệ thống ⇒ làm phần **giá trị cao, rủi ro 0** trước: sửa DRIFT nội dung tài liệu.
 - **Drift phát hiện (nặng hơn cả việc chưa test):** tài liệu viết ở **#428 = TRƯỚC SSE (#454) và TRƯỚC bulkhead (#456)** ⇒ ai deploy theo sẽ (a) **MẤT OVERLAY** vì không cấu hình no-buffering cho `/events`; (b) **chạm trần ~3 viewer** vì để `--threads` mặc định 8 (mỗi viewer giữ 2 kết nối dài); (c) tin một tài liệu **chưa từng chạy**.

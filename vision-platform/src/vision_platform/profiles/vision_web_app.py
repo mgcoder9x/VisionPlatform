@@ -44,6 +44,7 @@ from vision_platform.domain.detect_cadence import should_detect
 from vision_platform.domain.motion_gate import MotionGate
 from vision_platform.runtime.overlay_state_store import OverlayStateStore
 from vision_platform.runtime.stream_admission import StreamAdmission, capacity_from_threads
+from vision_platform.runtime.log_throttle import LogThrottle
 from vision_platform.runtime.overlay_expiry_scheduler import OverlayExpiryScheduler
 from vision_platform.runtime.overlay_projection import project_overlay
 from vision_platform.runtime.overlay_health import derive_health
@@ -64,6 +65,8 @@ _stop = threading.Event()
 _store: Optional[OverlayStateStore] = None
 # Bulkhead kết nối streaming (Wave 2, ĐO #456) — khởi tạo trong main(); None = không giới hạn (đường test/legacy)
 _admission: Optional[StreamAdmission] = None
+# Trần cho KÊNH LOG từ chối-503 (#462): 1 dòng / 5s + báo số lần đã nén → client KHÔNG điều khiển được lượng log
+_busy_log = LogThrottle(min_interval_ns=5_000_000_000)
 _cfg = OverlayConfig()
 _cadence_cfg = DetectionCadenceConfig()   # mặc định = hành vi hiện tại; main() build lại từ CLI + assert P5
 
@@ -379,8 +382,13 @@ def _admit_or_503(kind: str):
     resp = Response(f"streaming busy: dat tran {_admission.max_streams} ket noi dong thoi\n",
                     status=503, mimetype="text/plain")
     resp.headers["Retry-After"] = "5"
-    print(f"[web] TỪ CHỐI {kind}: đạt trần {_admission.max_streams} kết nối streaming đồng thời "
-          f"(tăng --threads / --max-stream-conns nếu cần nhiều viewer hơn)")
+    # LOG có TRẦN (#462): client bị 503 sẽ retry (backoff img.onerror #436) hoặc bị hammer → in mỗi lần = lượng
+    # ghi đĩa do CLIENT điều khiển + log lỗi thật bị chìm. Nén 1 dòng/cửa sổ NHƯNG báo số lần đã nén (không mất tin).
+    n = _busy_log.tick(time.monotonic_ns())
+    if n is not None:
+        print(f"[web] TỪ CHỐI {kind}: đạt trần {_admission.max_streams} kết nối streaming đồng thời "
+              f"(tăng --threads / --max-stream-conns nếu cần nhiều viewer hơn)"
+              + (f" · đã nén {n} lần từ chối tương tự" if n else ""))
     return resp
 
 

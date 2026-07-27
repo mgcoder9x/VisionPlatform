@@ -8693,3 +8693,29 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - **BẪY MỚI phát hiện, chưa ai nêu:** `proxy_ignore_client_abort` mặc định `off` = client ngắt thì nginx **đóng luôn** kết nối upstream → app chạy `finally` → **trả slot bulkhead**. Nếu operator bật `on`, slot bị giữ tới `channel_timeout` **120s** (quét mỗi 30s, K-125) ⇒ **mất dung lượng viewer ~2 phút mỗi lần ai đóng tab**. Đã ghi cảnh báo + checklist.
 
 **Đã verify:** `get_diagnostics` tài liệu = 0; các dữ kiện nginx **đọc tận docs chính chủ** (fetch thành công, không bị chặn); các số app dẫn lại đều từ LOG có bằng chứng (#427/#454/#456-#459); `vp verify` sẽ chạy trước commit. · **Chưa verify:** **toàn chuỗi qua proxy THẬT** (nginx/Caddy → waitress) vẫn 🔴 `[chưa kiểm]` — đã ghi tường minh trong bảng trạng thái của tài liệu; cần user bật Docker (hoặc cấp máy có nginx) để đóng.
+
+---
+
+### Entry #462 — 2026-07-27 — Tự soi ra 2 defect trong việc của CHÍNH TÔI: log-amplification (D-156) + probe báo-động-giả rò-rỉ (+K-127) — Kiro-Opus
+
+**Bối cảnh:** khuyến nghị #1 (verify nginx thật) **chặn bởi tiền đề** — Docker daemon chưa bật; tôi KHÔNG tự cài nginx/Caddy qua winget/scoop vì đó là cài phần mềm vào máy công ty (tinh thần K-126, cần user cho phép rõ). ⇒ chuyển sang **soi đối kháng code tôi vừa viết ở #456-#458** (doubt-driven), tìm được 2 defect thật.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **D-156 (defect 1 — LOG AMPLIFICATION):** `_admit_or_503` in log MỖI lần từ chối ⇒ **lượng ghi log do CLIENT điều khiển** (client bị 503 sẽ retry backoff #436; hoặc bị hammer) ⇒ log lỗi THẬT bị chìm + `RotatingFileHandler` (#443) xoay mất log cũ sớm. → thêm `runtime/log_throttle.py::LogThrottle` (THUẦN, `now_ns` tiêm, có lock cho waitress đa thread): tối đa **1 dòng / 5s**, và lần log kế **BÁO SỐ LẦN đã nén** (giới hạn nhưng KHÔNG mất thông tin — cùng triết lý bulkhead D-152 / keep-latest K-014).
+- **Defect 2 (trong TOOL của tôi):** `--churn` dùng `sleep(0.3)` cố định trước khi đọc `active` ⇒ dưới churn nặng release chưa kịp ⇒ **BÁO ĐỘNG GIẢ "RÒ RỈ SLOT — release thiếu!"**. → đổi sang **chờ-theo-sự-kiện** `_wait_active(target, deadline_s=5)` (đúng tiền lệ `wait_until` đã dùng đóng flaky #288/#430) + cờ `--release-deadline-s`.
+- Test guard hành vi: 20 request bị từ chối → **20 response 503** (chức năng không suy giảm) nhưng **1 dòng log** (`capsys`), chặn hồi quy nếu ai bỏ throttle.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- #458 tôi tuyên bố "KHÔNG RÒ RỈ" dựa trên churn 6 conns (dưới trần, không có 503). Khi đẩy lên 12 conns (vượt trần) thì **chính tool của tôi kết luận RÒ RỈ** — sai. Tôi KHÔNG nhận kết luận đó ngay mà đo lại: `/stats` giữ `streams=0/6` **suốt 15s** sau churn ⇒ là **TRỄ release**, không phải rò rỉ. Kết luận #458 vẫn đúng, nhưng **cách đo của #458 chưa đủ chặt** → đã sửa tool.
+
+**3. Trade-off đã cân nhắc:**
+- **Nén log vs bỏ log vs log hết:** bỏ log = mất tín hiệu bão hoà (không biết khi nào cần tăng `--threads`); log hết = client điều khiển được đĩa. Chọn nén + báo số lần nén = giữ tín hiệu, chặn khuếch đại. Cửa sổ 5s: đủ thấy diễn biến, đủ chặn flood. **Cái giá:** thời điểm chính xác của từng lần từ chối không còn trong log (chỉ còn số lượng) — chấp nhận vì cần đếm/cường độ, không cần từng mốc.
+- **Sleep dài hơn (1-2s) vs chờ-theo-sự-kiện trong probe:** sleep dài chỉ **đẩy** ngưỡng báo-động-giả sang tải cao hơn (đúng loại "fix ngọn" tôi vẫn từ chối); chờ-theo-sự-kiện đúng bản chất "release là SỰ KIỆN phụ thuộc tải".
+- Đặt `LogThrottle` ở `runtime` (không phải `profiles`): thuần, tái dùng được cho các đường log lặp khác; profiles chỉ lo việc in.
+
+**4. Điều bạn nên biết (SỐ ĐO THẬT):**
+- **Log throttle:** churn 8 chu kỳ × 12 kết nối (trần 6) = **~48 lần từ chối/lượt, ~96 lần qua 2 lượt** → server in **2 dòng**, dòng thứ hai ghi *"đã nén **55** lần từ chối tương tự"* ⇒ chặn khuếch đại + giữ được cường độ. Trước fix: ~96 dòng.
+- **Chống báo-động-giả:** cùng lệnh churn 8×12 — **trước** fix probe: `mở được` tụt 6→4, `active cuối=2`, verdict **"RÒ RỈ SLOT"** (SAI); **sau** fix: **8/8 chu kỳ `mở được 6`, `active` về `0/6`**, verdict **"KHÔNG RÒ RỈ"** (đúng).
+- **Cách phân biệt lag vs leak (ghi lại để lần sau không đuổi bóng):** đo lại `streams` sau một khoảng chờ — nếu về mốc đầu = trễ; nếu đứng mãi = rò rỉ thật.
+
+**Đã verify:** `scripts\vp.cmd verify` → **919 passed/2 skipped** (911→919: +7 `test_log_throttle.py` +1 guard log-flood) · **import-linter 7 kept/0 broken** · **drift PASS** · get_diagnostics 0. Empiric: 2 lượt churn + đọc log server + 15 mẫu `/stats` (số ở trên). · **Chưa verify:** hành vi log throttle khi chạy qua `RotatingFileHandler` production (#443) — chỉ kiểm ở stdout; toàn chuỗi qua proxy thật vẫn 🔴 (chờ Docker/nginx).

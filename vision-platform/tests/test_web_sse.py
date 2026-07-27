@@ -150,3 +150,26 @@ def test_stats_omits_streams_when_admission_absent(monkeypatch):
     with web.app.test_request_context("/stats"):
         body = web.stats()
     assert "streams=" not in body
+
+
+# --- #462: 503 vẫn trả ĐẦY ĐỦ nhưng LOG bị nén (client không điều khiển được lượng ghi log) ---
+def test_repeated_503_does_not_flood_log(monkeypatch, capsys):
+    """20 lần bị từ chối liên tiếp → **20 response 503** (không suy giảm chức năng) nhưng **1 dòng log**
+    (LogThrottle 5s). Nếu ai bỏ throttle, test này fail → chặn hồi quy log-amplification."""
+    from vision_platform.runtime.stream_admission import StreamAdmission
+    from vision_platform.runtime.log_throttle import LogThrottle
+
+    adm = StreamAdmission(1)
+    assert adm.try_acquire() is True
+    monkeypatch.setattr(web, "_admission", adm)
+    monkeypatch.setattr(web, "_busy_log", LogThrottle(min_interval_ns=5_000_000_000))
+    monkeypatch.setattr(web, "_store", _store_with_box())
+
+    statuses = []
+    for _ in range(20):
+        with web.app.test_request_context("/events"):
+            statuses.append(web.events().status_code)
+
+    assert statuses == [503] * 20                       # chức năng: MỌI request đều được trả lời tử tế
+    out = capsys.readouterr().out
+    assert out.count("TỪ CHỐI") == 1                    # log: đúng 1 dòng cho cả loạt

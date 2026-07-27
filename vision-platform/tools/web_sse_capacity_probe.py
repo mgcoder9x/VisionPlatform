@@ -70,6 +70,26 @@ def _stats_streams(base: str, headers: dict, timeout: float):
     return None
 
 
+def _wait_active(base: str, headers: dict, timeout: float, target: int, deadline_s: float):
+    """CHỜ-THEO-SỰ-KIỆN tới khi `active` về `target` (hoặc hết `deadline_s`) → trả `active` cuối cùng đọc được.
+
+    VÌ SAO KHÔNG `sleep()` CỐ ĐỊNH (bài học #462): release chỉ xảy ra khi server ghi chunk kế và phát hiện
+    broken pipe — độ trễ này PHỤ THUỘC TẢI. Sleep cố định 0.3s dưới churn nặng cho **BÁO ĐỘNG GIẢ "RÒ RỈ SLOT"**
+    (đo lại sau đó: `active` về 0). Tool báo-động-giả còn tệ hơn không có tool (đuổi bóng + mất tin vào checker).
+    Cùng tiền lệ `wait_until` đã dùng để đóng flaky test #288/#430.
+    """
+    end = time.monotonic() + deadline_s
+    last = None
+    while True:
+        st = _stats_streams(base, headers, timeout)
+        last = st[0] if st else last
+        if st and st[0] == target:
+            return st
+        if time.monotonic() >= end:
+            return st
+        time.sleep(0.1)
+
+
 def _run_churn(args) -> int:
     """Đo RÒ RỈ SLOT: lặp mở-rồi-đóng kết nối dài, kiểm `active` có về 0 (bulkhead D-152 release đúng chưa)."""
     base = f"http://{args.host}:{args.port}"
@@ -96,8 +116,9 @@ def _run_churn(args) -> int:
                 r.close()
             except Exception:  # noqa: BLE001,S110
                 pass
-        time.sleep(0.3)   # chờ server chạy `finally` của generator (release)
-        after = _stats_streams(base, headers, args.timeout)
+        # CHỜ-THEO-SỰ-KIỆN (không sleep cố định — chống báo động giả, #462): release phụ thuộc lúc server ghi
+        # chunk kế và phát hiện broken pipe → độ trễ thay đổi theo tải.
+        after = _wait_active(base, headers, args.timeout, target=before[0], deadline_s=args.release_deadline_s)
         peak = max(peak, at_open[0] if at_open else 0)
         leaked = after[0] if after else None
         print(f"  {c:<8} {len(held):<9} {str(at_open[0]) + '/' + str(at_open[1]) if at_open else '?':<15} "
@@ -149,6 +170,9 @@ def main() -> int:
                     help="CHẾ ĐỘ RÒ RỈ SLOT: số chu kỳ mở-rồi-đóng kết nối dài; đọc `streams=a/b` ở /stats mỗi "
                          "chu kỳ. Rò rỉ = `a` KHÔNG về 0 sau khi đóng hết (hệ chết dần trong soak 24/7).")
     ap.add_argument("--churn-conns", type=int, default=4, help="số kết nối dài mở trong mỗi chu kỳ churn")
+    ap.add_argument("--release-deadline-s", type=float, default=5.0,
+                    help="chờ TỐI ĐA bao lâu để slot được trả sau khi đóng kết nối (chờ-theo-sự-kiện, không sleep "
+                         "cố định). Quá hạn mà chưa về mốc đầu → mới kết luận RÒ RỈ (chống báo động giả #462).")
     ap.add_argument("--hold-seconds", type=float, default=0.0,
                     help="CHẾ ĐỘ GIỮ: mở `--hold-conns` kết nối dài rồi NGỦ, để bên ngoài KILL process này "
                          "(mô phỏng viewer tắt máy/rút mạng) → sau đó đọc `/stats` xem slot có được trả.")
