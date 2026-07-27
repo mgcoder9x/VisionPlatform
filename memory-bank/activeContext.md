@@ -1,7 +1,20 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-27)
-**Cập nhật lúc:** 2026-07-27T17:40:00+07:00.
+**Cập nhật lúc:** 2026-07-27T18:20:00+07:00.
+**[✅ #465 — C10-HOOKS: máy-kiểm phát hiện "cổng pre-commit chưa bật trên clone" (D-158, WARN-only)]**
+- User hỏi "vậy có chạy luôn không". **Trả lời: CÓ**, xác nhận bằng máy — `git config --local --get core.hooksPath` = `.githooks`; `git rev-parse --git-path hooks` = `.githooks`; **bằng chứng hành vi**: commit #464 in TRỌN output drift-check ngay trong lúc commit, và commit probe trước đó **bị CHẶN** bởi `SECRET-SCAN FAIL`.
+- **Nhưng câu hỏi đó phơi ra lớp drift THẬT:** hook `.githooks/` được **versioned** (D-148) nhưng **kích hoạt là config LOCAL mỗi-clone** ⇒ **cổng bảo vệ tắt ÂM THẦM** — chính máy này chưa set suốt nhiều phiên (#464). Đúng loại drift repo cưỡng chế bằng máy, mà bản thân nó lại không quan sát được.
+- **D-158:** thêm **C10-HOOKS** vào `tests/test_memory_consistency.py` (chạy qua `vp check`/`vp verify`/pre-commit): đọc **đường hooks THỰC TẾ** bằng `git rev-parse --git-path hooks` (KHÔNG đoán từ config) → `.githooks` = PASS, khác = **WARN + in lệnh sửa** `scripts\vp.cmd install-hooks`.
+- **WARN-only, KHÔNG FAIL — 2 lý do bản chất:** (a) **CI clone không cần hook** (CI chạy verify server-side) ⇒ FAIL làm CI đỏ oan; (b) thiếu hook là vấn đề **MÔI TRƯỜNG của máy**, không phải drift **BẢN GHI** ⇒ giữ đúng phạm vi checker. Bù lại độ cưỡng chế: `end.md` §0 đặt `vp install-hooks` thành **bước bắt buộc 1 lần/clone**.
+- **3 self-test guard-the-guard:** hook-on → PASS · hook-off → có dòng WARN · hook-off → **KHÔNG** làm exit code đỏ.
+- **KHÔNG port sang kit:** kit `tests/test_memory_consistency.template.py` là bản **generic rút gọn** (không có cả C9/`git_facts`) ⇒ port C10 sẽ làm kit lệch kiến trúc. Ghi rõ để lần sau không tưởng là bỏ sót.
+- **Chuỗi phòng thủ giờ 4 lớp và QUAN SÁT ĐƯỢC:** agentStop (mỗi lượt AI) → **pre-commit (drift-check + secret-scan)** → CI (mỗi push) → **C10-HOOKS canh chính lớp pre-commit**.
+- **VERIFY:** `vp check` → `[PASS] C10-HOOKS: pre-commit BAT (hooksPath=.githooks)` + 3 self-test C10 PASS + DRIFT-CHECK PASS.
+- **Ghi sổ:** LOG #465 · +D-158 · INDEX #464→#465 · Σ345→346 (D158) · Verify-Symbol `_collect_git_facts` (C8 47→48).
+- **Chưa verify:** C10 trên clone Linux/macOS (đường hooks dạng khác; logic dùng `endswith('.githooks')` sau chuẩn hoá `\`→`/`).
+- **Bước kế:** sang máy GPU → `end.md` §0 (nhớ `vp install-hooks` nếu C10 báo WARN) rồi §2 (A: SSE/bulkhead trên GPU/RTSP · B: fps end-to-end · C: proxy nếu bật được Docker).
+---
 **[✅ #464 — CỔNG CHẶN SECRET bằng máy (D-157) + ĐIỀU TRA GỐC RỄ sự cố commit ngoài ý muốn (+K-129)]**
 - Máy này không GPU → chọn hạng mục CPU-only giá trị cao nhất: **cưỡng chế secret bằng máy** (🔴 K-031). Lý do có bằng chứng: repo SẠCH secret nhưng chỉ nhờ **KỶ LUẬT**, mà #457 chứng minh AI cũng làm lộ được (in toàn bộ env); secret vào git history là **VĨNH VIỄN**.
 - **D-157:** `tests/secret_scan.py` (chỉ-đọc) quét **file git-tracked** (`git ls-files`) **2 tầng**: **BLOCK** (private-key block · `AKIA/ASIA` · `sk-` · `ghp_/github_pat_` · `xox…` · Slack webhook · `AIza` + **file bị cấm**: `.env*`,`*.pem`,`*.key`,`*.p12/pfx/jks`,`id_rsa*`) · **WARN** (URL-có-credential, exit 0).

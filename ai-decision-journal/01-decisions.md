@@ -1821,3 +1821,15 @@ Quyết định + lý do (bản chất):
 - **Self-test guard-the-guard:** trồng 6 loại key giả + 4 loại file cấm → phải BẮT; + ca chống-FP cho văn bản nhắc `.env`. Chống regex-rot (cùng khuôn `drift_check`).
 - **Phát hiện phụ:** `core.hooksPath` chưa set trên máy `k.nguyen` ⇒ hook drift-check (#449) **chưa từng chạy ở đây**; đã `vp install-hooks` (đảo: `git config --unset core.hooksPath`).
 - **Cái giá / khi nào KHÔNG đủ:** không phát hiện secret **entropy-cao không có prefix** (token nội bộ, mật khẩu DB) — cố ý bỏ để tránh FP nổ trên hash/base64/UUID trong journal; hook `sh` chưa kiểm trên Linux/macOS (`chmod +x`) — `[chưa kiểm]`. Nếu cần recall cao hơn: thêm tầng thứ 3 "entropy + allowlist" (chỉ khi có nhu cầu thật).
+
+### D-158 — 2026-07-27 — C10-HOOKS (WARN-only): máy-kiểm phát hiện "cổng pre-commit chưa bật trên clone này"
+Status: ✅ (C10 PASS trên máy này + 3 self-test: on→PASS · off→WARN · off KHÔNG làm đỏ exit code)
+Scope: `tests/test_memory_consistency.py` (`_collect_git_facts` +`hooks_path`, +C10, +3 self-test) · `end.md` §0
+Nguồn: LOG Entry #465 · #464 (phát hiện hook chưa bật ở máy `k.nguyen`) · D-148 (hook versioned) · D-157 (secret gate)
+Verify-Symbol: tests/test_memory_consistency.py::_collect_git_facts
+Quyết định + lý do (bản chất):
+- **Vấn đề:** hook `.githooks/` được **versioned** (D-148) nhưng **kích hoạt là config LOCAL mỗi-clone** (`core.hooksPath`) ⇒ **cổng bảo vệ có thể tắt âm thầm**. Đã xảy ra THẬT: máy `k.nguyen` chưa set ⇒ pre-commit (drift-check + secret-scan) **chưa từng chạy ở đó** suốt nhiều phiên. Đây đúng là lớp drift repo này vốn cưỡng chế bằng máy — nhưng chính nó lại không quan sát được.
+- **Giải pháp:** C10 đọc **đường hooks THỰC TẾ** (`git rev-parse --git-path hooks`, không đoán từ config) → `.githooks` = PASS, khác = **WARN** + in lệnh sửa. In ở MỌI `vp check` (đầu mỗi phiên theo §0).
+- **WARN-only, không FAIL:** (a) CI clone không cần hook (CI verify server-side) → FAIL làm CI đỏ oan; (b) thiếu hook là vấn đề **môi trường**, không phải drift **bản ghi** → giữ đúng phạm vi checker.
+- **Không port sang kit:** kit `test_memory_consistency.template.py` là bản generic rút gọn (không có cả C9/git_facts) ⇒ port sẽ làm kit lệch kiến trúc. Ghi rõ để lần sau không tưởng bỏ sót.
+- **Cái giá:** WARN có thể bị ngó lơ (không cưỡng chế như FAIL) ⇒ bù bằng `end.md` §0 đặt `vp install-hooks` thành bước bắt buộc 1 lần/clone. Nếu sau này thấy vẫn bị bỏ qua → cân nhắc FAIL có ngoại lệ khi phát hiện biến môi trường CI.

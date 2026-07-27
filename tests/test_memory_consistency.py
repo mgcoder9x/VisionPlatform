@@ -119,6 +119,11 @@ def _collect_git_facts() -> dict:
         parts = counts.split()   # "<behind>\t<ahead>" → split mọi whitespace
         if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
             facts["behind"], facts["ahead"] = int(parts[0]), int(parts[1])
+    # C10 (#465): hooks CÓ ĐANG BẬT trên clone này? `core.hooksPath` là config LOCAL/mỗi-clone → hook versioned
+    # `.githooks/` có thể THIẾU ÂM THẦM ở một máy (đã xảy ra: máy `k.nguyen` chưa set ⇒ pre-commit chưa từng chạy,
+    # #464). `git rev-parse --git-path hooks` cho đường hooks THỰC TẾ đang dùng (không đoán từ config).
+    rc_h, hooks_path = _run(["rev-parse", "--git-path", "hooks"])
+    facts["hooks_path"] = hooks_path if rc_h == 0 else ""
     return facts
 
 
@@ -256,6 +261,22 @@ def check(log_text: str | None = None, index_text: str | None = None,
              (f"local SAU upstream {behind} commit — GIT PULL/FETCH + reconcile TRUOC khi lam "
               f"(chong resume nen stale, K-098)"))
 
+    # ---- C10: cong pre-commit CO DANG BAT tren clone nay? (WARN-ONLY, #465) ----
+    # VI SAO CAN: hook `.githooks/` duoc versioned (D-148) nhung KICH HOAT la config LOCAL moi-clone
+    # (`core.hooksPath`) => co the THIEU AM THAM. Da xay ra THAT: may `k.nguyen` chua set => pre-commit
+    # (drift-check + secret-scan) CHUA TUNG chay o day suot nhieu phien (#464). Day dung la lop drift
+    # "cong bao ve khong bat ma khong ai biet" => phai QUAN SAT DUOC bang may.
+    # VI SAO WARN-ONLY (khong FAIL): CI clone KHONG can hook (CI chay verify server-side) => FAIL se lam CI
+    # do oan; va thieu hook la van de MOI-TRUONG cua may, khong phai drift BAN GHI (dung pham vi checker).
+    if gf.get("available", False):
+        hp = (gf.get("hooks_path") or "").replace("\\", "/")
+        if hp.endswith(".githooks"):
+            report.append(f"[PASS] C10-HOOKS: pre-commit BAT (hooksPath={hp})")
+        else:
+            report.append(f"[WARN] C10-HOOKS: pre-commit KHONG bat (hooksPath={hp or '?'}) — "
+                          f"drift-check + secret-scan se KHONG chay luc commit tren may nay. "
+                          f"Bat 1 lan/clone: scripts\\vp.cmd install-hooks")
+
     return ok_all, report
 
 
@@ -340,6 +361,15 @@ def self_test() -> tuple[bool, list[str]]:
     rec(_fail(r, "C9-GIT"), "C9-catch-behind")                 # local sau upstream → FAIL (nền stale)
     ok9u, _ = check(log, index, active, journal, git_facts={**gclean, "has_upstream": False})
     rec(ok9u, "C9-no-upstream-SKIP-PASS")                      # nhánh chưa track → SKIP-PASS
+    # C10: hook bat/tat — WARN-ONLY (khong duoc anh huong exit code, ke ca khi tat)
+    ok10on, r10on = check(log, index, active, journal,
+                          git_facts={**gclean, "hooks_path": ".githooks"})
+    rec(ok10on and any("C10-HOOKS" in x and x.startswith("[PASS]") for x in r10on), "C10-hooks-on-PASS")
+    ok10off, r10off = check(log, index, active, journal,
+                            git_facts={**gclean, "hooks_path": ".git/hooks"})
+    rec(any("C10-HOOKS" in x and x.startswith("[WARN]") for x in r10off), "C10-catch-hooks-off-WARN")
+    rec(ok10off, "C10-hooks-off-does-NOT-fail")   # thieu hook = van de moi-truong, KHONG lam drift-check do
+
     ok9a, _ = check(log, index, active, journal, git_facts={"available": False, "error": "no git"})
     rec(ok9a, "C9-unavailable-SKIP-PASS")                      # thiếu git → SKIP-PASS (fail-safe)
 

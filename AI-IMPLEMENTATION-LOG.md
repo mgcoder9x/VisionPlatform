@@ -8774,3 +8774,28 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - **Bài học hệ thống (K-129):** trong môi trường này, `&`-chaining KHÔNG "vô hại" — nó **thực thi âm thầm**, có thể **thay đổi git/filesystem** và **né mọi cổng kiểm tra** mà agent không hề thấy. ⇒ **luôn 1 lệnh / 1 tool-call**; nghi ngờ → `Get-Job`.
 
 **Đã verify:** `vp secrets` trên repo thật → **807 file tracked · 0 BLOCK · 23 WARN · self-test 13/13 PASS · exit 0**. Bắc cầu: trồng key giả + `git add` → `BLOCK (1) [aws-access-key-id]` **exit 1**; `git commit` → **bị pre-commit CHẶN** (in đúng thông điệp + hướng dẫn rotate) ⇒ cổng chặn THẬT, không phải nói suông. Gốc rễ sự cố: `Get-Job` + `git reflog` (dẫn ở trên). `git log` sau xử lý = `db122bc` khớp origin. · **Chưa verify:** hành vi hook trên **Linux/macOS** (script `sh`, cần `chmod +x` — máy này Windows/Git-Bash); phát hiện secret dạng entropy-cao (cố ý KHÔNG làm); `vp verify` full chạy ngay sau ghi sổ.
+
+---
+
+### Entry #465 — 2026-07-27 — C10-HOOKS: máy-kiểm phát hiện "cổng pre-commit CHƯA BẬT" (WARN-only) — đóng lớp drift do #464 phơi ra (D-158) — Kiro-Opus
+
+**Bối cảnh:** user hỏi "vậy có chạy luôn không" (về hook vừa bật). Trả lời có, đã xác nhận bằng máy: `git config --local --get core.hooksPath` = `.githooks` và `git rev-parse --git-path hooks` = `.githooks`; thêm bằng chứng hành vi: commit #464 in trọn output drift-check NGAY trong lúc commit, và commit probe trước đó **bị chặn** bởi `SECRET-SCAN FAIL`. Nhưng câu hỏi đó phơi ra lớp drift THẬT: **kích hoạt hook là config LOCAL mỗi-clone** nên nó **thiếu âm thầm** ở máy này suốt nhiều phiên mà không ai biết (#464).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **D-158:** thêm **C10-HOOKS** vào `tests/test_memory_consistency.py` (chạy qua `vp check`/`vp verify`/pre-commit): đọc **đường hooks THỰC TẾ** bằng `git rev-parse --git-path hooks` (không đoán từ config) → `.githooks` = PASS, khác = **WARN** kèm lệnh sửa `scripts\vp.cmd install-hooks`.
+- **WARN-only, KHÔNG fail** — 2 lý do bản chất: (a) **CI clone không cần hook** (CI chạy verify server-side) ⇒ fail sẽ làm CI đỏ oan; (b) thiếu hook là vấn đề **môi trường của máy**, không phải drift **bản ghi** ⇒ để FAIL sẽ làm lệch đúng-phạm-vi của checker (checker này là "bản ghi ↔ thực tế").
+- **3 self-test guard-the-guard:** hook-on → PASS · hook-off → có dòng WARN · hook-off → **KHÔNG** làm exit code đỏ.
+- Cập nhật `end.md` §0: thêm `vp install-hooks` thành **bước bắt buộc 1 lần/clone** + giải thích vì sao (quan trọng cho máy GPU sắp dùng).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (thêm 1 check mới; C1–C9 giữ nguyên hành vi).
+
+**3. Trade-off đã cân nhắc:**
+- **WARN vs FAIL:** FAIL cưỡng chế mạnh hơn (không ai bỏ qua được) nhưng làm CI đỏ + biến vấn đề môi trường thành lỗi bản ghi. Chọn WARN + đưa vào `end.md` §0 như bước bắt buộc. **Cái giá:** WARN có thể bị ngó lơ ⇒ giảm thiểu bằng việc nó in ở MỌI lần `vp check` (đầu mỗi phiên theo §0).
+- **Đọc `git rev-parse --git-path hooks` thay vì `git config core.hooksPath`:** rev-parse cho đường **đang thực sự dùng** (bao gồm mặc định `.git/hooks`), nên phản ánh sự thật chứ không phản ánh ý định cấu hình.
+- **KHÔNG port sang kit** `ai-learning-os-kit/tests/test_memory_consistency.template.py`: kiểm thấy kit là **bản generic rút gọn** (không có cả C9/git_facts) ⇒ port C10 sẽ làm kit lệch kiến trúc; kit vẫn nhất quán như trước. *(Ghi rõ để lần sau không tưởng là bỏ sót.)*
+
+**4. Điều bạn nên biết:**
+- Từ nay mỗi `vp check` in `C10-HOOKS: pre-commit BAT (hooksPath=.githooks)` — nếu đổi máy/clone mới mà thấy **WARN** thì chạy `scripts\vp.cmd install-hooks` (đảo: `git config --unset core.hooksPath`).
+- Chuỗi phòng thủ giờ đủ 4 lớp và **quan sát được**: agentStop (mỗi lượt AI) → **pre-commit (drift-check + secret-scan)** → CI (mỗi push) → `C10-HOOKS` canh chính lớp pre-commit.
+
+**Đã verify:** `scripts\vp.cmd check` → `[PASS] C10-HOOKS: pre-commit BAT (hooksPath=.githooks)` + `[PASS] self:C10-hooks-on-PASS` + `[PASS] self:C10-catch-hooks-off-WARN` + `[PASS] self:C10-hooks-off-does-NOT-fail` · DRIFT-CHECK PASS. `vp verify` chạy trước commit. · **Chưa verify:** hành vi C10 trên clone Linux/macOS (đường hooks có thể khác dạng — logic dùng `endswith(".githooks")` sau khi chuẩn hoá `\`→`/`, [chưa kiểm] thực tế).

@@ -10,8 +10,12 @@
 ## 0. ĐẦU PHIÊN BẮT BUỘC
 ```
 git status
-scripts\vp.cmd check
+scripts\vp.cmd check          :: xem dòng C10-HOOKS: PASS = cổng pre-commit đang bật
+scripts\vp.cmd install-hooks  :: CHẠY 1 LẦN / MỖI CLONE nếu C10-HOOKS báo WARN
 ```
+> ⚠️ **Hook là config LOCAL theo từng clone** (`core.hooksPath`) — hook versioned `.githooks/` **có thể thiếu âm thầm**
+> ở một máy. Đã xảy ra THẬT: máy `k.nguyen` chưa set ⇒ pre-commit (drift-check + secret-scan) **chưa từng chạy** ở đó
+> suốt nhiều phiên (#464). Nay `vp check` có **C10-HOOKS** cảnh báo (WARN-only, không làm CI đỏ) — #465.
 Đọc 5 entry cuối LOG + block trên cùng `activeContext.md`. FAIL drift → SỬA trước khi làm. Behind upstream →
 `git pull --ff-only` rồi đối chiếu lại.
 
