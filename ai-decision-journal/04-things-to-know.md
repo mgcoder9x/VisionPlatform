@@ -1335,3 +1335,19 @@ CẬP NHẬT 2026-07-27:
 - **CHƯA làm (chờ user quyết, KHÔNG tự mở rộng):** `--log-file` cho web app (tái dùng `ProductionLogHandle`, ~15 dòng)
   · `/metrics` Prometheus cho web app · alerting. Lý do hoãn: stdout+supervisor là chuẩn 12-factor và khớp
   `docker-compose.cpu-demo.yml`; thêm cờ = 2 lối làm cùng việc cho nhu cầu chưa ai nêu.
+
+### K-129 — 🔴→✅ PowerShell `&` = BACKGROUND JOB: lệnh `&`-chained CHẠY THẬT + ÂM THẦM (đã gây commit ngoài ý muốn, NÉ hook)
+Scope: mọi lệnh shell của AI trong repo này (shell agent = PowerShell 7)
+Nguồn: LOG Entry #464 · bằng chứng: `Get-Job` (Job5 `Command = git commit -m "PROBE should be blocked" …`, State=Completed) + `git reflog` (`bf15bc4` tạo 14:50:56, `install-hooks` chạy SAU)
+CẬP NHẬT 2026-07-27:
+- **ĐÍNH CHÍNH niềm tin sai trước đây** ("cmd nuốt `&`-chaining"): shell là **PowerShell 7**, ở đó `&` là **toán tử
+  background job**. `A & B & C` **KHÔNG bị nuốt** — mỗi đoạn **ĐƯỢC THỰC THI, TÁCH RỜI, ÂM THẦM**; output nằm trong
+  job nên agent chỉ thấy bảng `Id/Name/State` và dễ kết luận SAI là "lệnh không chạy".
+- **Hậu quả THẬT đã xảy ra:** một `git commit` chạy ngoài ý muốn (`bf15bc4`) và **thoát khỏi pre-commit hook** (lúc đó
+  hook chưa bật) ⇒ `&`-chaining có thể **đổi git/filesystem + né mọi cổng kiểm tra** mà agent không hề biết.
+  Rủi ro bảo mật lần này = 0 (chuỗi trồng là `AKIA…EXAMPLE` — key ví dụ công khai của AWS; commit chưa push),
+  nhưng cơ chế thì đủ để gây sự cố thật.
+- **LUẬT:** **1 lệnh / 1 tool-call.** KHÔNG `&`-chaining (kể cả `echo === & cmd`). Nghi có việc chạy ngầm →
+  `Get-Job` (dọn: `Get-Job | Remove-Job -Force`). PowerShell cũng cắt chuỗi ở `$`/`;`/`|` khi nội suy → tránh nốt.
+- **Cách xử lý nếu lỡ commit ngoài ý muốn (chưa push):** báo user + xin phép (git_safety) → `git reset --soft HEAD~1`
+  (giữ thay đổi trong staging) → `git rm --cached <file rác>` → xoá file → `git log` đối chiếu về đúng origin.

@@ -1808,3 +1808,16 @@ Quyết định + lý do (bản chất):
 - **Defect 2 (trong TOOL của tôi):** `--churn` dùng `sleep(0.3)` cố định → dưới churn nặng cho **BÁO ĐỘNG GIẢ "RÒ RỈ SLOT"**. Fix = **chờ-theo-sự-kiện** `_wait_active(target, deadline 5s)`; sleep dài hơn chỉ đẩy ngưỡng báo-động-giả (fix ngọn).
 - **Số thật:** churn 8×12 → trước fix probe: `mở được` 6→4, `active cuối=2`, verdict RÒ RỈ (SAI); sau fix: 8/8 chu kỳ mở 6, `active`→0/6, verdict ĐÚNG. Log: ~96 lần từ chối → 2 dòng (+"đã nén 55 lần").
 - **Cái giá:** log không còn mốc thời gian của TỪNG lần từ chối (chỉ còn số lượng/cường độ) — chấp nhận. Cửa sổ 5s là tham số cứng trong code (chưa expose CLI — YAGNI, thêm khi có nhu cầu thật).
+
+### D-157 — 2026-07-27 — Cổng chặn SECRET bằng máy (`tests/secret_scan.py` + `vp secrets` + `vp verify` + pre-commit)
+Status: ✅ (807 file tracked · 0 BLOCK · 23 WARN · self-test 13/13 · bắc cầu: key giả → BLOCK exit 1 → **commit bị hook CHẶN**)
+Scope: `tests/secret_scan.py` (MỚI) · `scripts/vp.cmd` (+`secrets`, đưa vào `verify`) · `.githooks/pre-commit` (+cổng 2)
+Nguồn: LOG Entry #464 · 🔴 K-031 · sự cố in env #457 · bài học K-127 (precision-first) · D-148 (hook versioned)
+Verify-Symbol: tests/secret_scan.py::self_test
+Quyết định + lý do (bản chất):
+- **Vấn đề:** repo SẠCH secret nhưng chỉ nhờ **kỷ luật**; kỷ luật hỏng 1 lần ⇒ secret nằm **vĩnh viễn** trong git history. #457 chứng minh AI cũng làm lộ được (in toàn bộ env). ⇒ cưỡng chế bằng máy, chặn **TRƯỚC** commit (pre-commit là nơi duy nhất còn kịp).
+- **2 tầng, quyết định dựa SỐ ĐO:** BLOCK = mẫu định danh nhà cung cấp + file bị cấm (`.env*`/`*.pem`/`*.key`/`id_rsa*`) ⇒ FP≈0. URL-có-credential = **WARN** vì quét thật ra **23 chỗ** toàn placeholder/masked/test hợp lệ — chặn chúng thì cổng bị tắt (K-127). **Độ chính xác > độ phủ.**
+- **Chỉ quét file git-tracked** (`git ls-files`): đúng thứ đi vào history; gitignored (scratch/screenshot) không phải rủi ro, quét chỉ gây nhiễu.
+- **Self-test guard-the-guard:** trồng 6 loại key giả + 4 loại file cấm → phải BẮT; + ca chống-FP cho văn bản nhắc `.env`. Chống regex-rot (cùng khuôn `drift_check`).
+- **Phát hiện phụ:** `core.hooksPath` chưa set trên máy `k.nguyen` ⇒ hook drift-check (#449) **chưa từng chạy ở đây**; đã `vp install-hooks` (đảo: `git config --unset core.hooksPath`).
+- **Cái giá / khi nào KHÔNG đủ:** không phát hiện secret **entropy-cao không có prefix** (token nội bộ, mật khẩu DB) — cố ý bỏ để tránh FP nổ trên hash/base64/UUID trong journal; hook `sh` chưa kiểm trên Linux/macOS (`chmod +x`) — `[chưa kiểm]`. Nếu cần recall cao hơn: thêm tầng thứ 3 "entropy + allowlist" (chỉ khi có nhu cầu thật).

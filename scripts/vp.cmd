@@ -43,6 +43,7 @@ if /i "%CMD%"=="setup"  goto :setup
 if /i "%CMD%"=="test"   goto :test
 if /i "%CMD%"=="lint"   goto :lint
 if /i "%CMD%"=="check"  goto :check
+if /i "%CMD%"=="secrets" goto :secrets
 if /i "%CMD%"=="verify" goto :verify
 if /i "%CMD%"=="install-hooks" goto :install_hooks
 goto :help
@@ -99,6 +100,19 @@ exit /b !RC!
 call "%ROOT%\tests\drift_check.cmd"
 exit /b !errorlevel!
 
+:secrets
+REM Quet secret trong file GIT-TRACKED (chi-doc). BLOCK = secret that -> exit 1. Chi tiet: tests/secret_scan.py
+if exist "%VENVPY%" (
+  "%VENVPY%" "%ROOT%\tests\secret_scan.py"
+  exit /b !errorlevel!
+)
+if defined BASEPY (
+  %BASEPY% "%ROOT%\tests\secret_scan.py"
+  exit /b !errorlevel!
+)
+echo [vp] ERROR: khong tim thay Python de chay secret_scan.
+exit /b 9009
+
 :verify
 call "%~f0" test
 set "T=!errorlevel!"
@@ -106,10 +120,12 @@ call "%~f0" lint
 set "L=!errorlevel!"
 call "%~f0" check
 set "C=!errorlevel!"
-echo [vp] verify: test=!T! lint=!L! drift-check=!C!
-set /a SUM=T+L+C
+call "%~f0" secrets
+set "S=!errorlevel!"
+echo [vp] verify: test=!T! lint=!L! drift-check=!C! secrets=!S!
+set /a SUM=T+L+C+S
 if not "!SUM!"=="0" ( echo [vp] VERIFY FAIL & exit /b 1 )
-echo [vp] VERIFY OK — test + lint + drift-check deu PASS
+echo [vp] VERIFY OK — test + lint + drift-check + secret-scan deu PASS
 exit /b 0
 
 :install_hooks
@@ -140,7 +156,8 @@ echo   setup   : dung/sua venv + pip install -e .[EXTRAS]  (extras hien tai: %EX
 echo   test    : pytest -q  (dung venv du an)
 echo   lint    : import-linter qua importlinter.api (ne AV — K-044)
 echo   check   : drift-check (nhat quan bo nho + RULES_VERSION)
-echo   verify  : test + lint + check
+echo   secrets : quet secret trong file git-tracked (BLOCK = secret that; WARN = URL co credential)
+echo   verify  : test + lint + check + secrets
 echo   install-hooks : kich hoat git hooks .githooks/ (pre-commit chan commit khi drift)
 echo.
 echo Profile rieng may: copy scripts\env.local.cmd.example -^> scripts\env.local.cmd (gitignored)

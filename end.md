@@ -73,8 +73,12 @@ thật" vẫn 🔴. Cần dựng nginx → đo: SSE qua proxy còn live? MJPEG l
 ## 5. RÀNG BUỘC VẬN HÀNH (để máy sau khỏi vấp)
 - Python qua `vision-platform\.venv\Scripts\python.exe` hoặc `scripts\vp.cmd`; lệnh routine qua launcher cố định (§3.1).
 - LOG entry heading phải là **`### Entry #N`** (3 dấu `#`) — drift C1 mới nhận.
-- Shell: cmd nuốt `&`-chaining, PowerShell nuốt `$`/`;`/`|` trong chuỗi → dùng **lệnh ĐƠN**; `set VAR=v && ...` **nhồi
-  khoảng trắng** vào giá trị (đã gây 401 giả ở #457) → viết `set VAR=v&&...` không có space.
+- **Shell — ĐỌC KỸ, đây là bẫy gây SỰ CỐ THẬT (K-129, #464):** shell của agent là **PowerShell 7**, trong đó `&`
+  là **toán tử BACKGROUND JOB**. `A & B & C` **KHÔNG bị "nuốt"** — mỗi đoạn **ĐƯỢC THỰC THI, tách rời, ÂM THẦM**
+  (output nằm trong job, agent chỉ thấy bảng `Id/Name/State`). Đã gây: một `git commit` chạy **ngoài ý muốn** và
+  **thoát khỏi pre-commit hook** (#464). ⇒ **TUYỆT ĐỐI dùng lệnh ĐƠN**, mỗi tool-call một lệnh. Nghi ngờ có job
+  chạy ngầm → `Get-Job` (rồi `Remove-Job -Force`). PowerShell cũng cắt chuỗi ở `$`/`;`/`|` khi nội suy.
+- `set VAR=v && ...` (cmd) **nhồi khoảng trắng** vào giá trị (đã gây 401 giả ở #457) → viết `set VAR=v&&...` không space.
 - **DỪNG server nền TRƯỚC `vp verify`** (đốt CPU → flaky giả). Port TIME_WAIT → đổi port.
 - git: không `add -A` (chọn file cụ thể), không force/reset, push nhánh hiện tại.
 - Đo trạng-thái-sau-sự-kiện-có-độ-trễ-phụ-thuộc-tải → **KHÔNG sleep cố định**, dùng poll-tới-điều-kiện + deadline (K-127).

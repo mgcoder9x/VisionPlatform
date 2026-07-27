@@ -1,7 +1,23 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-27)
-**Cập nhật lúc:** 2026-07-27T16:50:00+07:00.
+**Cập nhật lúc:** 2026-07-27T17:40:00+07:00.
+**[✅ #464 — CỔNG CHẶN SECRET bằng máy (D-157) + ĐIỀU TRA GỐC RỄ sự cố commit ngoài ý muốn (+K-129)]**
+- Máy này không GPU → chọn hạng mục CPU-only giá trị cao nhất: **cưỡng chế secret bằng máy** (🔴 K-031). Lý do có bằng chứng: repo SẠCH secret nhưng chỉ nhờ **KỶ LUẬT**, mà #457 chứng minh AI cũng làm lộ được (in toàn bộ env); secret vào git history là **VĨNH VIỄN**.
+- **D-157:** `tests/secret_scan.py` (chỉ-đọc) quét **file git-tracked** (`git ls-files`) **2 tầng**: **BLOCK** (private-key block · `AKIA/ASIA` · `sk-` · `ghp_/github_pat_` · `xox…` · Slack webhook · `AIza` + **file bị cấm**: `.env*`,`*.pem`,`*.key`,`*.p12/pfx/jks`,`id_rsa*`) · **WARN** (URL-có-credential, exit 0).
+- **Quyết định 2 tầng DỰA SỐ ĐO (không cảm tính):** quét thật ra **807 file · 0 BLOCK · 23 WARN** — 23 chỗ đó **toàn placeholder/masked/test hợp lệ** (`rtsp://USER:PASS@HOST`, `admin:***`, `<MATKHAU>`, `admin:secret@10.0.0.9`) ⇒ nếu để BLOCK thì cổng chặn 23 chỗ đúng ⇒ **chắc chắn bị tắt** (đúng K-127: checker báo-động-giả làm mất tin vào checker). **Độ chính xác > độ phủ.**
+- **Self-test guard-the-guard 13/13** (trồng 6 loại key giả + 4 loại file cấm + 1 ca chống-FP văn bản nhắc `.env`) → chống regex-rot.
+- **Wire 3 chỗ:** `scripts\vp.cmd secrets` (tên CỐ ĐỊNH §3.1) · đưa vào `vp verify` · **cổng 2 trong `.githooks/pre-commit`** (sau drift-check) — pre-commit là nơi DUY NHẤT còn chặn được **trước khi** vào history.
+- **BẮC CẦU (cổng chặn THẬT, không nói suông):** trồng key giả dạng `AKIA…EXAMPLE` + `git add` → `vp secrets` báo `BLOCK (1) [aws-access-key-id]` exit 1 → **`git commit` BỊ pre-commit CHẶN** kèm hướng dẫn xoá + rotate.
+- **Phát hiện phụ quan trọng:** `core.hooksPath` **CHƯA set trên máy này** ⇒ hook drift-check (#449) **chưa từng chạy ở đây** suốt các phiên trước → đã bật `vp install-hooks` (đảo: `git config --unset core.hooksPath`).
+- **SỰ CỐ DO TÔI + GỐC RỄ (K-129, bằng chứng cứng):** một commit `bf15bc4 "PROBE should be blocked"` **được tạo ngoài ý muốn** và **né hook** (hook chưa bật lúc đó). Gốc: shell là **PowerShell 7**, `&` là **toán tử BACKGROUND JOB** ⇒ lệnh `&`-chained **CHẠY THẬT, TÁCH RỜI, ÂM THẦM** — `Get-Job` cho **Job5** `Command = git commit -m "PROBE should be blocked" …` State=Completed; `reflog` cho `bf15bc4`@14:50:56 (trước `install-hooks`). **ĐÍNH CHÍNH** ghi chú sai cũ "cmd nuốt `&`-chaining" (đã sửa trong `end.md`).
+  - **Rủi ro thực tế = 0:** chuỗi trồng là `AKIA…EXAMPLE` — **key ví dụ CÔNG KHAI trong tài liệu AWS** (chọn có chủ đích), và commit **chưa push** (origin vẫn `db122bc`).
+  - **Cổng tự bắt chính tài liệu của tôi:** viết chuỗi key nguyên văn vào LOG ⇒ `vp verify` `secrets=1` FAIL. KHÔNG phải FP — repo không nên chứa chuỗi hình-dạng-key ở bất kỳ đâu ⇒ mọi doc viết dạng **ngắt** (`AKIA…EXAMPLE`), **KHÔNG** thêm allowlist (allowlist là chỗ để lọt secret thật sau này).
+  - **Xử lý (xin phép user TRƯỚC theo git_safety):** `git reset --soft HEAD~1` → HEAD về `db122bc` = origin, giữ thay đổi trong staging · `git rm --cached` + xoá file probe · `Get-Job | Remove-Job -Force`. `git status` sau đó chỉ còn 3 file chủ đích. *(reflog local còn `bf15bc4` tới khi gc — vô hại, không có ở origin.)*
+  - **LUẬT rút ra:** **1 lệnh / 1 tool-call**, KHÔNG `&`-chaining (nó né được MỌI cổng kiểm tra mà agent không thấy); nghi ngờ → `Get-Job`.
+- **Ghi sổ:** LOG #464 · +D-157 +K-129 · INDEX #463→#464 · Σ343→345 · Verify-Symbol `secret_scan.py::self_test` (C8 46→47).
+- **Bước kế:** sang máy GPU → theo `end.md` §2 (A: SSE/bulkhead trên GPU/RTSP · B: fps end-to-end · C: proxy nếu bật được Docker). Ở máy CPU còn: `--log-file`/`/metrics` cho web app (K-128, chờ bạn nói cần) · soak 24/7 · network-partition thật.
+---
 **[✅ #463 — Đóng nợ `[chưa kiểm]` #462: web app KHÔNG có production log file (+K-128) + sửa lỗi doc + handoff GPU]**
 - User: máy này KHÔNG có GPU, một lát nữa mới sang máy có GPU → chọn việc CPU-only có giá trị: (1) đóng nợ trung thực của #462; (2) chuẩn bị handoff GPU.
 - **Trả lời `[chưa kiểm]` của #462 bằng ĐỌC CODE + grep (đáp án XÁC ĐỊNH, không phải "chưa đo được"):** `vision_web_app.py` **KHÔNG có** `--log-file`, **KHÔNG** dùng `ProductionLogHandle`, **KHÔNG có** `--metrics-port` (grep 4 mẫu → 0 kết quả; `logging` chỉ dùng để hạ mức werkzeug). ⇒ log throttle **chỉ tồn tại trên stdout**; **đường RotatingFileHandler KHÔNG tồn tại** cho web app.

@@ -37,4 +37,27 @@ if [ "$rc" -ne 0 ]; then
   echo "  Sua cho khop roi commit lai. (Bo qua co chu dich: git commit --no-verify)" >&2
   exit 1
 fi
+
+# --- COng 2: SECRET-SCAN (K-031) — chan secret THAT truoc khi vao history (rewrite history = viec dau).
+#     Chi mau do-tin-cay-CAO (private key/AKIA/sk-/ghp_/xox/AIza + file .env|.pem|.key|id_rsa) => FP ~ 0.
+#     URL co credential chi WARN (repo CO Y dung placeholder) — xem tests/secret_scan.py.
+SECRETS="tests/secret_scan.py"
+if py -3 --version >/dev/null 2>&1; then
+  py -3 "$SECRETS" >/dev/null 2>&1; src=$?
+elif [ -x "$VENV" ]; then
+  "$VENV" "$SECRETS" >/dev/null 2>&1; src=$?
+elif python --version >/dev/null 2>&1; then
+  python "$SECRETS" >/dev/null 2>&1; src=$?
+else
+  src=0   # khong co Python: drift-check o tren da bao loi 9009 truoc do
+fi
+
+if [ "$src" -ne 0 ]; then
+  echo "" >&2
+  echo "[pre-commit] SECRET-SCAN FAIL (rc=$src) — COMMIT BI CHAN." >&2
+  echo "  Co secret that / file bi cam (.env|.pem|.key|id_rsa) trong file tracked." >&2
+  echo "  Chi tiet: scripts\\vp.cmd secrets    → XOA khoi repo + ROTATE key da lo." >&2
+  echo "  (Bo qua co chu dich: git commit --no-verify — CHI khi chac chan la false positive)" >&2
+  exit 1
+fi
 exit 0

@@ -8743,3 +8743,34 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Câu `[chưa kiểm]` của #462 nay có câu trả lời **xác định**: không phải "chưa đo được" mà là "**không tồn tại đường đó**" — log throttle chỉ tồn tại trên stdout.
 
 **Đã verify:** grep 4 mẫu (`add_argument("--log`, `ProductionLogHandle`, `FileLoggingObserver`, `--metrics-port`) trên `vision_web_app.py` → **0 kết quả**; đọc `adapters/production_log_handle.py` + `profiles/vision_slice_app.py` xác nhận đường logging production **chỉ** wire cho slice app; `get_diagnostics` doc = 0; `vp verify` chạy trước commit. Doc-only, 0 đụng code. · **Chưa verify:** hành vi `print()` khi stdout bị block thật (chưa dựng thí nghiệm pipe-không-đọc — nêu như rủi ro `[chưa kiểm]`, không tuyên bố đã đo); toàn chuỗi qua proxy thật vẫn 🔴 (chờ Docker/nginx).
+
+---
+
+### Entry #464 — 2026-07-27 — CỔNG CHẶN SECRET bằng máy (D-157, đóng phần cưỡng-chế của 🔴 K-031) + ĐIỀU TRA GỐC RỄ sự cố commit ngoài ý muốn (+K-129) — Kiro-Opus
+
+**Bối cảnh:** máy này không GPU; hạng mục CPU-only giá trị cao nhất còn lại = **cưỡng chế secret bằng máy**. Lý do có bằng chứng: repo hiện SẠCH (quét 0 kết quả cho private-key/AKIA/sk-/ghp_/xox) nhưng cái giữ nó sạch tới giờ chỉ là **KỶ LUẬT** — và ở #457 chính AI đã làm `cmd set` in TOÀN BỘ biến môi trường (gồm 3 biến chứa API key) ra log phiên ⇒ kỷ luật hỏng được. Secret vào git history là **vĩnh viễn** (rewrite history = việc đau) ⇒ phải chặn TRƯỚC commit.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **D-157:** `tests/secret_scan.py` (chỉ-đọc) quét **file git-tracked** (`git ls-files` — đúng thứ vào history) theo **2 tầng**: **BLOCK** (mẫu định danh nhà cung cấp: private-key block · `AKIA/ASIA` · `sk-` · `ghp_/gho_/ghu_/ghs_/github_pat_` · `xox[baprs]-` · Slack webhook · `AIza` + **file bị cấm tracked**: `.env*`, `*.pem`, `*.key`, `*.p12/pfx/jks`, `id_rsa*`) và **WARN** (URL có credential — chỉ báo, exit 0).
+- **Vì sao URL-có-credential chỉ WARN (quyết định dựa SỐ ĐO, không cảm tính):** quét thật cho **23 WARN**, tất cả là placeholder/masked/test hợp lệ (`rtsp://USER:PASS@HOST`, `admin:***`, `<MATKHAU>`, `admin:secret@10.0.0.9` trong test). Nếu để tầng BLOCK thì cổng chặn 23 chỗ đúng ⇒ **chắc chắn bị tắt** ⇒ đúng bài học K-127 (checker báo-động-giả làm mất tin vào checker). **Độ chính xác trước độ phủ.**
+- **Self-test guard-the-guard** (khuôn `drift_check`): trồng 6 loại key giả + 4 loại file bị cấm → checker PHẢI bắt; thêm ca chống-FP cho văn bản chỉ *nhắc tới* `.env`. Chống regex-rot.
+- Wire 3 chỗ: `scripts\vp.cmd secrets` (lệnh mới, tên CỐ ĐỊNH §3.1) · đưa vào `vp verify` · **cổng 2 trong `.githooks/pre-commit`** (sau drift-check).
+- **Phát hiện phụ:** `core.hooksPath` **CHƯA set trên máy này** ⇒ hook drift-check (#449) **chưa từng chạy ở đây** suốt các phiên trước (mọi commit trước đó không qua cổng local). Đã bật bằng `vp install-hooks` (đảo: `git config --unset core.hooksPath`).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Ghi chú vận hành cũ trong `end.md` ("**cmd nuốt `&`-chaining**") **SAI BẢN CHẤT** → đã sửa. Sự thật: shell là **PowerShell 7**, `&` là **toán tử BACKGROUND JOB** ⇒ `A & B & C` **ĐƯỢC THỰC THI, tách rời, ÂM THẦM**. Niềm tin sai này chính là nguyên nhân sự cố dưới đây.
+
+**3. Trade-off đã cân nhắc:**
+- **Chặn ở pre-commit (chọn)** vs chỉ báo trong `vp verify`: pre-commit là nơi DUY NHẤT chặn được secret **trước khi** vào history; `verify` chạy sau thì đã muộn. **Cái giá:** thêm 1 cổng có thể chặn commit ⇒ đã tối thiểu hoá bằng tầng BLOCK FP≈0 + hướng dẫn `--no-verify` cho FP thật.
+- **Không thêm phát hiện entropy cao chung** (kiểu "chuỗi 32 ký tự lộn xộn"): recall cao hơn nhưng FP nổ trên hash/base64/UUID trong journal ⇒ vi phạm nguyên tắc precision-first. Ghi lại làm hướng nếu sau này cần.
+- **Chỉ quét tracked** thay vì cả working tree: file gitignored (scratch, `.playwright-mcp/`) không vào history nên không phải rủi ro; quét chúng chỉ tạo nhiễu.
+
+**4. Điều bạn nên biết — SỰ CỐ DO TÔI + GỐC RỄ (K-129), có bằng chứng cứng:**
+- **Hiện tượng:** trong lúc bắc cầu cổng secret, một commit `bf15bc4 "PROBE should be blocked"` **được tạo ngoài ý muốn** và **KHÔNG qua hook** (lúc đó hook chưa bật).
+- **Bằng chứng gốc rễ:** `Get-Job` → **Job5** `Command = git commit -m "PROBE should be blocked" 2>&1 | findstr …`, `State = Completed`; `git reflog` → `bf15bc4` tạo **14:50:56**, `install-hooks` chạy SAU. ⇒ lệnh `&`-chained của tôi bị PowerShell tách thành **3 background job** và **chạy thật**, output nằm trong job nên tôi **không thấy** — tôi tưởng "lệnh không chạy được".
+- **Mức rủi ro thực tế: bằng không về bảo mật** — chuỗi trồng là `AKIA…EXAMPLE` (**key ví dụ CÔNG KHAI trong tài liệu AWS**, tôi cố ý chọn vì lý do này), và commit **chưa push** (origin vẫn `db122bc`).
+- **CỔNG TỰ BẮT CHÍNH TÀI LIỆU CỦA TÔI (bằng chứng sống, đáng ghi):** khi ghi sổ entry này tôi viết chuỗi key nguyên văn ⇒ `vp verify` → `secrets=1` **FAIL**. **Không phải false positive** — repo KHÔNG nên chứa chuỗi hình-dạng-key ở bất kỳ đâu (scanner nào, kể cả secret-scanning của GitHub, cũng không phân biệt được thật/ví dụ). Fix gốc: mọi tài liệu viết dạng **ngắt** (`AKIA…EXAMPLE`); KHÔNG thêm allowlist (allowlist là chỗ để lọt secret thật sau này).
+- **Xử lý (user duyệt trước khi làm, theo git_safety):** `git reset --soft HEAD~1` → HEAD về `db122bc` = origin, giữ nguyên thay đổi trong staging; `git rm --cached` + xoá file probe; `Get-Job | Remove-Job -Force` dọn job rác. `git status` sau đó chỉ còn 3 file tôi chủ đích. *(Reflog local vẫn còn `bf15bc4` tới khi gc — vô hại vì key là ví dụ công khai, và không có ở origin.)*
+- **Bài học hệ thống (K-129):** trong môi trường này, `&`-chaining KHÔNG "vô hại" — nó **thực thi âm thầm**, có thể **thay đổi git/filesystem** và **né mọi cổng kiểm tra** mà agent không hề thấy. ⇒ **luôn 1 lệnh / 1 tool-call**; nghi ngờ → `Get-Job`.
+
+**Đã verify:** `vp secrets` trên repo thật → **807 file tracked · 0 BLOCK · 23 WARN · self-test 13/13 PASS · exit 0**. Bắc cầu: trồng key giả + `git add` → `BLOCK (1) [aws-access-key-id]` **exit 1**; `git commit` → **bị pre-commit CHẶN** (in đúng thông điệp + hướng dẫn rotate) ⇒ cổng chặn THẬT, không phải nói suông. Gốc rễ sự cố: `Get-Job` + `git reflog` (dẫn ở trên). `git log` sau xử lý = `db122bc` khớp origin. · **Chưa verify:** hành vi hook trên **Linux/macOS** (script `sh`, cần `chmod +x` — máy này Windows/Git-Bash); phát hiện secret dạng entropy-cao (cố ý KHÔNG làm); `vp verify` full chạy ngay sau ghi sổ.
