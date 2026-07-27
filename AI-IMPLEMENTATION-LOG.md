@@ -8620,3 +8620,26 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Vận hành: `streams=a/b` cho biết mức bão hoà; `a` không về 0 khi không còn viewer = dấu hiệu rò rỉ cần điều tra.
 
 **Đã verify:** `scripts\vp.cmd verify` → **911 passed/2 skipped** (909→911: +2 test `/stats` streams) · **import-linter 7 kept/0 broken** · **drift PASS**. Empiric: churn 10 + churn 30 (số trên) trên waitress thật với webcam. · **Chưa verify:** (a) **soak 24/7 thật** (240 chu kỳ ≠ nhiều ngày; đặc biệt chưa kiểm client ngắt BẤT THƯỜNG — kill process/mất mạng đột ngột — có luôn chạy `finally` release hay không); (b) hành vi sau reverse-proxy (proxy giữ kết nối riêng, có thể làm server thấy kết nối sống lâu hơn thực tế); (c) chưa xuất ra Prometheus (`/metrics`) — chỉ `/stats` text.
+
+---
+
+### Entry #459 — 2026-07-27 — Ca biên viewer NGẮT BẤT THƯỜNG: slot trả <1s (đo) + biên thu hồi khi mất mạng thật (đọc source waitress) (+K-125) — Kiro-Opus
+
+**Bối cảnh:** #458 chứng minh không rò rỉ slot khi client đóng TỬ TẾ (240 chu kỳ). Lỗ còn lại tôi tự nêu: **client ngắt BẤT THƯỜNG** (tắt máy/kill/rút mạng) — nếu `finally` không chạy thì bulkhead **khoá dần cả hệ**, đúng kiểu lỗi 24/7 khó quy trách. Không được suy đoán, phải đo.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- Thêm chế độ **`--hold-seconds`/`--hold-conns`** vào probe TÊN CỐ ĐỊNH (§3.1, không tạo lệnh mới): mở N kết nối dài rồi NGỦ để **bên ngoài kill** process → sau đó đọc `/stats streams` (dùng trường phơi ở D-154).
+- Với ca **mất mạng thật** (không FIN/RST — không dựng được trên loopback): thay vì đoán, **ĐỌC SOURCE waitress đã cài** để biết biên thu hồi.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (thêm chế độ đo vào tool sẵn có; 0 đụng src sản phẩm ở entry này).
+
+**3. Trade-off đã cân nhắc:**
+- Đo bằng kill process (đo được ngay) vs dựng network-partition thật (cần 2 máy/VM hoặc firewall drop): chọn kill trước vì đó là ca THƯỜNG GẶP nhất (viewer đóng laptop/kill browser) và verify được ngay; partition thật để lại `[chưa kiểm]` + bù bằng đọc source (biên có thể chứng minh).
+- Không hạ `channel_timeout` xuống thấp: sẽ cắt oan các kết nối chậm hợp lệ; giữ mặc định 120s vì trần slot vốn có giới hạn nên hậu quả xấu nhất chỉ là **mất tạm dung lượng**, không phải sập.
+
+**4. Điều bạn nên biết:**
+- **ĐO THẬT (kill đột ngột):** giữ 4 kết nối dài → `/stats streams=4/6`; **kill process client** (không đóng socket tử tế) → mẫu đầu tiên ngay sau đó đã là **`streams=0/6`**, và giữ 0/6 suốt 12 mẫu/12s ⇒ slot được trả **<1s** (waitress ghi chunk kế → broken pipe → generator close → `finally` release).
+- **ĐỌC SOURCE (ca mất mạng thật, không FIN):** `waitress/adjustments.py` → `channel_timeout = 120` · `cleanup_interval = 30` · `connection_limit = 100`; `waitress/channel.py` → `last_activity` CHỈ cập nhật khi **thực sự gửi được byte** (`if sent:`) hoặc khi nhận data. ⇒ khi partition, buffer gửi OS đầy → không gửi được → `last_activity` ngừng cập nhật → waitress đóng channel sau ~**120s** (quét mỗi 30s) → `finally` release. **Slot vẫn được thu hồi, biên ~120–150s** (mất tạm dung lượng, KHÔNG rò rỉ vĩnh viễn).
+- Vận hành: nếu môi trường hay mất mạng và cần thu hồi nhanh hơn, có thể hạ `channel_timeout` (waitress hỗ trợ) — hiện app CHƯA expose cờ này; cân nhắc khi có nhu cầu thật (YAGNI).
+
+**Đã verify:** `scripts\vp.cmd verify` → **911 passed/2 skipped** · lint **7 kept/0 broken** · **drift PASS**. Empiric kill-đột-ngột (số trên) + đọc source waitress tận file trong `.venv` (2 file, dẫn giá trị cụ thể). · **Chưa verify:** (a) **network partition THẬT** (rút cáp/firewall drop) — kết luận biên 120–150s là **suy từ code đã đọc**, chưa đo bằng thực nghiệm ⇒ gắn `[chưa kiểm]`; (b) hành vi khi có reverse-proxy ở giữa (proxy có timeout riêng, có thể giữ kết nối tới server lâu hơn client thật); (c) soak nhiều ngày.

@@ -1,7 +1,18 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-27)
-**Cập nhật lúc:** 2026-07-27T12:30:00+07:00.
+**Cập nhật lúc:** 2026-07-27T13:20:00+07:00.
+**[✅ #459 — Ca biên viewer NGẮT BẤT THƯỜNG: slot trả <1s (ĐO) + biên ~120–150s khi mất mạng (đọc source) (+K-125)]**
+- Lỗ tôi tự nêu ở #458: client ngắt BẤT THƯỜNG (tắt máy/kill/rút mạng). Nếu `finally` không chạy → bulkhead **khoá dần cả hệ** = lỗi 24/7 khó quy trách. Không suy đoán, phải đo.
+- **Thêm `--hold-seconds`/`--hold-conns`** vào probe TÊN CỐ ĐỊNH (§3.1, không tạo lệnh mới): mở N kết nối rồi ngủ để bên ngoài kill, rồi đọc `/stats streams` (trường phơi từ D-154 — đúng lúc phát huy tác dụng).
+- **ĐO THẬT (kill process client, không đóng socket tử tế):** `streams=4/6` → kill → **`0/6` ngay mẫu đầu (<1s)**, giữ 0/6 suốt 12 mẫu/12s. Cơ chế: waitress ghi chunk kế → broken pipe → generator close → `finally` → `release()`.
+- **Mất mạng THẬT (không FIN/RST):** không dựng được trên loopback → **ĐỌC SOURCE waitress đã cài** thay vì đoán: `adjustments.py` `channel_timeout=120`·`cleanup_interval=30`·`connection_limit=100`; `channel.py` `last_activity` CHỈ update khi **gửi được byte** (`if sent:`) hoặc nhận data ⇒ partition → buffer OS đầy → không gửi được → `last_activity` đứng → waitress đóng channel sau ~120s (quét mỗi 30s) → release. **Biên ~120–150s: mất TẠM dung lượng, KHÔNG rò rỉ vĩnh viễn.** Phần này gắn `[chưa kiểm]` (suy từ code đã đọc, chưa thực nghiệm).
+- **VERIFY:** `vp verify` **911 passed/2 skipped** · lint **7 kept/0 broken** · **drift PASS**. 0 đụng src sản phẩm (chỉ thêm chế độ đo vào tools/).
+- **Ghi sổ:** LOG #459 · +K-125 · INDEX #458→#459 · Σ337→338 (K125).
+- **Trạng thái spec `overlay-sse-transport`:** Wave 1 (SSE #454) + Wave 2 (bulkhead #456) + Property 4 auth (#457) + observability & no-leak (#458) + ca biên ngắt bất thường (#459) — **đã đóng mọi rủi ro đo-được-trên-máy-này**.
+- **CÒN HỞ (thứ tự rủi ro):** (a) **reverse-proxy** nginx/Caddy — `deploy/README-tls-reverse-proxy.md` hiện là khẳng định **CHƯA kiểm**; máy này CÓ Docker → dựng nginx verify được: SSE qua proxy (`proxy_buffering off`), MJPEG, trần bulkhead khi proxy giữ kết nối riêng, path-prefix ảnh hưởng `BASE` (D-153); (b) network partition thật (cần 2 máy/firewall drop); (c) auth qua dialog THẬT của browser; (d) SSE trên máy `toann` GPU/RTSP; (e) 🔴 K-001 (ARM, cần HW) · K-031 (rotate secret, có thêm lý do từ #457).
+- **Khuyến nghị bước kế:** làm (a) — vì đó là **tài liệu deploy đang được coi là đúng mà chưa ai chạy**, rủi ro drift doc↔thực tế cao nhất trong các việc còn lại, và verify được ngay bằng Docker trên máy này.
+---
 **[✅ #458 — ĐÓNG rủi ro RÒ RỈ SLOT bằng ĐO TRỰC TIẾP: `streams=a/b` @/stats + `--churn` probe (D-154)]**
 - Rủi ro còn lại của bulkhead #456: nếu `release()` sót đường nào → `active` tăng dần → hệ **chết dần** trong 24/7 (failure mode chậm, khó quy trách). Bằng chứng ban đầu (probe 3 lần đều giữ 6) chỉ là **SUY RA**, không đo `active` ⇒ chưa đạt chuẩn verify của repo.
 - Đồng thời lộ vấn đề thiết kế: bulkhead **VÔ HÌNH** với operator tới khi nó ĐÃ từ chối (503) → không lập kế hoạch dung lượng được.

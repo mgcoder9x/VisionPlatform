@@ -107,6 +107,34 @@ def _run_churn(args) -> int:
     return 0 if leaked == before[0] else 1
 
 
+def _run_hold(args) -> int:
+    """Mở N kết nối dài rồi GIỮ + ngủ, để bên ngoài KILL (mô phỏng viewer tắt máy/mất mạng đột ngột).
+
+    Ca biên QUAN TRỌNG: client không đóng socket tử tế → nếu server không phát hiện được thì `finally` KHÔNG
+    chạy → slot bulkhead rò rỉ → sau vài lần là khoá hết hệ. Kill process này rồi đọc `/stats` để có bằng chứng.
+    """
+    base = f"http://{args.host}:{args.port}"
+    long_paths = [p.strip() for p in args.long_paths.split(",") if p.strip()]
+    headers = _auth_header()
+    held = []
+    for i in range(args.hold_conns):
+        try:
+            held.append(_open_long(base, long_paths[i % len(long_paths)], headers, args.timeout))
+        except Exception as e:  # noqa: BLE001
+            print(f"  [hold] mở #{i+1} THẤT BẠI: {type(e).__name__}")
+    st = _stats_streams(base, headers, args.timeout)
+    print(f"[hold] base={base} · giữ {len(held)} kết nối dài · /stats streams="
+          f"{str(st[0]) + '/' + str(st[1]) if st else '?'} · ngủ {args.hold_seconds}s (KILL process này để test)")
+    time.sleep(args.hold_seconds)
+    print("[hold] hết thời gian ngủ (không bị kill) — đóng bình thường")
+    for r in held:
+        try:
+            r.close()
+        except Exception:  # noqa: BLE001,S110
+            pass
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(prog="tools.web_sse_capacity_probe")
     ap.add_argument("--host", default="127.0.0.1")
@@ -121,10 +149,16 @@ def main() -> int:
                     help="CHẾ ĐỘ RÒ RỈ SLOT: số chu kỳ mở-rồi-đóng kết nối dài; đọc `streams=a/b` ở /stats mỗi "
                          "chu kỳ. Rò rỉ = `a` KHÔNG về 0 sau khi đóng hết (hệ chết dần trong soak 24/7).")
     ap.add_argument("--churn-conns", type=int, default=4, help="số kết nối dài mở trong mỗi chu kỳ churn")
+    ap.add_argument("--hold-seconds", type=float, default=0.0,
+                    help="CHẾ ĐỘ GIỮ: mở `--hold-conns` kết nối dài rồi NGỦ, để bên ngoài KILL process này "
+                         "(mô phỏng viewer tắt máy/rút mạng) → sau đó đọc `/stats` xem slot có được trả.")
+    ap.add_argument("--hold-conns", type=int, default=4, help="số kết nối dài giữ trong chế độ --hold-seconds")
     args = ap.parse_args()
 
     if args.churn > 0:
         return _run_churn(args)
+    if args.hold_seconds > 0:
+        return _run_hold(args)
 
     base = f"http://{args.host}:{args.port}"
     long_paths = [p.strip() for p in args.long_paths.split(",") if p.strip()]

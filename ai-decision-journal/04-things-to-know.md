@@ -1270,3 +1270,18 @@ CẬP NHẬT 2026-07-27 (D-153):
 - **Ảnh hưởng tới CÁCH VERIFY (điểm mù đã lộ):** dùng URL-nhúng-credential để né dialog Basic Auth (kỹ thuật #428)
   làm mọi `fetch` trong trang chết ⇒ số đo `/stats`, `/overlay` bị nhiễu, dễ kết luận sai là "server lỗi".
   **Cách đúng:** tiêm header `Authorization` bằng `page.route(...)` với URL SẠCH (đã dùng ở #457, cho Property 4 ✅).
+
+### K-125 — ✅ Slot bulkhead được thu hồi cả khi viewer ngắt BẤT THƯỜNG: <1s khi kill process · ~120–150s khi mất mạng thật [phần sau chưa đo]
+Scope: web serving (bulkhead D-152 · waitress) / vận hành 24/7
+Nguồn: LOG Entry #459 · ĐO `tools/web_sse_capacity_probe.py --hold-seconds` + `/stats streams` (D-154) · ĐỌC `.venv/.../waitress/adjustments.py` + `channel.py`
+CẬP NHẬT 2026-07-27:
+- **Kill client đột ngột (không đóng socket tử tế) — ĐO THẬT:** giữ 4 kết nối (`streams=4/6`) → kill process →
+  `streams=0/6` ngay mẫu đầu (**<1s**), giữ 0/6 suốt 12s. Cơ chế: waitress ghi chunk kế → broken pipe →
+  generator bị close → `finally` chạy → `release()`.
+- **Mất mạng THẬT (không FIN/RST) — suy từ SOURCE đã đọc, `[chưa kiểm]` thực nghiệm:** `channel_timeout=120`,
+  `cleanup_interval=30`, `connection_limit=100`; `last_activity` chỉ cập nhật khi **gửi được byte** (`if sent:`)
+  hoặc nhận data ⇒ partition làm buffer gửi OS đầy → không gửi được → `last_activity` đứng → waitress đóng
+  channel sau ~120s (quét mỗi 30s) → release. **Biên ~120–150s**: mất TẠM dung lượng, KHÔNG rò rỉ vĩnh viễn.
+- **Hệ quả vận hành:** trần bulkhead có thể tạm bị chiếm bởi viewer đã "chết" tối đa ~2,5 phút. Muốn nhanh hơn →
+  hạ `channel_timeout` của waitress (app CHƯA expose cờ; chỉ thêm khi có nhu cầu thật — YAGNI).
+- **Cách đo lại:** `python -m tools.web_sse_capacity_probe --hold-conns N --hold-seconds 300` rồi kill process, đọc `/stats`.
