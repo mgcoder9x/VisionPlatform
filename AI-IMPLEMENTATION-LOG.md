@@ -8924,3 +8924,25 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Baseline 923/2 giữ (doc-only). Workflow git vẫn CHƯA quyết (main-trunk vs branch+PR).
 
 **Đã verify:** `tasks.md` get_diagnostics = **0** (đạt Kiro Spec Format, JSON wave block khớp schema repo); `vp check` sẽ chạy trước commit. · **Chưa verify:** nội dung tasks khớp ý user tới đâu (chờ review); chưa chạy code nào (chưa tới bước implement).
+
+### Entry #471 — 2026-07-28 — Wave 1 Task 1: LabelMap value-object (kernel) + loader (adapter) — Kiro-Opus
+
+**Bối cảnh:** Bắt đầu THI CÔNG spec `image-preprocess-and-labeling` (D-161). Wave 1 Task 1 theo TDD: LabelMap fail-safe (kernel) + loader nguồn-ưu-tiên (adapter). Đây là entry CODE đầu của spec → +D-162.
+
+**1. Quyết định AI tự ra (spec không nói):** (chi tiết ở D-162)
+- LabelMap = value-object POSITIONAL (tuple names) fail-safe `canonical(cid)` → `class_<id>` khi ngoài phạm vi/âm; frozen+hashable. Tách I/O⊥logic (kernel thuần / loader adapter). Nguồn ưu tiên sidecar`.names`→metadata-ONNX(best-effort)→config→rỗng.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Không có (đúng thiết kế §B.3 + §D-5). Chưa wire vào decoder (Task 2) — giữ Task 1 là slice độc lập, xanh, commit được.
+
+**3. Trade-off đã cân nhắc:**
+- Positional tuple vs dict-sparse → positional (khớp argmax + `labels` list hiện có, hashable; dict = YAGNI id-thưa).
+- Metadata ONNX raise vs nuốt-lỗi → nuốt-lỗi trả None rơi nguồn kế (loader không được làm sập pipeline vì nhãn; fail-safe cuối `class_<id>`).
+- Sidecar-first vs metadata-first → sidecar (file cạnh model) THẮNG (cho phép override tại chỗ nguồn nhúng).
+
+**4. Điều bạn nên biết:**
+- Nhánh đọc metadata ONNX test bằng model onnx stub có `metadata_props['names']` (importorskip onnx) — lõi sidecar/config/rỗng test KHÔNG cần onnx.
+- LabelMap CHƯA được decoder dùng (vẫn `str(cid)` ở `yolo_postprocess.py`) — Task 2 mới thay. Chưa đụng render/analytics.
+- secret-scan WARN 1 dòng `tasks.md:150` (chuỗi `http://user:pass@host/` trong ghi chú K-124) = WARN placeholder, exit 0, không phải BLOCK.
+
+**Đã verify:** `pytest tests/test_label_map.py tests/test_label_map_loader.py` = **13 passed**; `vp verify` = **936 passed/2 skipped** (923→936, +13) · **import-linter 7 kept/0 broken** (LabelMap@kernel thuần + loader@adapter tôn trọng tầng) · **drift PASS · secret-scan PASS**; get_diagnostics 2 file mới = 0. · **Chưa verify:** hành vi khi decoder THẬT dùng LabelMap (Task 2); metadata ONNX trên weight Ultralytics thật (mới test bằng stub).

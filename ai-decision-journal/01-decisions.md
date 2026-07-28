@@ -1871,3 +1871,17 @@ Quyết định + lý do (bản chất):
 - **Label:** tách canonical ⊥ display. Giữ `Detection.label`=canonical xuyên analytics/DB (ổn định track+DB); áp display-name ở mép. 3 tầng LabelMap (fail-safe idx-lạ `class_<id>`) · DisplayPolicy (i18n/alias/gộp/ẩn/màu-ổn-định @domain) · Render. Ground: hiện `str(cid)` cho idx-lạ + `labels` sai thứ tự = gán nhầm tên âm thầm.
 - **Cái giá / khi nào KHÔNG:** T3 op-đổi-hình-học tăng độ phức tạp inverse-transform → chỉ thêm op có nhu cầu THẬT (YAGNI); de-warp fisheye cần calib = Non-Goal v1; DisplayPolicy thêm 1 tầng ở mép (chấp nhận để analytics sạch).
 - **FF main:** thực hiện cùng entry (user duyệt) — remote-push FF, 0 xung đột, đóng bẫy clone-nhầm-main.
+
+### D-162 — 2026-07-28 — LabelMap value-object + loader (Wave 1 Task 1): positional-tuple, fail-safe `class_<id>`, nguồn ưu-tiên file→config→rỗng
+Status: ✅ (verify thật — 13 test mới pass · full 936/2 · import-linter 7 kept/0 broken · drift+secret PASS)
+Scope: `kernel/label_map.py` (MỚI) · `adapters/label_map_loader.py` (MỚI) · `tests/test_label_map.py` + `tests/test_label_map_loader.py` (MỚI)
+Nguồn: LOG Entry #471 · spec `image-preprocess-and-labeling` (R1) · design §B.3 · ground `yolo_postprocess.py` (`str(cid)`) · `onnx_detector.py::describe_onnx`
+Verify-Symbol: vision-platform/src/vision_platform/kernel/label_map.py::LabelMap
+Links: D-161, R1
+Quyết định + lý do (bản chất):
+- **LabelMap = value-object POSITIONAL (tuple names), KHÔNG dict-sparse.** Vì output model là argmax → class-id 0..nc-1 liên tục; positional khớp cơ chế `labels` list hiện có (tương thích, không đổi ngữ nghĩa) + frozen tuple = hashable (khoá/cache an toàn). Dict chỉ cần khi id thưa — YAGNI.
+- **Fail-safe tuyệt đối (R1.2, P-B2):** `canonical(cid)` chỉ trả tên khi `0 <= cid < len`; ngoài phạm vi/ÂM → `class_<id>`. KHÔNG raise, KHÔNG gán nhầm tên lớp khác (nguy hiểm hơn crash — đây là gốc rủi ro §B.1).
+- **Tách I/O ⊥ logic:** resolve fail-safe ở kernel (thuần, test không cần file); ĐỌC nguồn (sidecar/metadata) ở adapter `label_map_loader`. Giữ import 6-layer (kernel không I/O).
+- **Nguồn ưu tiên (§D-5):** sidecar `.names` (override tường minh, 1 tên/dòng, không cần onnx) → metadata ONNX `names` (best-effort, `ast.literal_eval` dict/list, thứ tự khoá tăng) → config `labels` → rỗng. "Model nào cũng chạy được".
+- **Metadata ONNX = best-effort NUỐT lỗi:** thiếu onnxruntime / model hỏng / không có key → trả None (rơi nguồn kế), KHÔNG raise. Lý do: loader KHÔNG được làm sập pipeline chỉ vì nhãn — fail-safe cuối là `class_<id>`.
+- **Cái giá / khi nào KHÔNG:** positional không hợp model id-thưa (chưa có nhu cầu); sidecar-first nghĩa là file cạnh model THẮNG cả metadata nhúng (chủ ý: cho phép override tại chỗ). CHƯA wire vào decoder (Task 2) — mới là nền + loader độc lập.

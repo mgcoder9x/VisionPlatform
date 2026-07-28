@@ -1,7 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-28)
-**Cập nhật lúc:** 2026-07-28T10:15:00+07:00.
+**Cập nhật lúc:** 2026-07-28T11:00:00+07:00.
+**[✅ #471 — THI CÔNG Wave 1 Task 1: LabelMap (kernel) + loader (adapter), TDD 13 test, +D-162]**
+- Bắt đầu thi công spec `image-preprocess-and-labeling` (theo khuyến nghị chạy từng task TDD). **Task 1 XONG** (1.1-1.4 + parent auto-complete trong task-tool).
+- **`kernel/label_map.py::LabelMap`** (MỚI): value-object POSITIONAL (tuple names, frozen+hashable) · `canonical(cid)` fail-safe → `class_<id>` khi ngoài phạm vi/ÂM (KHÔNG raise, KHÔNG gán nhầm — R1.2/P-B2) · `from_names`/`empty`/`__len__`. THUẦN kernel (chỉ dataclasses/typing).
+- **`adapters/label_map_loader.py::load_label_map`** (MỚI): nguồn ưu tiên **sidecar `.names` → metadata ONNX (`ast.literal_eval` dict/list, best-effort NUỐT lỗi→None) → config `labels` → rỗng** (§D-5). Tách I/O⊥logic (kernel thuần).
+- **Test (MỚI):** `test_label_map.py` (6) + `test_label_map_loader.py` (7, gồm nhánh onnx-metadata importorskip). Tổng +13.
+- **VERIFY:** `vp verify` = **936 passed/2 skipped** (923→936) · **import-linter 7 kept/0 broken** (LabelMap@kernel thuần + loader@adapter tôn trọng tầng) · **drift PASS · secret-scan PASS** (1 WARN placeholder tasks.md:150, không BLOCK); get_diagnostics 2 file = 0.
+- **Ghi sổ:** LOG #471 · **+D-162** · INDEX logref #470→#471 · Σ350→**351** (D162) · Verify-Symbol `label_map.py::LabelMap` (C8 51→52).
+- **CHƯA:** LabelMap chưa được decoder dùng (vẫn `str(cid)` ở `yolo_postprocess.py`) — **Task 2** (wire decoder + `pipeline_factory`) là bước kế. Task-tool ready = 2.1.
+---
 **[✅ #470 — Spec `image-preprocess-and-labeling`: tạo `tasks.md` → BỘ SPEC HOÀN CHỈNH, CHƯA code chờ user duyệt]**
 - Tiếp #469 (D-161). Design-first: design.md + requirements.md có → theo implicit-rules dựng **`tasks.md`**.
 - **`tasks.md` = 13 task / 2 Wave TDD** khớp §D-1: **Wave 1 (task 1-6, Label)** LabelMap fail-safe → wire decoder (thay `str(cid)`) → DisplayPolicy domain thuần → bất biến canonical⊥display → render `/overlay`+client → verify · **Wave 2 (task 7-13, Preprocess T3)** `MediaPacket.with_media` → registry+op numpy-thuần (domain) → op cv2 (adapter) → nghịch-biến-toạ-độ ≤1px → `PreprocessStage`+config `[preprocess]`+wire `_detect_loop` → đo tác động → verify+Non-Goal. Mỗi leaf tham chiếu R1-R12.

@@ -46,14 +46,14 @@ Nhánh chính tuần tự: `1 → 2 → 4 → 5 → 6 → 7 → 11 → 13`. Task
 
 ### WAVE 1 — HIỂN THỊ TÊN VẬT THỂ (Label Display)
 
-- [ ] 1. LabelMap: value-object fail-safe (kernel) + loader (adapter)
-  - [ ] 1.1 Viết test cho LabelMap resolve: id hợp lệ → canonical; id ngoài phạm vi → `class_<id>`; map rỗng → mọi id `class_<id>`; không raise
+- [x] 1. LabelMap: value-object fail-safe (kernel) + loader (adapter)
+  - [x] 1.1 Viết test cho LabelMap resolve: id hợp lệ → canonical; id ngoài phạm vi → `class_<id>`; map rỗng → mọi id `class_<id>`; không raise
     - _Requirements: 1.1, 1.2_
-  - [ ] 1.2 Thêm value-object LabelMap (kernel, frozen, thuần) với method `canonical(cid: int) -> str` fail-safe `class_<id>`
+  - [x] 1.2 Thêm value-object LabelMap (kernel, frozen, thuần) với method `canonical(cid: int) -> str` fail-safe `class_<id>`
     - _Requirements: 1.1, 1.2, 1.6_
-  - [ ] 1.3 Viết test loader: đọc file `.names`/metadata cạnh `.onnx`; ưu tiên file > config `labels` > rỗng
+  - [x] 1.3 Viết test loader: đọc file `.names`/metadata cạnh `.onnx`; ưu tiên file > config `labels` > rỗng
     - _Requirements: 1.3, 1.4_
-  - [ ] 1.4 Thêm loader ở adapter (đọc I/O) dựng LabelMap theo thứ tự ưu tiên nguồn
+  - [x] 1.4 Thêm loader ở adapter (đọc I/O) dựng LabelMap theo thứ tự ưu tiên nguồn
     - _Requirements: 1.3, 1.4, 1.6_
 
 - [ ] 2. Wire LabelMap vào decoder (thay `str(cid)`), giữ hành vi cho id hợp lệ
