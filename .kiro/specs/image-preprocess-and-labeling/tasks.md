@@ -56,7 +56,7 @@ Nhánh chính tuần tự: `1 → 2 → 4 → 5 → 6 → 7 → 11 → 13`. Task
   - [x] 1.4 Thêm loader ở adapter (đọc I/O) dựng LabelMap theo thứ tự ưu tiên nguồn
     - _Requirements: 1.3, 1.4, 1.6_
 
-- [x] 2. Wire LabelMap vào decoder (thay `str(cid)`), giữ hành vi cho id hợp lệ
+- [ ] 2. Wire LabelMap vào decoder (thay `str(cid)`), giữ hành vi cho id hợp lệ
   - [x] 2.1 Viết test: `yolov8_decode`/`yolov5_decode` với LabelMap → id hợp lệ ra canonical (bằng kết quả cũ khi labels đúng+đủ); id ngoài phạm vi → `class_<id>` (KHÔNG số trần)
     - _Requirements: 1.5_
   - [x] 2.2 Sửa `yolo_postprocess.py` (`yolov5_decode`, `yolov8_decode`) route qua LabelMap fail-safe thay biểu thức `labels[cid] if ... else str(cid)`
@@ -65,13 +65,13 @@ Nhánh chính tuần tự: `1 → 2 → 4 → 5 → 6 → 7 → 11 → 13`. Task
     - _Requirements: 1.3, 1.5_
 
 - [ ] 3. DisplayPolicy: thuần @domain, i18n/alias/gộp/ẩn/màu-ổn-định, chồng được
-  - [ ] 3.1 Viết test DisplayPolicy: mặc định rỗng → `display_name=canonical`, `visible=true`; alias; gộp lớp; ẩn lớp; chồng nhiều quy tắc
+  - [x] 3.1 Viết test DisplayPolicy: mặc định rỗng → `display_name=canonical`, `visible=true`; alias; gộp lớp; ẩn lớp; chồng nhiều quy tắc
     - _Requirements: 3.2, 3.3, 3.4_
-  - [ ] 3.2 Viết test màu ổn định: cùng canonical → cùng `color_key` mọi lần gọi
+  - [x] 3.2 Viết test màu ổn định: cùng canonical → cùng `color_key` mọi lần gọi
     - _Requirements: 3.5_
-  - [ ] 3.3 Thêm DTO `DisplayDecision {visible, display_name, group, color_key}` + DisplayPolicy (domain thuần, không cv2/torch/I/O)
+  - [x] 3.3 Thêm DTO `DisplayDecision {visible, display_name, group, color_key}` + DisplayPolicy (domain thuần, không cv2/torch/I/O)
     - _Requirements: 3.1, 3.6_
-  - [ ] 3.4 Hiện thực i18n/alias + gộp + ẩn + `color_key` (hash canonical ổn định), cho phép chồng quy tắc theo thứ tự xác định
+  - [x] 3.4 Hiện thực i18n/alias + gộp + ẩn + `color_key` (hash canonical ổn định), cho phép chồng quy tắc theo thứ tự xác định
     - _Requirements: 3.3, 3.4, 3.5_
 
 - [ ] 4. Bất biến canonical ⊥ display (analytics không thấy display-name)

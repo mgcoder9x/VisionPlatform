@@ -1898,3 +1898,17 @@ Quyết định + lý do (bản chất):
 - **Wire choke-point `_build_detector` (ngoài task 2.3):** `vision_web_app` (đường sản phẩm THẬT) gọi `vision_demo_app._build_detector` → wire tại đây phủ CẢ web lẫn demo, tránh lệch (config-path auto-load nhưng web-path không). `pipeline_factory._det_onnx` wire riêng (đường config-declarative).
 - **Giữ param `labels` (tương thích ngược):** caller/test cũ truyền list vẫn chạy (nội bộ → LabelMap.from_names). `label_map` ưu tiên khi truyền.
 - **Cái giá / khi nào KHÔNG:** `load_label_map` cho file/metadata THẮNG config `labels` → nếu ai muốn config override file thì chưa hỗ trợ (YAGNI). Nạp LabelMap 1 lần lúc build (không mỗi-frame → 0 chi phí runtime).
+
+### D-164 — 2026-07-28 — DisplayPolicy (Wave 1 Task 3): domain thuần, thứ tự alias>group>canonical, color_key=khoá-chuỗi-ổn-định
+Status: ✅ (verify thật — 9 test pass · full 952/2 · import-linter 7 kept/0 broken · drift+secret PASS)
+Scope: `domain/display_policy.py` (MỚI: `DisplayDecision` + `DisplayPolicy`) · `tests/test_display_policy.py` (MỚI)
+Nguồn: LOG Entry #473 · spec R3/R4 · design §B.3 · §D-2/§D-3
+Verify-Symbol: vision-platform/src/vision_platform/domain/display_policy.py::DisplayPolicy
+Links: D-162, D-163, R3, R4
+Quyết định + lý do (bản chất):
+- **DisplayPolicy THUẦN @domain** (dataclasses/typing, không cv2/torch/I/O/numpy) → test không cần camera; giữ import 6-layer (Overlay-display-không-import-analytics KEPT). `decide(canonical)` = hàm thuần.
+- **Thứ tự display_name = alias > group > canonical:** alias (i18n/đổi-tên cụ-thể) thắng group (gộp), group thắng canonical (mặc định). Ý người dùng cụ thể hơn thì ưu tiên hơn.
+- **color_key = KHOÁ CHUỖI ổn định (group nếu gộp, else canonical), KHÔNG hash-ra-RGB ở domain:** domain quyết ĐỊNH DANH màu, render (client) map key→pixel. Lý do: giữ domain sạch màu + ổn định cross-restart (không phụ thuộc `PYTHONHASHSEED` như builtin `hash()`) + dễ test (so chuỗi). Lớp cùng group chung color_key → chung màu (P-B3).
+- **Ẩn ⊥ Đếm (§D-3, R4):** `visible` chỉ là field quyết định RENDER; KHÔNG lọc/đếm ở đây. "Không đếm" là quyết định nghiệp vụ riêng (count-stage), không do DisplayPolicy.
+- **Mặc định RỖNG = passthrough** (display=canonical, visible=True) → không ép ai dùng i18n (§D-2); chồng `aliases`+`groups`+`hidden` áp đồng thời (R3.4).
+- **Cái giá / khi nào KHÔNG:** gộp lớp làm display_name=group (mất tên gốc trên overlay) — đừng cấu hình group nếu muốn giữ tên gốc. CHƯA có loader config→DisplayPolicy (dựng thủ công) + CHƯA wire vào /overlay (Task 4/5).

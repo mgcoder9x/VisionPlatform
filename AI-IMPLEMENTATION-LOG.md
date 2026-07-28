@@ -8969,3 +8969,25 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - CHƯA có DisplayPolicy (Task 3) → nhãn hiển thị vẫn = canonical.
 
 **Đã verify:** `pytest tests/test_decoder_label_map.py tests/test_yolo_postprocess.py tests/test_pipeline_factory.py tests/test_vision_demo_app.py` = **28 passed**; `vp verify` = **943 passed/2 skipped** (936→943, +7) · **import-linter 7 kept/0 broken** · **drift PASS · secret PASS**; get_diagnostics 4 file = 0. · **Chưa verify:** hành vi trên weight Ultralytics thật có `.names`/metadata (mới test stub); render hiển thị (Task 3-5).
+
+### Entry #473 — 2026-07-28 — Wave 1 Task 3: DisplayPolicy (domain thuần) — i18n/alias/gộp/ẩn/màu-ổn-định — Kiro-Opus
+
+**Bối cảnh:** Wave 1 Task 3 (D-161/R3/R4). Tầng "hiển thị tên chuẩn" tách khỏi canonical. +D-164.
+
+**1. Quyết định AI tự ra (spec không nói):** (chi tiết D-164)
+- `domain/display_policy.py`: `DisplayDecision {visible, display_name, group, color_key}` (frozen) + `DisplayPolicy(aliases, groups, hidden)` thuần. `decide(canonical)` hàm thuần.
+- Thứ tự display_name: **alias > group > canonical**. `color_key` = group nếu gộp else canonical (lớp cùng group chung màu). Rỗng → passthrough.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Task 3.4 ghi "color_key (hash canonical ổn định)" → tôi chọn **color_key = KHOÁ chuỗi ổn định (group/canonical), KHÔNG hash-ra-màu ở domain**. Lý do: domain không giữ RGB (màu là việc render/client). Ổn định theo config (hàm thuần) đủ cho P-B3; client hash key→màu. Đúng tinh thần, khác chữ "hash".
+
+**3. Trade-off đã cân nhắc:**
+- color_key = hash-số vs khoá-chuỗi → khoá-chuỗi (group/canonical): giữ domain sạch màu, render tự map; dễ test (so sánh chuỗi), ổn định cross-restart (không phụ thuộc PYTHONHASHSEED).
+- display_name khi vừa alias vừa group → alias THẮNG (cụ thể hơn ý người dùng); group vẫn giữ ở field `group` + quyết định màu.
+- gộp lớp làm display_name = group (car→"phương tiện") — hợp nhu cầu §D-2; muốn giữ tên gốc thì đừng cấu hình group.
+
+**4. Điều bạn nên biết:**
+- Ẩn ⊥ Đếm (R4): `visible=false` chỉ là 1 field quyết định — CHƯA wire vào render/analytics (Task 4/5 mới kiểm bất biến + áp ở overlay). DisplayPolicy CHƯA được dùng ở đâu (component độc lập).
+- Chưa có loader config→DisplayPolicy (dựng thủ công qua constructor) — parse config để sau (Task 5 wiring hoặc riêng).
+
+**Đã verify:** `pytest tests/test_display_policy.py` = **9 passed**; `vp verify` = **952 passed/2 skipped** (943→952, +9) · **import-linter 7 kept/0 broken** (domain thuần, không import ngoài) · **drift PASS · secret PASS**; get_diagnostics 2 file = 0. · **Chưa verify:** bất biến canonical⊥display end-to-end (Task 4); áp vào /overlay + client render (Task 5).

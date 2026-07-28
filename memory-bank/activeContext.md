@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-28)
-**Cập nhật lúc:** 2026-07-28T11:45:00+07:00.
+**Cập nhật lúc:** 2026-07-28T12:30:00+07:00.
+**[✅ #473 — Wave 1 Task 3: DisplayPolicy (domain thuần), +D-164]**
+- Task 3 XONG (3.1-3.4 + parent). `domain/display_policy.py` (MỚI): `DisplayDecision{visible,display_name,group,color_key}` (frozen) + `DisplayPolicy(aliases,groups,hidden).decide(canonical)` hàm thuần.
+- Quy tắc: display_name **alias>group>canonical**; `color_key`=group nếu gộp else canonical (lớp cùng group chung màu; domain KHÔNG giữ RGB → render map key→màu, ổn định cross-restart P-B3); rỗng=passthrough (§D-2); Ẩn⊥Đếm (visible chỉ render, §D-3); chồng alias+group+hide (R3.4).
+- **VERIFY:** `vp verify` **952 passed/2 skipped** (943→952, +9 `test_display_policy.py`) · import-linter **7 kept/0 broken** (domain thuần) · drift+secret PASS; get_diagnostics 2 file = 0.
+- **Ghi sổ:** LOG #473 · +D-164 · INDEX logref #472→#473 · Σ352→**353** · Verify-Symbol `display_policy.py::DisplayPolicy` (C8 53→54).
+- **Bước kế:** Task 4 (bất biến canonical⊥display: đổi policy KHÔNG đổi `Detection.label` mà analytics dùng) — ready = 4.1. Rồi Task 5 (wire /overlay + client render). DisplayPolicy CHƯA được dùng ở đâu (component độc lập).
+---
 **[✅ #472 — Wave 1 Task 2: wire LabelMap vào decoder (thay `str(cid)`), +D-163]**
 - Task 2 XONG (2.1-2.3 + parent auto-complete). Hướng "1 cơ chế duy nhất" (user duyệt).
 - **`yolo_postprocess.py`:** thêm helper `_resolve_label_map` + param `label_map` cho `yolov5_decode`/`yolov8_decode`; thay `labels[cid] if..else str(cid)` → `lm.canonical(cid)`. Giữ `labels` (compat). **Đổi hành vi có chủ đích:** không-labels/idx-lạ số-trần `"0"`→`"class_0"` (R1.2/R1.5). Sửa 1 assert `test_yolo_postprocess.py`. grep xác nhận 0 downstream phụ thuộc nhãn-số.
