@@ -1847,3 +1847,15 @@ Quyết định + lý do (bản chất):
 - **Chọn dựng-lúc-scrape, KHÔNG InMemoryMetrics-song-song:** tránh 2 nguồn đếm phải đồng bộ. Cái giá: chỉ counter+gauge (không histogram) — đủ cho tín hiệu vận hành.
 - **Hoãn `--log-file`:** stdout+supervisor đã phủ (#463); `--log-file` chỉ thêm giá trị cho deploy không-supervisor → làm sau nếu user cần.
 - **6 metric:** video/detect_frames_total (counter) · stream_refused_total (counter) · overlay_event_revision · stream_conns_active/max (gauge). Empiric động: refused=3 khi mở 9 kết nối/trần 6; active→0 sau đóng.
+
+### D-160 — 2026-07-27 — `--log-file` cho web app (route log vận hành qua sink non-blocking + rotating)
+Status: ✅ (923/2 · lint 7 kept/0 broken · drift PASS · secret-scan PASS · empiric: 4 dòng [web] vào file, stdout im)
+Scope: `vision-platform/src/vision_platform/profiles/vision_web_app.py` (`--log-file` + `_log()` + `_log_handle` + shutdown) · `tests/test_web_sse.py` (+2)
+Nguồn: LOG Entry #467 · K-128 (đóng nửa logging) · K-130 (đo print-block ~4KB) · #443 (ProductionLogHandle) · đảo YAGNI của #463/#466 CÓ bằng chứng
+Verify-Symbol: vision-platform/src/vision_platform/profiles/vision_web_app.py::_log
+Quyết định + lý do (bản chất):
+- **Đảo quyết định #463/#466 (hoãn --log-file) — CÓ bằng chứng mới:** đo được `print()` block ~4KB khi stdout không ai đọc (K-130) ⇒ rủi ro thật + ngưỡng thấp; + durable rotating log là nhu cầu thương mại cơ bản. Không phải flip-flop tuỳ tiện.
+- **Giải pháp:** `_log(msg)` — có `--log-file` → `ProductionLogHandle.emit` (non-blocking bounded-queue + rotating, #443); không → `print` stdout (dev). File-only khi bật (KHÔNG mirror stdout — mirror thì stdout vẫn block, vô nghĩa hoá fix). `serve_wsgi` bọc try/finally → shutdown (drain+flush).
+- **Không route dòng `[device]`** (từ adapter onnx): kéo adapter vào `_log` = tăng bề mặt/đảo hướng; nó in 1 lần trước serve → block ở đó là LOUD (không phải hang-âm-thầm), chấp nhận.
+- **Cái giá:** console im khi bật (bù bằng 1 dòng thông báo + đọc file). Deploy có supervisor thì stdout cũng đủ (#463) — `--log-file` cho deploy không-supervisor + durable.
+- **Khi nào KHÔNG dùng:** chạy dưới Docker/systemd đã drain+rotate stdout → không cần `--log-file` (dùng cũng được, dư).

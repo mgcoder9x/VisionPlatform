@@ -47,6 +47,7 @@ from vision_platform.runtime.stream_admission import StreamAdmission, capacity_f
 from vision_platform.runtime.log_throttle import LogThrottle
 from vision_platform.kernel.metric_sample import MetricSample
 from vision_platform.adapters.metrics_exposition import render_prometheus
+from vision_platform.adapters.production_log_handle import ProductionLogHandle
 from vision_platform.runtime.overlay_expiry_scheduler import OverlayExpiryScheduler
 from vision_platform.runtime.overlay_projection import project_overlay
 from vision_platform.runtime.overlay_health import derive_health
@@ -72,6 +73,19 @@ _busy_log = LogThrottle(min_interval_ns=5_000_000_000)
 # Đếm TỔNG lần từ chối streaming (#466) — phơi ra /metrics để Prometheus alert khi bão hoà kéo dài.
 # Log bị throttle (chỉ 1 dòng/5s) nên KHÔNG dùng để đếm được; counter riêng, tăng dưới `_lock`.
 _stream_refused_total = 0
+
+# Sink log vận hành (#467). --log-file → ProductionLogHandle (non-blocking + rotating); None → stdout (dev).
+_log_handle: "Optional[ProductionLogHandle]" = None
+
+
+def _log(msg: str) -> None:
+    """Log 1 dòng vận hành. Có `--log-file` → sink NON-BLOCKING + rotating (durable; KHÔNG block thread dù stdout
+    không ai đọc — đo được `print()` block sau ~4KB pipe Windows, K-128/#467). Không có → `print` stdout (dev)."""
+    h = _log_handle
+    if h is not None:
+        h.emit(msg)
+    else:
+        print(msg)
 _cfg = OverlayConfig()
 _cadence_cfg = DetectionCadenceConfig()   # mặc định = hành vi hiện tại; main() build lại từ CLI + assert P5
 
@@ -394,9 +408,9 @@ def _admit_or_503(kind: str):
     # ghi đĩa do CLIENT điều khiển + log lỗi thật bị chìm. Nén 1 dòng/cửa sổ NHƯNG báo số lần đã nén (không mất tin).
     n = _busy_log.tick(time.monotonic_ns())
     if n is not None:
-        print(f"[web] TỪ CHỐI {kind}: đạt trần {_admission.max_streams} kết nối streaming đồng thời "
-              f"(tăng --threads / --max-stream-conns nếu cần nhiều viewer hơn)"
-              + (f" · đã nén {n} lần từ chối tương tự" if n else ""))
+        _log(f"[web] TỪ CHỐI {kind}: đạt trần {_admission.max_streams} kết nối streaming đồng thời "
+             f"(tăng --threads / --max-stream-conns nếu cần nhiều viewer hơn)"
+             + (f" · đã nén {n} lần từ chối tương tự" if n else ""))
     return resp
 
 
@@ -550,7 +564,7 @@ def _merge_detection(cli: dict, toml_det: Optional[DetectionCadenceConfig]) -> D
 
 
 def main() -> int:
-    global _store, _admission
+    global _store, _admission, _log_handle
     p = argparse.ArgumentParser(prog="vision_platform.profiles.vision_web_app")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
@@ -566,6 +580,10 @@ def main() -> int:
                         "(chừa thread cho /stats,/overlay,/). Vượt trần → 503 + Retry-After (client rơi về poll).")
     p.add_argument("--stream-reserve-threads", type=int, default=2,
                    help="số thread CHỪA cho request ngắn khi tự suy trần streaming (mặc định 2).")
+    p.add_argument("--log-file", default=None,
+                   help="Ghi log vận hành ra FILE (non-blocking + rotating) thay vì stdout — cho production/deploy "
+                        "KHÔNG có supervisor + tránh print() BLOCK khi stdout không ai đọc (đo block ~4KB, K-128/#467). "
+                        "Mặc định: stdout (dev).")
     p.add_argument("--insecure", action="store_true",
                    help="CHO PHÉP bind non-loopback KHÔNG xác thực (rủi ro: ai cũng xem được camera). "
                         "Mặc định: phơi mạng bắt buộc đặt VP_WEB_USER/VP_WEB_PASS.")
@@ -662,9 +680,16 @@ def main() -> int:
     _max_streams = (args.max_stream_conns if args.max_stream_conns is not None
                     else capacity_from_threads(args.threads, reserve=args.stream_reserve_threads))
     _admission = StreamAdmission(_max_streams)
-    print(f"[web] bulkhead streaming: trần {_max_streams} kết nối đồng thời "
-          f"(threads={args.threads}, chừa {args.stream_reserve_threads} cho request ngắn) → "
-          f"≈{max(1, _max_streams // 2)} viewer (mỗi viewer dùng /stream + /events); vượt trần → 503 + client rơi về poll")
+
+    # --- sink log vận hành (#467): --log-file → non-blocking + rotating (durable, không block thread). Init TRƯỚC
+    #     các dòng [web] startup để chúng vào file. Báo 1 dòng ra stdout để console không im-lặng khó hiểu. ---
+    if args.log_file:
+        _log_handle = ProductionLogHandle(args.log_file).start()
+        print(f"[web] log vận hành → {args.log_file} (non-blocking + rotating); stdout sẽ im từ đây.")
+
+    _log(f"[web] bulkhead streaming: trần {_max_streams} kết nối đồng thời "
+         f"(threads={args.threads}, chừa {args.stream_reserve_threads} cho request ngắn) → "
+         f"≈{max(1, _max_streams // 2)} viewer (mỗi viewer dùng /stream + /events); vượt trần → 503 + client rơi về poll")
 
     src_name = (f"rtsp={mask_rtsp(args.rtsp)}" if args.rtsp else
                 f"video={args.video}" if args.video else
@@ -675,9 +700,9 @@ def main() -> int:
     cad = (f"min-interval={_cadence_cfg.detectMinIntervalMs}ms · max-interval(heartbeat)="
            f"{_cadence_cfg.detectMaxIntervalMs}ms · every-n={_cadence_cfg.detectEveryN} · "
            f"motion-gate={'ON' if _cadence_cfg.motionGate else 'off'}")
-    print(f"[web] TÁCH LUỒNG + OVERLAY(fix flicker) · nguồn={src_name} · detector={det_name}")
-    print(f"[web] cadence: {cad}  (mặc định = hành vi cũ nếu không set)")
-    print(f"[web] Mở: http://{args.host}:{args.port}/  (/overlay = bản fix · /boxes = legacy)")
+    _log(f"[web] TÁCH LUỒNG + OVERLAY(fix flicker) · nguồn={src_name} · detector={det_name}")
+    _log(f"[web] cadence: {cad}  (mặc định = hành vi cũ nếu không set)")
+    _log(f"[web] Mở: http://{args.host}:{args.port}/  (/overlay = bản fix · /boxes = legacy)")
 
     import logging
     logging.getLogger("werkzeug").setLevel(logging.WARNING)
@@ -690,19 +715,23 @@ def main() -> int:
     verify = make_env_verifier()                       # None nếu chưa đặt VP_WEB_USER/VP_WEB_PASS
     if verify is not None:
         app.wsgi_app = BasicAuthMiddleware(app.wsgi_app, verify)   # áp cho cả waitress lẫn dev (Flask.__call__→wsgi_app)
-        print("[web] xác thực: Basic Auth BẬT (credential từ VP_WEB_USER/VP_WEB_PASS)")
+        _log("[web] xác thực: Basic Auth BẬT (credential từ VP_WEB_USER/VP_WEB_PASS)")
     elif not is_loopback(args.host) and not args.insecure:
         raise SystemExit(
             f"[web] TỪ CHỐI khởi động: bind non-loopback ({args.host}) nhưng CHƯA đặt VP_WEB_USER/VP_WEB_PASS "
             f"→ web sẽ MỞ cho mọi người trong mạng. Đặt credential (khuyến nghị), hoặc --insecure để chấp nhận rủi ro.")
     elif not is_loopback(args.host):                   # args.insecure = True
-        print(f"[web] ⚠️  CẢNH BÁO: phơi {args.host} KHÔNG xác thực (--insecure). "
-              f"Ai truy cập host:port đều xem được camera. Chỉ dùng mạng nội bộ tin cậy + nên có TLS reverse-proxy.")
+        _log(f"[web] ⚠️  CẢNH BÁO: phơi {args.host} KHÔNG xác thực (--insecure). "
+             f"Ai truy cập host:port đều xem được camera. Chỉ dùng mạng nội bộ tin cậy + nên có TLS reverse-proxy.")
 
     # security headers NGOÀI CÙNG (Wave 3): phủ mọi response gồm 401 auth (chống clickjacking/MIME-sniff)
     app.wsgi_app = SecurityHeadersMiddleware(app.wsgi_app)
 
-    serve_wsgi(app, args.host, args.port, threads=args.threads, server=args.server)   # WSGI production (Wave 1)
+    try:
+        serve_wsgi(app, args.host, args.port, threads=args.threads, server=args.server)   # WSGI production (Wave 1)
+    finally:
+        if _log_handle is not None:
+            _log_handle.shutdown()   # drain queue + flush + close → KHÔNG mất log cuối lúc dừng (#467)
     return 0
 
 

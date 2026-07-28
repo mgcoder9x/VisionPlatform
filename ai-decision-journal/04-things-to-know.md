@@ -1351,3 +1351,17 @@ CẬP NHẬT 2026-07-27:
   `Get-Job` (dọn: `Get-Job | Remove-Job -Force`). PowerShell cũng cắt chuỗi ở `$`/`;`/`|` khi nội suy → tránh nốt.
 - **Cách xử lý nếu lỡ commit ngoài ý muốn (chưa push):** báo user + xin phép (git_safety) → `git reset --soft HEAD~1`
   (giữ thay đổi trong staging) → `git rm --cached <file rác>` → xoá file → `git log` đối chiếu về đúng origin.
+
+### K-130 — ✅ `print()` tới stdout-pipe-không-ai-đọc BLOCK writer sau ~4KB (Windows) — đo được, đóng [chưa kiểm] của K-128
+Scope: web app logging / deploy detached · vận hành 24/7
+Nguồn: LOG Entry #467 · probe 1-lần (child `print(flush=True)`, parent không đọc `stdout=PIPE`, heartbeat file)
+CẬP NHẬT 2026-07-27:
+- **Đo (máy Windows này):** stdout là pipe KHÔNG ai đọc → `print(flush=True)` **block writer ở ~4KB** (iter=19).
+  Buffer pipe ẩn danh Windows nhỏ. ⇒ rủi ro chặn thread là THẬT + ngưỡng THẤP (vài chục dòng log).
+- **Hệ quả:** web app chạy **detached** (stdout tới pipe không ai drain, hoặc đĩa đầy) → thread ghi log block →
+  nếu là thread xử lý request (vd `_admit_or_503`) thì request treo. Log throttle (#462) giảm tần suất nhưng
+  KHÔNG khử. Chạy dưới **supervisor** (Docker/systemd) drain stdout liên tục → pipe không đầy → KHÔNG block.
+- **Fix (D-160):** `--log-file` → route log vận hành qua `ProductionLogHandle` (non-blocking bounded-queue) →
+  không block dù stdout tắc. Đóng [chưa kiểm] "print block" của K-128.
+- **Cách đo lại:** child `while: print('X'*198, flush=True); ghi heartbeat ra file`; parent Popen `stdout=PIPE`
+  KHÔNG đọc; theo dõi heartbeat đứng = đã block. (Probe 1-lần, xoá sau — KHÔNG commit.)

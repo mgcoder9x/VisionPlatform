@@ -8826,3 +8826,29 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - **Phản ánh trạng thái ĐỘNG (đã chứng minh):** chạy probe mở 9 kết nối (trần 6) → `vp_web_stream_refused_total` = **3.0**; sau khi probe đóng `vp_web_stream_conns_active` = **0.0** (không rò rỉ). ⇒ Prometheus giờ alert được khi web app bão hoà — điều trước đây KHÔNG làm được.
 
 **Đã verify:** `scripts\vp.cmd verify` → **921 passed/2 skipped** (919→921: +2 test metrics) · **import-linter 7 kept/0 broken** (profiles→adapters/kernel hợp lệ) · **drift PASS · secret-scan PASS**. Empiric: `/metrics` 200 + render hợp lệ + phản ánh động (refused 3.0, active về 0) trên server thật. · **Chưa verify:** `--log-file` cho web app (hoãn có chủ đích); `/metrics` scrape bởi Prometheus THẬT qua reverse-proxy (cùng nhóm 🔴 proxy chờ Docker).
+
+---
+
+### Entry #467 — 2026-07-27 — `--log-file` cho web app (đóng nốt observability K-128) — SAU khi ĐO print()-block ~4KB (D-160, +K-130) — Kiro-Opus
+
+**Bối cảnh:** #466 đóng nửa observability (`/metrics`); nửa còn lại = logging. Tôi ĐÃ hoãn `--log-file` 2 lần (#463/#466) với lý do "stdout+supervisor là 12-factor, YAGNI". Trước khi ĐẢO quyết định đó, áp nguyên tắc user: **kiểm chứng rủi ro TRƯỚC khi triển khai** — nếu `print()`-block không thật thì `--log-file` là YAGNI thật.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **ĐO trước (K-130):** probe 1-lần — child in stdout `print(flush=True)`, parent KHÔNG đọc pipe. Kết quả trên máy Windows này: **BLOCK sau ~4KB** (iter=19, buffer pipe Windows nhỏ). ⇒ rủi ro `print()`-block THẬT + ngưỡng thấp: nếu web app chạy detached, stdout tới pipe không ai đọc → vài chục dòng log là block thread đang ghi (kể cả thread xử lý request qua `_admit_or_503`). **Bằng chứng đảo YAGNI → `--log-file` có căn cứ.**
+- **D-160:** `--log-file PATH` → route log vận hành qua `ProductionLogHandle` (non-blocking bounded-queue + rotating, #443) thay vì `print`. Helper `_log(msg)`: có sink → `emit` (non-blocking, durable); không → `print` stdout (dev). Đổi các dòng `[web]` startup + `_admit_or_503` + auth/insecure sang `_log`. `serve_wsgi` bọc `try/finally` → `_log_handle.shutdown()` (drain+flush, không mất log cuối). Khi bật in 1 dòng stdout báo "log → file, stdout sẽ im" (console không im-lặng khó hiểu).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Đảo phần "YAGNI" của #463/#466 — NHƯNG có **bằng chứng mới** (K-130 đo block ~4KB) + nhu cầu durable-log thương mại, nên không phải flip-flop tuỳ tiện. Ghi rõ để truy vết.
+- Dòng `[device]` (từ adapter onnx, ngoài web app) vẫn `print` stdout — chỉ in 1 lần lúc startup (trước serve), block ở đó là LOUD (server không lên) chứ không phải hang-âm-thầm-24/7 → chấp nhận, không kéo adapter vào `_log`.
+
+**3. Trade-off đã cân nhắc:**
+- **File-only khi bật (chọn) vs mirror cả stdout:** mirror stdout thì stdout VẪN block (vô nghĩa hoá fix). Chọn file-only → khử hẳn block cho các dòng đã route + durable. Cái giá: console im khi bật (đã bù bằng 1 dòng thông báo + đọc file).
+- **`--log-file` vs "chỉ tài liệu hoá dùng supervisor" (#463):** supervisor drain stdout → không bao giờ block, đúng 12-factor. NHƯNG (a) deploy không-supervisor (chạy .exe/dịch vụ Windows thô) là có thật; (b) durable rotating log là nhu cầu thương mại cơ bản (audit/debug sau restart). Nên làm cả hai: tài liệu (supervisor) + tuỳ chọn file.
+- **Không route dòng `[device]`:** kéo adapter vào `_log` = đảo hướng phụ thuộc/tăng bề mặt; startup-block là loud nên bỏ qua an toàn.
+
+**4. Điều bạn nên biết (SỐ ĐO THẬT):**
+- **K-130 (probe):** stdout pipe không-đọc → `print(flush=True)` block ở **~4KB** (iter=19) trên Windows này.
+- **`--log-file` (server thật port 8049):** console chỉ có 1 dòng thông báo + `[device]` (adapter); **4 dòng `[web]` vận hành vào FILE** `wave-weblog-467.log` (đọc file xác nhận đủ 4 dòng: bulkhead/tách-luồng/cadence/mở). ⇒ log durable + không đụng stdout ⇒ không còn rủi ro block cho các dòng này. (File `wave-*` gitignored, đã xoá sau đo.)
+- Bất đối xứng K-128 nay đóng CẢ HAI nửa: `/metrics` (#466) + `--log-file` (#467). Web app đạt mức observability tương đương slice app.
+
+**Đã verify:** `scripts\vp.cmd verify` → **923 passed/2 skipped** (921→923: +2 test `_log` routing) · **import-linter 7 kept/0 broken** (profiles→adapters hợp lệ) · **drift PASS · secret-scan PASS**. Empiric: probe block ~4KB + server thật ghi file đúng (không stdout). · **Chưa verify:** hành vi rotating khi vượt `max_bytes` thật (ProductionLogHandle đã có test riêng #443, không lặp); `--log-file` trên Linux path. Lưu ý phương pháp: 2 lần lỡ dùng `&` trong shell (sinh background job, K-129) khi dọn dẹp — đã `Get-Job|Remove-Job`, không hậu quả; nhắc lại kỷ luật 1-lệnh/1-tool-call.

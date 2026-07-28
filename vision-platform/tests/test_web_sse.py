@@ -215,3 +215,27 @@ def test_metrics_samples_safe_when_uninitialized(monkeypatch):
         resp = web.metrics()
     assert resp.status_code == 200
     assert "vp_web_stream_conns_active 0.0" in resp.get_data(as_text=True)
+
+
+# --- #467: --log-file → _log() đi qua sink NON-BLOCKING (không print stdout → không block khi stdout không ai đọc) ---
+class _FakeSink:
+    def __init__(self):
+        self.lines = []
+    def emit(self, msg):
+        self.lines.append(msg)
+
+
+def test_log_routes_to_sink_when_configured(monkeypatch, capsys):
+    """Có sink (--log-file) → _log emit vào sink, KHÔNG print stdout (tránh print()-block K-128/#467)."""
+    sink = _FakeSink()
+    monkeypatch.setattr(web, "_log_handle", sink)
+    web._log("[web] hello")
+    assert sink.lines == ["[web] hello"]
+    assert capsys.readouterr().out == ""          # KHÔNG chạm stdout
+
+
+def test_log_prints_stdout_when_no_sink(monkeypatch, capsys):
+    """Không sink (dev) → _log print stdout như cũ."""
+    monkeypatch.setattr(web, "_log_handle", None)
+    web._log("[web] dev-line")
+    assert "[web] dev-line" in capsys.readouterr().out

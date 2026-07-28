@@ -1,7 +1,18 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-27)
-**Cập nhật lúc:** 2026-07-27T19:10:00+07:00.
+**Cập nhật lúc:** 2026-07-27T20:05:00+07:00.
+**[✅ #467 — `--log-file` cho web app: đóng NỐT observability K-128, SAU khi ĐO print()-block ~4KB (D-160, +K-130)]**
+- #466 đóng nửa `/metrics`; nửa còn lại = logging. Tôi ĐÃ hoãn `--log-file` 2 lần (#463/#466, lý do "stdout+supervisor 12-factor, YAGNI"). **Trước khi đảo quyết định đó → KIỂM CHỨNG rủi ro** (nguyên tắc user).
+- **K-130 (probe 1-lần):** stdout pipe KHÔNG ai đọc → `print(flush=True)` **BLOCK sau ~4KB** (Windows, iter=19). Rủi ro thật + ngưỡng thấp: web app chạy **detached** (stdout không ai drain) → thread ghi log block → request treo nếu là thread request. ⇒ đảo YAGNI **có bằng chứng**, + durable-rotating-log là nhu cầu thương mại.
+- **D-160:** `--log-file PATH` → helper `_log()` route log vận hành qua `ProductionLogHandle` (non-blocking bounded-queue + rotating #443) khi bật; `print` stdout khi tắt (dev). **File-only khi bật** (KHÔNG mirror stdout — mirror thì stdout vẫn block, vô nghĩa hoá fix). Đổi các dòng `[web]` startup + `_admit_or_503` + auth/insecure → `_log`. `serve_wsgi` bọc try/finally → `_log_handle.shutdown()` (drain+flush). In 1 dòng stdout báo "log→file" để console không im khó hiểu. KHÔNG route `[device]` (adapter, startup-once, block loud không phải hang-âm-thầm).
+- **EMPIRIC (server thật port 8049 --log-file):** console chỉ 1 dòng thông báo + `[device]`; **4 dòng `[web]` vận hành vào FILE** (đọc file xác nhận: bulkhead/tách-luồng/cadence/mở) ⇒ durable + không đụng stdout ⇒ hết rủi ro block cho các dòng này.
+- **VERIFY:** `vp verify` **923 passed/2 skipped** (+2 test `_log` routing) · **lint 7 kept/0 broken** · **drift PASS · secret-scan PASS**.
+- **Ghi sổ:** LOG #467 · +D-160 +K-130 · INDEX #466→#467 · Σ347→349 · Verify-Symbol `_log` (C8 49→50).
+- **K-128 ĐÓNG cả hai nửa:** `/metrics` (#466) + `--log-file` (#467). Web app đạt observability ngang slice app.
+- **Kỷ luật:** lỡ dùng `&` 2 lần khi dọn dẹp → sinh background job (K-129), đã `Get-Job|Remove-Job`, không hậu quả. Nhắc: 1 lệnh / 1 tool-call.
+- **Bước kế (CPU đã cạn việc lớn):** (a) FF `main` (chờ bạn OK — nhánh chore +143 commit so main); (b) máy GPU `end.md §2`; (c) 🔴 K-031 rotate secret · K-001 ARM · proxy thật (Docker); (d) soak 24/7.
+---
 **[✅ #466 — `/metrics` Prometheus cho web app (đóng nửa observability K-128, D-159)]**
 - User duyệt hướng (1) "log-file + /metrics cho web app". Theo incremental: làm **`/metrics` TRƯỚC** vì là khoảng-trống KHÔNG-có-lựa-chọn-thay-thế (K-128: web app không scrape được; stdout không aggregate/alert được); `--log-file` hoãn vì stdout+supervisor đã phủ (#463).
 - **D-159:** route `/metrics` trên CHÍNH Flask app (cùng port, sau Basic Auth + security-headers) — KHÔNG mở HTTP server thứ 2 phải bảo vệ riêng. Dựng `MetricSample` TẠI scrape từ state SỐNG (`_vframes`/`_dframes`/`_stream_refused_total` dưới `_lock` · `_store.snapshot().eventRevision` · `_admission.active/max`) — single-source-of-truth, không nuôi `InMemoryMetrics` song song. Render bằng `render_prometheus` (adapter thuần #284). +counter `_stream_refused_total` (log throttle #462 → không đếm từ log được). Luôn bật, không cờ (nhất quán `/stats`; không nhãn → bounded cardinality K-019).
