@@ -173,3 +173,45 @@ def test_repeated_503_does_not_flood_log(monkeypatch, capsys):
     assert statuses == [503] * 20                       # chức năng: MỌI request đều được trả lời tử tế
     out = capsys.readouterr().out
     assert out.count("TỪ CHỐI") == 1                    # log: đúng 1 dòng cho cả loạt
+
+
+# --- #466: /metrics Prometheus cho web app (trước đây web app KHÔNG scrape được — K-128) ---
+def test_metrics_endpoint_prometheus_format(monkeypatch):
+    """`/metrics` trả Prometheus text 0.0.4 với các tín hiệu vận hành cốt lõi + phản ánh state bulkhead."""
+    from vision_platform.runtime.stream_admission import StreamAdmission
+
+    adm = StreamAdmission(6)
+    assert adm.try_acquire() is True and adm.try_acquire() is True   # active=2
+    monkeypatch.setattr(web, "_admission", adm)
+    monkeypatch.setattr(web, "_store", _store_with_box())
+    monkeypatch.setattr(web, "_vframes", 123)
+    monkeypatch.setattr(web, "_dframes", 45)
+    monkeypatch.setattr(web, "_stream_refused_total", 7)
+
+    with web.app.test_request_context("/metrics"):
+        resp = web.metrics()
+    assert resp.status_code == 200
+    assert resp.headers["Content-Type"].startswith("text/plain; version=0.0.4")
+    body = resp.get_data(as_text=True)
+
+    assert "# TYPE vp_web_video_frames_total counter" in body
+    assert "vp_web_video_frames_total 123.0" in body
+    assert "vp_web_detect_frames_total 45.0" in body
+    assert "vp_web_stream_refused_total 7.0" in body
+    assert "# TYPE vp_web_stream_conns_active gauge" in body
+    assert "vp_web_stream_conns_active 2.0" in body
+    assert "vp_web_stream_conns_max 6.0" in body
+    assert "vp_web_overlay_event_revision" in body
+
+
+def test_metrics_samples_safe_when_uninitialized(monkeypatch):
+    """Trước khi main() dựng _store/_admission (đường test/khởi động) → /metrics KHÔNG nổ, trả 0."""
+    monkeypatch.setattr(web, "_admission", None)
+    monkeypatch.setattr(web, "_store", None)
+    monkeypatch.setattr(web, "_vframes", 0)
+    monkeypatch.setattr(web, "_dframes", 0)
+    monkeypatch.setattr(web, "_stream_refused_total", 0)
+    with web.app.test_request_context("/metrics"):
+        resp = web.metrics()
+    assert resp.status_code == 200
+    assert "vp_web_stream_conns_active 0.0" in resp.get_data(as_text=True)

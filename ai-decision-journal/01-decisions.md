@@ -1833,3 +1833,17 @@ Quyết định + lý do (bản chất):
 - **WARN-only, không FAIL:** (a) CI clone không cần hook (CI verify server-side) → FAIL làm CI đỏ oan; (b) thiếu hook là vấn đề **môi trường**, không phải drift **bản ghi** → giữ đúng phạm vi checker.
 - **Không port sang kit:** kit `test_memory_consistency.template.py` là bản generic rút gọn (không có cả C9/git_facts) ⇒ port sẽ làm kit lệch kiến trúc. Ghi rõ để lần sau không tưởng bỏ sót.
 - **Cái giá:** WARN có thể bị ngó lơ (không cưỡng chế như FAIL) ⇒ bù bằng `end.md` §0 đặt `vp install-hooks` thành bước bắt buộc 1 lần/clone. Nếu sau này thấy vẫn bị bỏ qua → cân nhắc FAIL có ngoại lệ khi phát hiện biến môi trường CI.
+
+### D-159 — 2026-07-27 — `/metrics` Prometheus cho web app (route cùng-app, dựng-lúc-scrape, luôn bật)
+Status: ✅ (921/2 · lint 7 kept/0 broken · drift PASS · secret-scan PASS · empiric: refused 3.0 + active→0 trên server thật)
+Scope: `vision-platform/src/vision_platform/profiles/vision_web_app.py` (route `/metrics` + `_metrics_samples` + counter `_stream_refused_total`) · `tests/test_web_sse.py` (+2)
+Nguồn: LOG Entry #466 · K-128 (web app thiếu observability) · reuse #284 (render_prometheus) · #456/#458 (bulkhead)
+Verify-Symbol: vision-platform/src/vision_platform/profiles/vision_web_app.py::_metrics_samples
+Quyết định + lý do (bản chất):
+- **Vấn đề (K-128):** web app — thứ khách hàng chạy — không scrape được (chỉ stdout, không aggregate/alert). Bulkhead saturation (#456/#458) chỉ thấy qua `/stats` text, không đưa vào Prometheus/alert được.
+- **Giải pháp:** route `/metrics` trên CHÍNH Flask app (cùng port, sau Basic Auth), dựng `MetricSample` TẠI scrape từ state sống (single-source-of-truth), render bằng `render_prometheus` (adapter thuần). + counter `_stream_refused_total` (log bị throttle #462 nên không đếm được từ log).
+- **Luôn bật, không cờ:** nhất quán `/stats`; không dữ liệu nhạy cảm; auth phủ khi bật. Không label → bounded cardinality (K-019).
+- **Chọn route-cùng-app, KHÔNG server-riêng** (`MetricsHttpExporter`): kế thừa auth/security-headers/bind; tránh port-thứ-2 phải bảo vệ. Cái giá: chia thread-pool (nhưng là request ngắn, được reserve bulkhead bảo vệ).
+- **Chọn dựng-lúc-scrape, KHÔNG InMemoryMetrics-song-song:** tránh 2 nguồn đếm phải đồng bộ. Cái giá: chỉ counter+gauge (không histogram) — đủ cho tín hiệu vận hành.
+- **Hoãn `--log-file`:** stdout+supervisor đã phủ (#463); `--log-file` chỉ thêm giá trị cho deploy không-supervisor → làm sau nếu user cần.
+- **6 metric:** video/detect_frames_total (counter) · stream_refused_total (counter) · overlay_event_revision · stream_conns_active/max (gauge). Empiric động: refused=3 khi mở 9 kết nối/trần 6; active→0 sau đóng.

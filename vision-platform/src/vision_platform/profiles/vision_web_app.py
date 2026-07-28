@@ -45,6 +45,8 @@ from vision_platform.domain.motion_gate import MotionGate
 from vision_platform.runtime.overlay_state_store import OverlayStateStore
 from vision_platform.runtime.stream_admission import StreamAdmission, capacity_from_threads
 from vision_platform.runtime.log_throttle import LogThrottle
+from vision_platform.kernel.metric_sample import MetricSample
+from vision_platform.adapters.metrics_exposition import render_prometheus
 from vision_platform.runtime.overlay_expiry_scheduler import OverlayExpiryScheduler
 from vision_platform.runtime.overlay_projection import project_overlay
 from vision_platform.runtime.overlay_health import derive_health
@@ -67,6 +69,9 @@ _store: Optional[OverlayStateStore] = None
 _admission: Optional[StreamAdmission] = None
 # Trần cho KÊNH LOG từ chối-503 (#462): 1 dòng / 5s + báo số lần đã nén → client KHÔNG điều khiển được lượng log
 _busy_log = LogThrottle(min_interval_ns=5_000_000_000)
+# Đếm TỔNG lần từ chối streaming (#466) — phơi ra /metrics để Prometheus alert khi bão hoà kéo dài.
+# Log bị throttle (chỉ 1 dòng/5s) nên KHÔNG dùng để đếm được; counter riêng, tăng dưới `_lock`.
+_stream_refused_total = 0
 _cfg = OverlayConfig()
 _cadence_cfg = DetectionCadenceConfig()   # mặc định = hành vi hiện tại; main() build lại từ CLI + assert P5
 
@@ -377,8 +382,11 @@ def _admit_or_503(kind: str):
     Vì sao 503 chứ KHÔNG cứ stream: WSGI sync = 1 thread/kết nối, `/stream`+`/events` vô hạn → nhận quá trần là
     cạn pool ⇒ MỌI request ngắn treo vô hạn (ĐO #456). 503 = tín hiệu tường minh để client suy giảm (SSE→poll,
     ảnh→retry backoff) thay vì hang âm thầm."""
+    global _stream_refused_total
     if _admission is None or _admission.try_acquire():
         return None
+    with _lock:
+        _stream_refused_total += 1        # đếm tổng để /metrics phơi (log bị throttle nên không đếm được từ log)
     resp = Response(f"streaming busy: dat tran {_admission.max_streams} ket noi dong thoi\n",
                     status=503, mimetype="text/plain")
     resp.headers["Retry-After"] = "5"
@@ -482,6 +490,36 @@ def stats():
     # không còn viewer nào) — đây là cách kiểm rò rỉ trong soak dài, thay vì suy đoán.
     st = f" · streams={_admission.active}/{_admission.max_streams}" if _admission is not None else ""
     return f"video={_vframes} · detect={_dframes} · boxes={n} · overlay_rev={ev}{st}"
+
+
+def _metrics_samples() -> "list[MetricSample]":
+    """Dựng snapshot metric TẠI THỜI ĐIỂM scrape TỪ state sống (single-source-of-truth — KHÔNG nuôi
+    InMemoryMetrics song song để tránh đếm-lệch). Không label → 0 rủi ro cardinality (K-019). Web app 1-process."""
+    with _lock:
+        vframes, dframes, refused = _vframes, _dframes, _stream_refused_total
+    ev = _store.snapshot().eventRevision if _store is not None else 0
+    active = _admission.active if _admission is not None else 0
+    mx = _admission.max_streams if _admission is not None else 0
+    return [
+        MetricSample("counter", "vp_web_video_frames_total", float(vframes)),
+        MetricSample("counter", "vp_web_detect_frames_total", float(dframes)),
+        MetricSample("counter", "vp_web_stream_refused_total", float(refused)),
+        MetricSample("gauge", "vp_web_overlay_event_revision", float(ev)),
+        MetricSample("gauge", "vp_web_stream_conns_active", float(active)),
+        MetricSample("gauge", "vp_web_stream_conns_max", float(mx)),
+    ]
+
+
+@app.route("/metrics")
+def metrics():
+    """Prometheus scrape (#466): phơi tín hiệu vận hành web app (frames · overlay_rev · bulkhead active/max ·
+    refused) — trước đây web app KHÔNG scrape được (K-128, chỉ có stdout). Cùng port + sau Basic Auth (Prometheus
+    gửi Authorization) → KHÔNG mở port thứ 2 phải bảo vệ riêng. Không label → bounded cardinality."""
+    body = render_prometheus(_metrics_samples())
+    resp = Response(body, mimetype="text/plain")
+    resp.headers["Content-Type"] = "text/plain; version=0.0.4; charset=utf-8"
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 
 def _merge_detection(cli: dict, toml_det: Optional[DetectionCadenceConfig]) -> DetectionCadenceConfig:

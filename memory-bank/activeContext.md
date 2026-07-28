@@ -1,7 +1,17 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-27)
-**Cập nhật lúc:** 2026-07-27T18:20:00+07:00.
+**Cập nhật lúc:** 2026-07-27T19:10:00+07:00.
+**[✅ #466 — `/metrics` Prometheus cho web app (đóng nửa observability K-128, D-159)]**
+- User duyệt hướng (1) "log-file + /metrics cho web app". Theo incremental: làm **`/metrics` TRƯỚC** vì là khoảng-trống KHÔNG-có-lựa-chọn-thay-thế (K-128: web app không scrape được; stdout không aggregate/alert được); `--log-file` hoãn vì stdout+supervisor đã phủ (#463).
+- **D-159:** route `/metrics` trên CHÍNH Flask app (cùng port, sau Basic Auth + security-headers) — KHÔNG mở HTTP server thứ 2 phải bảo vệ riêng. Dựng `MetricSample` TẠI scrape từ state SỐNG (`_vframes`/`_dframes`/`_stream_refused_total` dưới `_lock` · `_store.snapshot().eventRevision` · `_admission.active/max`) — single-source-of-truth, không nuôi `InMemoryMetrics` song song. Render bằng `render_prometheus` (adapter thuần #284). +counter `_stream_refused_total` (log throttle #462 → không đếm từ log được). Luôn bật, không cờ (nhất quán `/stats`; không nhãn → bounded cardinality K-019).
+- **6 metric:** `vp_web_video_frames_total`·`vp_web_detect_frames_total`·`vp_web_stream_refused_total` (counter) + `vp_web_overlay_event_revision`·`vp_web_stream_conns_active`·`vp_web_stream_conns_max` (gauge).
+- **EMPIRIC (server thật port 8048):** `/metrics` 200 `text/plain; version=0.0.4`; probe mở 9 kết nối (trần 6) → `stream_refused_total`=**3.0**; sau đóng `stream_conns_active`→**0.0** ⇒ phản ánh ĐỘNG + không rò rỉ. Prometheus giờ alert được khi web app bão hoà (điều trước KHÔNG làm được).
+- **VERIFY:** `vp verify` **921 passed/2 skipped** (+2 test metrics) · **lint 7 kept/0 broken** (profiles→adapters/kernel hợp lệ) · **drift PASS · secret-scan PASS**.
+- **Ghi sổ:** LOG #466 · +D-159 · INDEX #465→#466 · Σ346→347 (D159) · Verify-Symbol `_metrics_samples` (C8 48→49).
+- **CÒN của K-128 (chờ user nếu cần):** `--log-file` cho web app (deploy không-supervisor + giảm rủi ro `print()`-block) — hoãn có chủ đích.
+- **Bước kế:** (a) `--log-file` web app nếu bạn cần; (b) FF `main` (chờ bạn OK — nhánh chore đang +143 commit so main); (c) máy GPU: `end.md §2`; (d) 🔴 K-031 rotate secret · K-001 ARM · proxy thật (Docker).
+---
 **[✅ #465 — C10-HOOKS: máy-kiểm phát hiện "cổng pre-commit chưa bật trên clone" (D-158, WARN-only)]**
 - User hỏi "vậy có chạy luôn không". **Trả lời: CÓ**, xác nhận bằng máy — `git config --local --get core.hooksPath` = `.githooks`; `git rev-parse --git-path hooks` = `.githooks`; **bằng chứng hành vi**: commit #464 in TRỌN output drift-check ngay trong lúc commit, và commit probe trước đó **bị CHẶN** bởi `SECRET-SCAN FAIL`.
 - **Nhưng câu hỏi đó phơi ra lớp drift THẬT:** hook `.githooks/` được **versioned** (D-148) nhưng **kích hoạt là config LOCAL mỗi-clone** ⇒ **cổng bảo vệ tắt ÂM THẦM** — chính máy này chưa set suốt nhiều phiên (#464). Đúng loại drift repo cưỡng chế bằng máy, mà bản thân nó lại không quan sát được.

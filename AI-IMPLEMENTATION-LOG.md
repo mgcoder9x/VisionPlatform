@@ -8799,3 +8799,30 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Chuỗi phòng thủ giờ đủ 4 lớp và **quan sát được**: agentStop (mỗi lượt AI) → **pre-commit (drift-check + secret-scan)** → CI (mỗi push) → `C10-HOOKS` canh chính lớp pre-commit.
 
 **Đã verify:** `scripts\vp.cmd check` → `[PASS] C10-HOOKS: pre-commit BAT (hooksPath=.githooks)` + `[PASS] self:C10-hooks-on-PASS` + `[PASS] self:C10-catch-hooks-off-WARN` + `[PASS] self:C10-hooks-off-does-NOT-fail` · DRIFT-CHECK PASS. `vp verify` chạy trước commit. · **Chưa verify:** hành vi C10 trên clone Linux/macOS (đường hooks có thể khác dạng — logic dùng `endswith(".githooks")` sau khi chuẩn hoá `\`→`/`, [chưa kiểm] thực tế).
+
+---
+
+### Entry #466 — 2026-07-27 — `/metrics` Prometheus cho web app (đóng nửa observability của K-128, D-159) — Kiro-Opus
+
+**Bối cảnh:** user duyệt hướng (1) "log-file + /metrics cho web app". Theo incremental-implementation: làm **`/metrics` TRƯỚC** vì đó là khoảng trống **KHÔNG có lựa-chọn-thay-thế** (K-128: web app — thứ khách hàng chạy — không scrape được; stdout có info một phần nhưng không aggregate/alert được), còn `--log-file` thì stdout+supervisor đã phủ (#463) nên để sau. Reuse hạ tầng metrics sẵn có (#284/#291).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **D-159:** thêm route `/metrics` vào CHÍNH Flask app của web (cùng port, sau Basic Auth + security headers) — KHÔNG mở HTTP server thứ 2 (`MetricsHttpExporter`). Lý do: web app đã phục vụ HTTP có auth; port thứ 2 = thêm 1 thứ phải bảo vệ/expose riêng. Prometheus gửi `Authorization` khi scrape.
+- **Dựng `MetricSample` TẠI THỜI ĐIỂM scrape từ state SỐNG** (`_vframes`/`_dframes`/`_stream_refused_total` dưới `_lock` · `_store.snapshot().eventRevision` · `_admission.active/max`) — **KHÔNG** nuôi `InMemoryMetrics` song song. Lý do: single-source-of-truth, tránh đếm-lệch giữa 2 nơi. Render bằng `render_prometheus` (adapter thuần sẵn có).
+- **Thêm counter `_stream_refused_total`** (tăng dưới `_lock` trong `_admit_or_503`): log từ chối bị throttle (1 dòng/5s, #462) nên KHÔNG đếm được từ log → cần counter riêng để Prometheus alert khi bão hoà kéo dài.
+- **`/metrics` LUÔN BẬT, không cờ CLI** — nhất quán với `/stats` (cùng loại tín-hiệu-vận-hành, không dữ liệu camera/PII); tránh feature-flag thừa. Không label → bounded cardinality (K-019 an toàn).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- User nói làm CẢ "log-file + /metrics"; tôi tách và làm `/metrics` trước, **hoãn `--log-file`** với lý do có căn cứ (#463: stdout+supervisor là 12-factor; `--log-file` chỉ thêm giá trị cho deploy KHÔNG có supervisor + giảm rủi ro `print()`-block K-128 — sẽ làm ở entry sau nếu user cần). Không làm gộp để giữ mỗi thay đổi verify được (incremental).
+
+**3. Trade-off đã cân nhắc:**
+- **Route cùng-app vs HTTP-server-riêng (`MetricsHttpExporter`):** riêng thì độc lập lifecycle nhưng phải bảo vệ port thứ 2 (auth/bind riêng) + thêm thread. Chọn cùng-app: kế thừa auth/security-headers/bind sẵn, đơn giản hơn. Cái giá: `/metrics` chia thread-pool với các route khác (nhưng nó là request NGẮN, được reserve của bulkhead bảo vệ khỏi starve — #456).
+- **Dựng-lúc-scrape vs InMemoryMetrics-song-song:** scrape-time đọc thẳng state → luôn đúng, không có 2 nguồn phải đồng bộ. Cái giá: không có histogram/quantile (chỉ counter+gauge) — đủ cho tín hiệu vận hành hiện tại; thêm sau nếu cần.
+- **Luôn-bật vs cờ opt-in:** luôn-bật đơn giản + nhất quán `/stats`; rủi ro lộ số liệu tải cho ai xem được — chấp nhận vì đã sau auth (khi bật) và không có dữ liệu nhạy cảm.
+
+**4. Điều bạn nên biết (SỐ ĐO THẬT, waitress webcam port 8048):**
+- `GET /metrics` → **200**, `Content-Type: text/plain; version=0.0.4; charset=utf-8`, render Prometheus hợp lệ.
+- 6 metric: `vp_web_video_frames_total` (125) · `vp_web_detect_frames_total` (22) · `vp_web_stream_refused_total` · `vp_web_overlay_event_revision` (gauge) · `vp_web_stream_conns_active` · `vp_web_stream_conns_max` (6).
+- **Phản ánh trạng thái ĐỘNG (đã chứng minh):** chạy probe mở 9 kết nối (trần 6) → `vp_web_stream_refused_total` = **3.0**; sau khi probe đóng `vp_web_stream_conns_active` = **0.0** (không rò rỉ). ⇒ Prometheus giờ alert được khi web app bão hoà — điều trước đây KHÔNG làm được.
+
+**Đã verify:** `scripts\vp.cmd verify` → **921 passed/2 skipped** (919→921: +2 test metrics) · **import-linter 7 kept/0 broken** (profiles→adapters/kernel hợp lệ) · **drift PASS · secret-scan PASS**. Empiric: `/metrics` 200 + render hợp lệ + phản ánh động (refused 3.0, active về 0) trên server thật. · **Chưa verify:** `--log-file` cho web app (hoãn có chủ đích); `/metrics` scrape bởi Prometheus THẬT qua reverse-proxy (cùng nhóm 🔴 proxy chờ Docker).
