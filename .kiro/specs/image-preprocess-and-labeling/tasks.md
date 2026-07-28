@@ -74,10 +74,10 @@ Nhánh chính tuần tự: `1 → 2 → 4 → 5 → 6 → 7 → 11 → 13`. Task
   - [x] 3.4 Hiện thực i18n/alias + gộp + ẩn + `color_key` (hash canonical ổn định), cho phép chồng quy tắc theo thứ tự xác định
     - _Requirements: 3.3, 3.4, 3.5_
 
-- [ ] 4. Bất biến canonical ⊥ display (analytics không thấy display-name)
-  - [ ] 4.1 Viết test bất biến: đổi DisplayPolicy (alias/i18n/gộp/ẩn) KHÔNG đổi `Detection.label` mà stabilizer/crossing/DB dùng
+- [x] 4. Bất biến canonical ⊥ display (analytics không thấy display-name)
+  - [x] 4.1 Viết test bất biến: đổi DisplayPolicy (alias/i18n/gộp/ẩn) KHÔNG đổi `Detection.label` mà stabilizer/crossing/DB dùng
     - _Requirements: 2.1, 2.2_
-  - [ ] 4.2 Xác nhận (test + đọc code) display-name CHỈ áp ở mép projection/overlay, KHÔNG ở tầng analytics
+  - [x] 4.2 Xác nhận (test + đọc code) display-name CHỈ áp ở mép projection/overlay, KHÔNG ở tầng analytics
     - _Requirements: 2.3_
 
 - [ ] 5. Render: phơi `displayName`/`colorKey` ra `/overlay` + client vẽ

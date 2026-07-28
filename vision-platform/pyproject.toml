@@ -105,6 +105,7 @@ source_modules = [
     "vision_platform.runtime.display_stabilizer",
     "vision_platform.runtime.overlay_state_store",
     "vision_platform.runtime.overlay_projection",
+    "vision_platform.domain.display_policy",
 ]
 forbidden_modules = [
     "vision_platform.runtime.iou_tracker",

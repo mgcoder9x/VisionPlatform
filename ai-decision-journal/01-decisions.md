@@ -1912,3 +1912,14 @@ Quyết định + lý do (bản chất):
 - **Ẩn ⊥ Đếm (§D-3, R4):** `visible` chỉ là field quyết định RENDER; KHÔNG lọc/đếm ở đây. "Không đếm" là quyết định nghiệp vụ riêng (count-stage), không do DisplayPolicy.
 - **Mặc định RỖNG = passthrough** (display=canonical, visible=True) → không ép ai dùng i18n (§D-2); chồng `aliases`+`groups`+`hidden` áp đồng thời (R3.4).
 - **Cái giá / khi nào KHÔNG:** gộp lớp làm display_name=group (mất tên gốc trên overlay) — đừng cấu hình group nếu muốn giữ tên gốc. CHƯA có loader config→DisplayPolicy (dựng thủ công) + CHƯA wire vào /overlay (Task 4/5).
+
+### D-165 — 2026-07-28 — Bất biến canonical ⊥ display (Wave 1 Task 4): cưỡng chế BẰNG MÁY qua contract Property 10 + test tracker thật
+Status: ✅ (verify thật — 3 test pass · full 955/2 · import-linter 7 kept/0 broken · drift+secret PASS)
+Scope: `vision-platform/pyproject.toml` (Property 10 +`domain.display_policy`) · `tests/test_canonical_display_invariant.py` (MỚI)
+Nguồn: LOG Entry #474 · spec R2/P-B1 · design §B.3 · contract "Overlay display khong import analytics"
+Verify-Symbol: vision-platform/src/vision_platform/domain/display_policy.py::DisplayDecision
+Links: D-164, R2
+Quyết định + lý do (bản chất):
+- **Cưỡng chế BẰNG MÁY, không chỉ test:** thêm `domain.display_policy` vào `source_modules` của Property 10 (forbidden import `iou_tracker`/`tracking_protocol`/`crossing_event`). Lý do CHÍNH XÁC: `layers` cho phép domain→kernel, mà `tracking_protocol`/`crossing_event` Ở KERNEL → display_policy (domain) VẪN có thể import chúng nếu không có Property 10. Contract này bịt đúng lỗ đó → "display chạy ngược vào analytics" bị chặn xuyên phiên (mạnh hơn test-runtime, chống regression tương lai).
+- **Test bám tracker THẬT:** `DisplayStabilizer` (analytics-hiển-thị) match/track theo canonical → `DisplayTrack.label`=canonical; đổi DisplayPolicy KHÔNG đụng label track → không vỡ/nhân-đôi track, DB nhất quán (P-B1). DisplayPolicy nhận `str` (không nhận Detection) → bất biến theo CẤU TRÚC; test khẳng định thêm.
+- **Cái giá / khi nào KHÔNG:** ràng buộc display_policy KHÔNG được dùng DTO analytics kernel — nếu tương lai cần đọc tracking-DTO ở tầng hiển thị (khó xảy ra) phải xét lại contract. CHƯA áp DisplayPolicy vào overlay (Task 5).

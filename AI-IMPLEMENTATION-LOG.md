@@ -8991,3 +8991,22 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Chưa có loader config→DisplayPolicy (dựng thủ công qua constructor) — parse config để sau (Task 5 wiring hoặc riêng).
 
 **Đã verify:** `pytest tests/test_display_policy.py` = **9 passed**; `vp verify` = **952 passed/2 skipped** (943→952, +9) · **import-linter 7 kept/0 broken** (domain thuần, không import ngoài) · **drift PASS · secret PASS**; get_diagnostics 2 file = 0. · **Chưa verify:** bất biến canonical⊥display end-to-end (Task 4); áp vào /overlay + client render (Task 5).
+
+### Entry #474 — 2026-07-28 — Wave 1 Task 4: bất biến canonical ⊥ display (test + cưỡng chế Property 10) — Kiro-Opus
+
+**Bối cảnh:** Wave 1 Task 4 (D-161/R2/P-B1). Chứng minh đổi DisplayPolicy KHÔNG đụng `Detection.label` (canonical) mà analytics dùng. +D-165.
+
+**1. Quyết định AI tự ra (spec không nói):** (chi tiết D-165)
+- **4.2 cưỡng chế BẰNG MÁY thay vì chỉ test:** thêm `vision_platform.domain.display_policy` vào `source_modules` của contract import-linter **Property 10** ("Overlay display khong import analytics") → chặn display_policy import `iou_tracker`/`tracking_protocol`/`crossing_event` (kernel-DTO mà `layers` KHÔNG chặn vì domain được import kernel). Máy kiểm mỗi `vp verify`, mạnh hơn test.
+- **4.1 test bám tracker THẬT:** `DisplayStabilizer` nuôi canonical → `DisplayTrack.label`=canonical, bất kể DisplayPolicy; đổi policy giữa 2 frame không làm vỡ/nhân-đôi track.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không có (đúng R2/P-B1). DisplayPolicy vốn nhận `str` (không nhận Detection) → bất biến theo cấu trúc; test + contract chỉ khẳng định + cưỡng chế.
+
+**3. Trade-off đã cân nhắc:**
+- Chỉ test-runtime vs +contract-máy → chọn CẢ HAI: test tài liệu-hoá ý định + contract cưỡng chế xuyên phiên (tinh thần "cưỡng chế bằng máy" của repo). Contract mạnh hơn: chặn regression tương lai (ai đó cho display_policy import crossing_event).
+
+**4. Điều bạn nên biết:**
+- DisplayPolicy vẫn CHƯA được áp ở đâu (Task 5 mới wire vào `overlay_projection`). Task 4 chỉ chốt bất biến + phòng thủ.
+- Contract Property 10 giờ phủ 5 source_modules (thêm domain.display_policy) → KEPT ngay = bằng chứng display_policy sạch analytics.
+
+**Đã verify:** `pytest tests/test_canonical_display_invariant.py` = **3 passed**; `vp verify` = **955 passed/2 skipped** (952→955, +3) · **import-linter 7 kept/0 broken** (Property 10 mở rộng KEPT) · **drift PASS · secret PASS**. · **Chưa verify:** áp DisplayPolicy vào /overlay + client render (Task 5).

@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-28)
-**Cập nhật lúc:** 2026-07-28T12:30:00+07:00.
+**Cập nhật lúc:** 2026-07-28T13:15:00+07:00.
+**[✅ #474 — Wave 1 Task 4: bất biến canonical⊥display (cưỡng chế Property 10 + test), +D-165]**
+- Task 4 XONG (4.1 + 4.2). Bất biến P-B1: đổi DisplayPolicy KHÔNG đụng `Detection.label` (canonical) mà analytics/DB dùng.
+- **4.2 cưỡng chế BẰNG MÁY:** thêm `vision_platform.domain.display_policy` vào `source_modules` contract import-linter **Property 10** → chặn display import `iou_tracker`/`tracking_protocol`/`crossing_event`. Quan trọng: `layers` cho phép domain→kernel nên tracking_protocol/crossing_event (kernel) VẪN import được nếu không có Property 10 → contract này bịt đúng lỗ. KEPT ngay = display_policy sạch analytics.
+- **4.1 test:** `test_canonical_display_invariant.py` — `DisplayStabilizer` nuôi canonical → `DisplayTrack.label`=canonical; đổi policy giữa 2 frame → track không vỡ/nhân-đôi.
+- **VERIFY:** `vp verify` **955 passed/2 skipped** (952→955, +3) · import-linter **7 kept/0 broken** (Property 10 phủ 5 module, KEPT) · drift+secret PASS.
+- **Ghi sổ:** LOG #474 · +D-165 · INDEX logref #473→#474 · Σ353→**354** · Verify-Symbol `display_policy.py::DisplayDecision` (C8 54→55).
+- **Bước kế:** Task 5 (Render — áp DisplayPolicy ở `overlay_projection`: phơi `displayName`/`colorKey` ra `/overlay`, lọc `visible=false`; client `_PAGE` vẽ). Đây là bước ĐẦU TIÊN DisplayPolicy thực sự được dùng + Ẩn⊥Đếm end-to-end (R4/R5).
+---
 **[✅ #473 — Wave 1 Task 3: DisplayPolicy (domain thuần), +D-164]**
 - Task 3 XONG (3.1-3.4 + parent). `domain/display_policy.py` (MỚI): `DisplayDecision{visible,display_name,group,color_key}` (frozen) + `DisplayPolicy(aliases,groups,hidden).decide(canonical)` hàm thuần.
 - Quy tắc: display_name **alias>group>canonical**; `color_key`=group nếu gộp else canonical (lớp cùng group chung màu; domain KHÔNG giữ RGB → render map key→màu, ổn định cross-restart P-B3); rỗng=passthrough (§D-2); Ẩn⊥Đếm (visible chỉ render, §D-3); chồng alias+group+hide (R3.4).
