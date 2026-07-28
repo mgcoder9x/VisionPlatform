@@ -8852,3 +8852,29 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Bất đối xứng K-128 nay đóng CẢ HAI nửa: `/metrics` (#466) + `--log-file` (#467). Web app đạt mức observability tương đương slice app.
 
 **Đã verify:** `scripts\vp.cmd verify` → **923 passed/2 skipped** (921→923: +2 test `_log` routing) · **import-linter 7 kept/0 broken** (profiles→adapters hợp lệ) · **drift PASS · secret-scan PASS**. Empiric: probe block ~4KB + server thật ghi file đúng (không stdout). · **Chưa verify:** hành vi rotating khi vượt `max_bytes` thật (ProductionLogHandle đã có test riêng #443, không lặp); `--log-file` trên Linux path. Lưu ý phương pháp: 2 lần lỡ dùng `&` trong shell (sinh background job, K-129) khi dọn dẹp — đã `Get-Job|Remove-Job`, không hậu quả; nhắc lại kỷ luật 1-lệnh/1-tool-call.
+
+---
+
+### Entry #468 — 2026-07-27 — FF `main` (dọn cấu trúc kho) + mở spec `image-preprocess-and-labeling` design-first (D-161 🔵) — Kiro-Opus
+
+**Bối cảnh:** user đồng ý FF `main` + yêu cầu "nghiên cứu tiền xử lý ảnh (nhiều cách tùy trường hợp)" và "thiết kế chuẩn cho hiển thị tên vật thể". Hai việc: (a) FF main, (b) design-first cho 2 chủ đề.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- **FF `main`:** `git push origin chore/dev-env-launcher-portable-hooks:main` (FF remote, KHÔNG checkout → tránh churn/để-lộn-nhánh) + `git branch -f main` (đồng bộ ref local). Kết quả `origin/main 3ac7974..3e0edd3`, `origin/main...HEAD = 0 0`. Đóng bẫy "clone mới lấy nhầm main cũ 18 ngày/143 commit".
+- **D-161 (spec `image-preprocess-and-labeling`, design.md, CHƯA code):** thiết kế chuẩn 2 mép của pipeline thị giác. Nguyên tắc xuyên suốt: **thứ do MODEL quyết định = cố định (T1 normalize + T2 letterbox, giữ trong adapter); thứ do TRIỂN KHAI quyết định = cấu-hình-được/cắm-được** (T3 preprocess theo cảnh + display-name theo nghiệp vụ).
+  - **Preprocess:** T1/T2 [đã có] đúng chỗ; khoảng trống = **T3** (CLAHE/denoise/de-warp/ROI-crop/downscale) — đề xuất chuỗi `PreprocessStage` trên `MediaPacket` TRƯỚC detect, per-camera config, op đổi-hình-học phải **nghịch-biến toạ-độ** (phần khó nhất). Loại 3 hướng (nhét vào preprocess_fn=sai tầng · op cứng trong video_loop=fix ngọn · thư viện ngoài=nặng/augment-lúc-train).
+  - **Label:** tách **canonical ⊥ display** — giữ `Detection.label`=canonical xuyên analytics/DB (ổn định), chỉ áp display-name ở mép projection. 3 tầng: LabelMap (id→canonical, fail-safe idx-lạ) · DisplayPolicy (canonical→i18n/alias/gộp/ẩn/màu-ổn-định, thuần @domain) · Render.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** không (thuần thiết kế + thao tác git đã duyệt).
+
+**3. Trade-off đã cân nhắc:**
+- FF qua **remote-push** thay vì `checkout main + merge`: tránh đổi working-branch giữa phiên (rủi ro để-lộn-nhánh, churn). Cái giá: local `main` ref phải `git branch -f` thủ công (đã làm).
+- Ongoing workflow (main-trunk vs feature-branch+PR): **CHƯA quyết** — để user chọn; hiện giữ nhánh `chore` làm việc, `main` == nó. Nếu tiếp tục commit trên `chore` mà không FF định kỳ, `main` lại cũ → cần user chốt chiến lược.
+- Label: giữ canonical xuyên pipeline vs đổi-tên-tại-detector: chọn canonical-xuyên-suốt vì đổi-tại-detector làm analytics/DB nhiễu + track vỡ khi i18n. Cái giá: thêm 1 tầng DisplayPolicy ở mép.
+
+**4. Điều bạn nên biết:**
+- **[đã kiểm] rủi ro label hiện tại** (`yolo_postprocess.py` L52/L97): idx ngoài `labels` → **số trần `str(cid)`**; nếu `labels` sai thứ tự/thiếu → **gán NHẦM tên lớp khác ÂM THẦM** (nguy hiểm hơn crash). Đây là lý do cần LabelMap chuẩn hoá + fail-safe `class_<id>`.
+- Đề xuất thứ tự triển khai (khi duyệt): **Wave 1 = Label** (nhỏ, đóng rủi ro gán-nhầm-tên) → **Wave 2 = Preprocess T3** (lớn, đụng toạ-độ, làm từng op có nhu cầu thật — YAGNI).
+- design.md kết bằng **5 câu hỏi valid** (ưu tiên Label/Preprocess · i18n vi ngay? · ẩn-hiển-thị có ẩn-đếm? · op preprocess nào THẬT cần cho camera của bạn · model có file `.names` kèm không) — cần user trả lời để dựng requirements+tasks.
+
+**Đã verify:** FF thật: `git push` báo `3ac7974..3e0edd3 → main`; `git rev-list --left-right --count origin/main...HEAD` = **0 0** (main == nhánh này). Rủi ro label: ĐỌC `yolo_postprocess.py` xác nhận `str(cid)`. `vp check` PASS (đầu turn, #467). design.md là văn bản, KHÔNG code → baseline test giữ. · **Chưa verify:** mọi phần thiết kế (design-first, chờ user valid 5 câu rồi mới code + test); `MediaPacket.with_media()`/`PreprocessStage`/`LabelMap`/`DisplayPolicy` đều **(MỚI)** chưa tồn tại.

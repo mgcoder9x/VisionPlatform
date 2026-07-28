@@ -1,7 +1,18 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-27)
-**Cập nhật lúc:** 2026-07-27T20:05:00+07:00.
+**Cập nhật lúc:** 2026-07-27T21:00:00+07:00.
+**[✅ #468 — FF `main` (dọn cấu trúc kho) + mở spec `image-preprocess-and-labeling` design-first (D-161 🔵)]**
+- **FF `main` (user duyệt):** `git push origin chore/dev-env-launcher-portable-hooks:main` (FF remote, KHÔNG checkout → tránh churn/lộn-nhánh) + `git branch -f main`. Kết quả `origin/main 3ac7974..3e0edd3`, `git rev-list --left-right --count origin/main...HEAD = 0 0`. Đóng bẫy "clone mới lấy nhầm main cũ 18 ngày/143 commit".
+- **Workflow ONGOING (CHƯA quyết, cần user):** hiện `main`==`chore`. Nếu tiếp tục commit trên `chore` mà không FF định kỳ → `main` lại cũ. Chốt: main-trunk (commit thẳng main) HAY feature-branch+PR? — chờ user.
+- **D-161 (spec design-first, CHƯA code)** cho 2 yêu cầu của user (tiền xử lý ảnh "nhiều cách tùy trường hợp" + "thiết kế chuẩn hiển thị tên vật thể"). Nguyên tắc chuẩn: **MODEL-định=cố-định ⊥ TRIỂN-KHAI-định=cắm-được**.
+  - **Preprocess:** T1 normalize (`preprocess_fn` DI) + T2 letterbox (`DetectorPipeline`) [đã có] đúng chỗ (model-coupled). Khoảng trống = **T3 theo cảnh** (CLAHE/denoise/de-warp/ROI-crop/downscale) → đề xuất chuỗi `PreprocessStage` (MỚI) trên `MediaPacket` TRƯỚC detect + `MediaPacket.with_media()` (MỚI) + config `[preprocess]` per-camera; op-đổi-hình-học **phải nghịch-biến toạ-độ** (phần khó nhất). Loại 3 hướng (nhét-preprocess_fn/op-cứng/thư-viện-ngoài).
+  - **Label:** tách **canonical ⊥ display**. Giữ `Detection.label`=canonical xuyên analytics/DB. 3 tầng: LabelMap (id→canonical, fail-safe idx-lạ→`class_<id>`) · DisplayPolicy (canonical→i18n/alias/gộp/ẩn/màu-ổn-định, THUẦN @domain) · Render (áp ở mép `overlay_projection`). Ground rủi ro: `yolo_postprocess.py` L52/L97 idx-lạ→`str(cid)` số-trần; `labels` sai-thứ-tự→**gán NHẦM tên âm thầm**.
+- **Đề xuất Wave:** Wave1=Label (nhỏ, đóng rủi ro gán-nhầm-tên) → Wave2=Preprocess T3 (lớn, đụng toạ-độ, từng op có nhu-cầu-thật YAGNI). Non-Goal v1: augment-lúc-train, de-warp-cần-calib, thư-viện-ngoài.
+- **VERIFY:** FF thật (push `3ac7974..3e0edd3`, `0 0`); rủi ro label ĐỌC code xác nhận `str(cid)`; design.md văn bản, KHÔNG code → baseline 923/2 giữ. `vp check` sẽ PASS.
+- **Ghi sổ:** LOG #468 · +D-161 (🔵) · INDEX #467→#468 · Σ349→350 (D161) · Verify-Symbol `yolov8_decode` (C8 50→51).
+- **CHỜ USER — 5 câu valid (cuối design.md):** (1) ưu tiên Label hay Preprocess trước? (2) i18n tiếng Việt ngay hay chỉ khung? (3) ẩn-hiển-thị có ẩn-đếm không? (4) op preprocess nào THẬT cần cho camera của bạn (tối/fisheye/ROI)? (5) model có file `.names`/metadata kèm `.onnx` không? → trả lời → dựng requirements+tasks+code TDD.
+---
 **[✅ #467 — `--log-file` cho web app: đóng NỐT observability K-128, SAU khi ĐO print()-block ~4KB (D-160, +K-130)]**
 - #466 đóng nửa `/metrics`; nửa còn lại = logging. Tôi ĐÃ hoãn `--log-file` 2 lần (#463/#466, lý do "stdout+supervisor 12-factor, YAGNI"). **Trước khi đảo quyết định đó → KIỂM CHỨNG rủi ro** (nguyên tắc user).
 - **K-130 (probe 1-lần):** stdout pipe KHÔNG ai đọc → `print(flush=True)` **BLOCK sau ~4KB** (Windows, iter=19). Rủi ro thật + ngưỡng thấp: web app chạy **detached** (stdout không ai drain) → thread ghi log block → request treo nếu là thread request. ⇒ đảo YAGNI **có bằng chứng**, + durable-rotating-log là nhu cầu thương mại.

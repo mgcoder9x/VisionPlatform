@@ -1859,3 +1859,15 @@ Quyết định + lý do (bản chất):
 - **Không route dòng `[device]`** (từ adapter onnx): kéo adapter vào `_log` = tăng bề mặt/đảo hướng; nó in 1 lần trước serve → block ở đó là LOUD (không phải hang-âm-thầm), chấp nhận.
 - **Cái giá:** console im khi bật (bù bằng 1 dòng thông báo + đọc file). Deploy có supervisor thì stdout cũng đủ (#463) — `--log-file` cho deploy không-supervisor + durable.
 - **Khi nào KHÔNG dùng:** chạy dưới Docker/systemd đã drain+rotate stdout → không cần `--log-file` (dùng cũng được, dư).
+
+### D-161 — 2026-07-27 — Spec `image-preprocess-and-labeling` (design-first): chuẩn hoá 2 mép — tiền xử lý ảnh (T3) + hiển thị tên vật thể
+Status: 🔵 design-first (CHƯA code; chờ user valid 5 câu cuối design.md) + FF `main` đã thực hiện (0 xung đột)
+Scope: `.kiro/specs/image-preprocess-and-labeling/design.md` (MỚI) · (khi code) sẽ đụng domain/runtime/adapters/profiles
+Nguồn: LOG Entry #468 · yêu cầu user (tiền xử lý "nhiều cách tùy trường hợp" + "thiết kế chuẩn hiển thị tên") · D-140 (bản đồ preprocessing) · ground `yolo_postprocess.py` L52/L97 · `onnx_detector.py` · `detector_pipeline.py`
+Verify-Symbol: vision-platform/src/vision_platform/adapters/yolo_postprocess.py::yolov8_decode
+Quyết định + lý do (bản chất):
+- **Nguyên tắc chuẩn:** thứ do MODEL định = cố định (T1 normalize + T2 letterbox trong adapter, không cho chỉnh mù); thứ do TRIỂN KHAI định = cấu-hình/cắm-được (T3 preprocess theo cảnh + display-name theo nghiệp vụ). Trộn 2 loại = gốc mọi rối.
+- **Preprocess:** khoảng trống = T3 (T1/T2 đã có đúng chỗ). Đề xuất chuỗi `PreprocessStage` trên `MediaPacket` trước detect, per-camera, op-đổi-hình-học phải nghịch-biến-toạ-độ. Loại: nhét-preprocess_fn (sai tầng) · op-cứng-video_loop (fix ngọn) · thư-viện-ngoài (augment-lúc-train, nặng).
+- **Label:** tách canonical ⊥ display. Giữ `Detection.label`=canonical xuyên analytics/DB (ổn định track+DB); áp display-name ở mép. 3 tầng LabelMap (fail-safe idx-lạ `class_<id>`) · DisplayPolicy (i18n/alias/gộp/ẩn/màu-ổn-định @domain) · Render. Ground: hiện `str(cid)` cho idx-lạ + `labels` sai thứ tự = gán nhầm tên âm thầm.
+- **Cái giá / khi nào KHÔNG:** T3 op-đổi-hình-học tăng độ phức tạp inverse-transform → chỉ thêm op có nhu cầu THẬT (YAGNI); de-warp fisheye cần calib = Non-Goal v1; DisplayPolicy thêm 1 tầng ở mép (chấp nhận để analytics sạch).
+- **FF main:** thực hiện cùng entry (user duyệt) — remote-push FF, 0 xung đột, đóng bẫy clone-nhầm-main.
