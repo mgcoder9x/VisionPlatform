@@ -8878,3 +8878,26 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - design.md kết bằng **5 câu hỏi valid** (ưu tiên Label/Preprocess · i18n vi ngay? · ẩn-hiển-thị có ẩn-đếm? · op preprocess nào THẬT cần cho camera của bạn · model có file `.names` kèm không) — cần user trả lời để dựng requirements+tasks.
 
 **Đã verify:** FF thật: `git push` báo `3ac7974..3e0edd3 → main`; `git rev-list --left-right --count origin/main...HEAD` = **0 0** (main == nhánh này). Rủi ro label: ĐỌC `yolo_postprocess.py` xác nhận `str(cid)`. `vp check` PASS (đầu turn, #467). design.md là văn bản, KHÔNG code → baseline test giữ. · **Chưa verify:** mọi phần thiết kế (design-first, chờ user valid 5 câu rồi mới code + test); `MediaPacket.with_media()`/`PreprocessStage`/`LabelMap`/`DisplayPolicy` đều **(MỚI)** chưa tồn tại.
+
+### Entry #469 — 2026-07-28 — Spec `image-preprocess-and-labeling`: tạo `requirements.md` (EARS) + commit §D design — Kiro-Opus
+
+**Bối cảnh:** Tiếp D-161 (#468). Design-first workflow: `design.md` đã có (+§D quyết định user chốt, nhưng phần §D còn UNCOMMITTED từ lượt trước) và `requirements.md` CHƯA tồn tại → theo implicit-rules design-first: dựng `requirements.md` dựa trên design. KHÔNG tự nhảy sang `tasks.md` (chờ user xem requirements).
+
+**1. Quyết định AI tự ra (spec không nói):**
+- `requirements.md` = **12 Requirement EARS**, bám kiến trúc design: R1-R5 Wave 1 (Label: LabelMap fail-safe · canonical⊥display bất biến · DisplayPolicy thuần domain i18n/alias/gộp/ẩn/màu · Ẩn⊥Đếm · Render phơi displayName/colorKey) · R6-R10 Wave 2 (Preprocess: no-regression bytes-identical · PreprocessStage+MediaPacket.with_media · op-agnostic registry+bộ op v1 · nghịch-biến-toạ-độ ≤1px · chọn-op-theo-số-đo) · R11-R12 cross-cutting (tuân import 6-layer+verify · Non-Goal v1 chống YAGNI).
+- Ánh xạ trực tiếp §D-1..§D-5 (làm-cả-2-Wave/Label-trước · i18n-mặc-định-rỗng=canonical · visible-chỉ-render · registry-op-agnostic-de-warp-điểm-cắm · nguồn-nhãn .names→config→class_<id>) và các property P-A1..P-A4/P-B1..P-B4 vào AC kiểm-chứng-được.
+- **KHÔNG cấp ID journal mới** (D/C/T/K): requirements.md là bước THỰC THI của quyết định D-161 đã ghi ở #468, không phải quyết định/đánh-đổi mới → Σ giữ 350.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- Heading requirements phải theo format Kiro Spec (`# Requirements Document` · `## Requirements` · `## Glossary` · `### Requirement N: Title` dấu HAI CHẤM) → sửa từ dạng `— Title` + gom Wave thành nhóm dưới `## Requirements`. get_diagnostics: 0.
+
+**3. Trade-off đã cân nhắc:**
+- Tạo requirements RỒI DỪNG (đúng design-first: user xem trước) vs làm luôn tasks.md → chọn DỪNG theo implicit-rules ("Proceed to create requirements.md" — không nói tạo tasks).
+- Ground code TRƯỚC khi viết AC (đọc `yolo_postprocess.py` L52/L97 + `Detection` DTO) vs viết từ trí nhớ → đọc thật (xác nhận `label = labels[cid] if ... else str(cid)` ở CẢ yolov5_decode & yolov8_decode; Detection có label/confidence/box, KHÔNG có field id) — chống bịa.
+
+**4. Điều bạn nên biết:**
+- `design.md` vẫn còn diagnostics format Kiro Spec (thiếu `## Overview/## Architecture/## Components...`) vì dùng cấu trúc PHẦN A/B — CHƯA sửa (ngoài phạm vi lượt này, không phá gì; cân nhắc thêm section alias sau nếu cần cổng format xanh).
+- CHƯA code, CHƯA test mới → baseline 923/2 giữ nguyên; commit này gồm design.md(§D) + requirements.md, doc-only.
+- Bước kế (chờ user duyệt requirements): tạo `tasks.md` → code TDD Wave 1 (LabelMap + DisplayPolicy domain thuần + phơi /overlay + tests).
+
+**Đã verify:** `requirements.md` get_diagnostics = **0** (đạt Kiro Spec Format); đọc `yolo_postprocess.py` + `inference_protocol.py::Detection` xác nhận ground; `git status` chỉ design.md modified trước khi thêm requirements.md; `vp check` sẽ chạy trước commit. · **Chưa verify:** nội dung requirements khớp ý user tới đâu (chờ user review); design.md format-diagnostics vẫn đỏ (chưa trong phạm vi).

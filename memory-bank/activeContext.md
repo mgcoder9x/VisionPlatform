@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
-## Trạng thái hiện tại (2026-07-27)
-**Cập nhật lúc:** 2026-07-27T21:00:00+07:00.
+## Trạng thái hiện tại (2026-07-28)
+**Cập nhật lúc:** 2026-07-28T09:30:00+07:00.
+**[✅ #469 — Spec `image-preprocess-and-labeling`: tạo `requirements.md` (EARS) — design-first, DỪNG chờ user review]**
+- Tiếp D-161. Design-first workflow: `design.md` đã có (+§D quyết định user, trước đó UNCOMMITTED) · `requirements.md` CHƯA có → theo implicit-rules dựng `requirements.md`. **KHÔNG nhảy sang `tasks.md`** (chờ user xem requirements trước).
+- **`requirements.md` = 12 Requirement EARS** bám design: **R1-R5 Wave 1 Label** (LabelMap fail-safe `class_<id>` · canonical⊥display bất biến qua analytics · DisplayPolicy thuần @domain i18n/alias/gộp/ẩn/màu-ổn-định · Ẩn⊥Đếm visible-chỉ-render · Render phơi `displayName`/`colorKey` ra `/overlay`) · **R6-R10 Wave 2 Preprocess** (no-regression bytes-identical khi tắt op · `PreprocessStage`+`MediaPacket.with_media` · registry op-agnostic + bộ op v1 · nghịch-biến-toạ-độ ≤1px · chọn-op-theo-số-đo) · **R11-R12** (tuân import 6-layer + `vp verify` xanh + TDD từng slice · Non-Goal v1 chống YAGNI). Ánh xạ §D-1..§D-5 + P-A1..A4/P-B1..B4 vào AC.
+- **Ground code (chống bịa):** đọc `yolo_postprocess.py` xác nhận CẢ `yolov5_decode` & `yolov8_decode` dùng `label = labels[cid] if labels is not None and cid < len(labels) else str(cid)` (idx-lạ→số trần; labels-sai-thứ-tự→gán-nhầm-âm-thầm); `kernel/inference_protocol.py::Detection` có `{label, confidence, box}`, KHÔNG có field id.
+- **Format:** requirements theo Kiro Spec (`# Requirements Document` · `## Requirements` · `## Glossary` · `### Requirement N: Title` HAI CHẤM) → get_diagnostics = **0**. *(design.md vẫn còn format-diag đỏ vì cấu trúc PHẦN A/B — CHƯA sửa, ngoài phạm vi.)*
+- **Ghi sổ:** LOG #469 · **KHÔNG** ID journal mới (thực thi D-161) → Σ giữ **350** · INDEX logref #468→#469 + stamp. Commit gồm `design.md`(§D) + `requirements.md`, doc-only → baseline **923/2** giữ.
+- **CHỜ USER:** review `requirements.md` → duyệt/đính chính → tạo `tasks.md` → code TDD Wave 1 (Label). Workflow git vẫn CHƯA quyết (main-trunk vs feature-branch+PR; hiện `main`==`chore`).
+---
 **[✅ #468 — FF `main` (dọn cấu trúc kho) + mở spec `image-preprocess-and-labeling` design-first (D-161 🔵)]**
 - **FF `main` (user duyệt):** `git push origin chore/dev-env-launcher-portable-hooks:main` (FF remote, KHÔNG checkout → tránh churn/lộn-nhánh) + `git branch -f main`. Kết quả `origin/main 3ac7974..3e0edd3`, `git rev-list --left-right --count origin/main...HEAD = 0 0`. Đóng bẫy "clone mới lấy nhầm main cũ 18 ngày/143 commit".
 - **Workflow ONGOING (CHƯA quyết, cần user):** hiện `main`==`chore`. Nếu tiếp tục commit trên `chore` mà không FF định kỳ → `main` lại cũ. Chốt: main-trunk (commit thẳng main) HAY feature-branch+PR? — chờ user.

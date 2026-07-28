@@ -147,12 +147,20 @@ DISPLAY-NAME ở MÉP hiển thị (projection/overlay).** Nhờ vậy analytics
   nghịch-biến) + config `[preprocess]` + đo tác động. Lớn hơn (đụng toạ-độ) → làm sau, từng op một.
 - **Non-Goal v1:** augmentation lúc-train; de-warp fisheye (cần calib); thư viện ngoài.
 
-## D. CÂU HỎI VALID (cần bạn chốt trước khi code)
-1. **Ưu tiên:** làm **Label (Wave 1)** trước (nhỏ, đóng rủi ro gán-nhầm-tên) hay **Preprocess (Wave 2)** trước?
-2. **i18n:** cần tên hiển thị tiếng Việt ngay không, hay chỉ cần khung (map rỗng, mặc định = canonical)?
-3. **Ẩn lớp:** "ẩn khỏi hiển thị" có đồng nghĩa "không đếm" không, hay ẩn-hiển-thị nhưng VẪN đếm?
-4. **Preprocess op nào THẬT SỰ cần trước** cho camera của bạn (tối/ngược sáng? fisheye? chỉ 1 vùng ROI?) — để làm
-   đúng cái có nhu cầu, không làm rỗng (YAGNI).
-5. **Nguồn nhãn:** model của bạn có file `.names`/metadata kèm `.onnx` không, hay chỉ truyền list qua config?
+## D. QUYẾT ĐỊNH ĐÃ CHỐT (user 2026-07-27) → đưa vào requirements
 
-→ Trả lời 5 câu này → tôi dựng requirements + tasks (spec-driven) rồi code TDD từng Wave, verify được mới "xong".
+User: "làm CẢ hai, thứ tự tuỳ bạn; thiết kế tổng quát vì sau này dùng nhiều; i18n/gộp là tuỳ chọn kết-hợp-được;
+model nào cũng phải chạy được". ⇒ chốt:
+1. **Làm cả 2 Wave.** Thứ tự: **Label (Wave 1) trước** (nhỏ, đóng ngay rủi ro gán-nhầm-tên âm-thầm) → **Preprocess
+   (Wave 2) sau** (lớn, đụng toạ-độ). Cả hai đều là mục tiêu, không bỏ.
+2. **i18n = khung tuỳ chọn:** DisplayPolicy hỗ trợ map i18n/alias/gộp NHƯNG mặc định rỗng → display = canonical
+   (không ép ai dùng; bật per-deployment). "Kết hợp tuỳ" = nhiều policy chồng (alias + group + hide) áp được cùng lúc.
+3. **Ẩn ⊥ Đếm (P-B4 chốt):** `visible=false` CHỈ ảnh hưởng RENDER; analytics/đếm dùng canonical BẤT KỂ visible.
+   Muốn "không đếm" là một quyết định NGHIỆP VỤ riêng (filter ở count-stage), KHÔNG do display-policy.
+4. **Preprocess = registry tổng quát**, op-agnostic: framework nhận BẤT KỲ op đăng ký; v1 hiện thực bộ op phổ biến
+   (CLAHE, gamma, brightness/contrast, denoise, sharpen, white-balance, gray, resize-scale, ROI-crop). **De-warp
+   (fisheye) = điểm-cắm có sẵn nhưng CHƯA hiện thực** (cần calib camera — Non-Goal v1, thêm khi có tham số calib).
+5. **Nguồn nhãn:** hỗ trợ CẢ file `.names`/metadata cạnh `.onnx` (ưu tiên) LẪN `labels` qua config (fallback);
+   không có nguồn nào → `class_<id>` (fail-safe). Model nào cũng chạy được.
+
+→ Đã có quyết định → chuyển sang `requirements.md` (EARS) + `tasks.md`, code TDD từng Wave, verify mới "xong".
