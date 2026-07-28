@@ -8901,3 +8901,26 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Bước kế (chờ user duyệt requirements): tạo `tasks.md` → code TDD Wave 1 (LabelMap + DisplayPolicy domain thuần + phơi /overlay + tests).
 
 **Đã verify:** `requirements.md` get_diagnostics = **0** (đạt Kiro Spec Format); đọc `yolo_postprocess.py` + `inference_protocol.py::Detection` xác nhận ground; `git status` chỉ design.md modified trước khi thêm requirements.md; `vp check` sẽ chạy trước commit. · **Chưa verify:** nội dung requirements khớp ý user tới đâu (chờ user review); design.md format-diagnostics vẫn đỏ (chưa trong phạm vi).
+
+### Entry #470 — 2026-07-28 — Spec `image-preprocess-and-labeling`: tạo `tasks.md` (kế hoạch TDD 13 task/2 Wave) — Kiro-Opus
+
+**Bối cảnh:** Tiếp #469 (D-161). Design-first workflow: `design.md` + `requirements.md` đã có → theo implicit-rules "design-first → proceed to create tasks.md". Hoàn tất BỘ SPEC (design+requirements+tasks), CHƯA code.
+
+**1. Quyết định AI tự ra (spec không nói):**
+- `tasks.md` = **13 task** chia 2 Wave khớp §D-1 (Label trước, Preprocess sau): Wave 1 task 1-6 (LabelMap fail-safe → wire decoder → DisplayPolicy domain → bất biến canonical⊥display → render /overlay+client → verify) · Wave 2 task 7-13 (with_media → registry+op numpy-thuần → op cv2 adapter → nghịch-biến-toạ-độ → PreprocessStage+config+wire → đo tác động → verify+Non-Goal).
+- Mỗi leaf-task theo **TDD** (test TRƯỚC → code → xanh), tham chiếu Requirement (R1-R12) + property design (P-A/P-B); ranh giới tầng ghi rõ ở §Notes (domain numpy-thuần / adapter cv2 / runtime PreprocessStage / kernel LabelMap-VO).
+- **KHÔNG cấp ID journal mới** (thực thi D-161) → Σ giữ 350.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- tasks.md phải theo format Kiro Spec: `## Task Dependency Graph` bắt buộc **có JSON code block** (`waves`+`edges`) — không phải mermaid; + `## Overview`/`## Tasks`/`## Notes`. Khớp schema mẫu (`backpressure-cross-process/tasks.md`) → get_diagnostics 0.
+
+**3. Trade-off đã cân nhắc:**
+- Gộp Wave 1+2 vào 1 dải task phẳng vs chia 2 Wave có cổng verify (6, 13) → chia 2 Wave (khớp §D thứ-tự-rủi-ro: Label nhỏ đóng rủi ro gán-nhầm trước; Preprocess lớn đụng-toạ-độ sau) + JSON edges để chạy-song-song phần độc lập (3, 8/9/10).
+- Chỉ task code/test, KHÔNG task deploy/kiểm-thủ-công (verify browser ở 6.1 dùng URL sạch + tiêm Authorization theo K-124).
+
+**4. Điều bạn nên biết:**
+- BỘ SPEC hoàn chỉnh nhưng CHƯA code — chờ user duyệt tasks trước khi bắt đầu Wave 1 task 1 (LabelMap).
+- design.md vẫn còn format-diagnostics (PHẦN A/B thay ## Overview/## Architecture) — chưa sửa, không cản việc code.
+- Baseline 923/2 giữ (doc-only). Workflow git vẫn CHƯA quyết (main-trunk vs branch+PR).
+
+**Đã verify:** `tasks.md` get_diagnostics = **0** (đạt Kiro Spec Format, JSON wave block khớp schema repo); `vp check` sẽ chạy trước commit. · **Chưa verify:** nội dung tasks khớp ý user tới đâu (chờ review); chưa chạy code nào (chưa tới bước implement).

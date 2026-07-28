@@ -1,8 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-28)
-**Cập nhật lúc:** 2026-07-28T09:30:00+07:00.
-**[✅ #469 — Spec `image-preprocess-and-labeling`: tạo `requirements.md` (EARS) — design-first, DỪNG chờ user review]**
+**Cập nhật lúc:** 2026-07-28T10:15:00+07:00.
+**[✅ #470 — Spec `image-preprocess-and-labeling`: tạo `tasks.md` → BỘ SPEC HOÀN CHỈNH, CHƯA code chờ user duyệt]**
+- Tiếp #469 (D-161). Design-first: design.md + requirements.md có → theo implicit-rules dựng **`tasks.md`**.
+- **`tasks.md` = 13 task / 2 Wave TDD** khớp §D-1: **Wave 1 (task 1-6, Label)** LabelMap fail-safe → wire decoder (thay `str(cid)`) → DisplayPolicy domain thuần → bất biến canonical⊥display → render `/overlay`+client → verify · **Wave 2 (task 7-13, Preprocess T3)** `MediaPacket.with_media` → registry+op numpy-thuần (domain) → op cv2 (adapter) → nghịch-biến-toạ-độ ≤1px → `PreprocessStage`+config `[preprocess]`+wire `_detect_loop` → đo tác động → verify+Non-Goal. Mỗi leaf tham chiếu R1-R12.
+- **Format:** `## Task Dependency Graph` có **JSON `waves`+`edges`** (khớp schema `backpressure-cross-process/tasks.md`) + `## Overview`/`## Tasks`/`## Notes` → get_diagnostics **0**. Nhánh chính: `1→2→4→5→6→7→11→13`; song song: 3, 8/9/10, 12.
+- **Ghi sổ:** LOG #470 · KHÔNG ID journal mới (thực thi D-161) → Σ giữ **350** · INDEX logref #469→#470. Doc-only baseline 923/2 giữ.
+- **BỘ SPEC HOÀN CHỈNH** (design+requirements+tasks). **CHỜ USER duyệt tasks** → bắt đầu code Wave 1 task 1 (LabelMap, TDD). design.md format-diag vẫn đỏ (PHẦN A/B, ngoài phạm vi). Workflow git CHƯA quyết.
+---
+**[✅ #469 — Spec `image-preprocess-and-labeling`: tạo `requirements.md` (EARS) — design-first]**
 - Tiếp D-161. Design-first workflow: `design.md` đã có (+§D quyết định user, trước đó UNCOMMITTED) · `requirements.md` CHƯA có → theo implicit-rules dựng `requirements.md`. **KHÔNG nhảy sang `tasks.md`** (chờ user xem requirements trước).
 - **`requirements.md` = 12 Requirement EARS** bám design: **R1-R5 Wave 1 Label** (LabelMap fail-safe `class_<id>` · canonical⊥display bất biến qua analytics · DisplayPolicy thuần @domain i18n/alias/gộp/ẩn/màu-ổn-định · Ẩn⊥Đếm visible-chỉ-render · Render phơi `displayName`/`colorKey` ra `/overlay`) · **R6-R10 Wave 2 Preprocess** (no-regression bytes-identical khi tắt op · `PreprocessStage`+`MediaPacket.with_media` · registry op-agnostic + bộ op v1 · nghịch-biến-toạ-độ ≤1px · chọn-op-theo-số-đo) · **R11-R12** (tuân import 6-layer + `vp verify` xanh + TDD từng slice · Non-Goal v1 chống YAGNI). Ánh xạ §D-1..§D-5 + P-A1..A4/P-B1..B4 vào AC.
 - **Ground code (chống bịa):** đọc `yolo_postprocess.py` xác nhận CẢ `yolov5_decode` & `yolov8_decode` dùng `label = labels[cid] if labels is not None and cid < len(labels) else str(cid)` (idx-lạ→số trần; labels-sai-thứ-tự→gán-nhầm-âm-thầm); `kernel/inference_protocol.py::Detection` có `{label, confidence, box}`, KHÔNG có field id.
