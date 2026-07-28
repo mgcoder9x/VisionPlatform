@@ -74,20 +74,20 @@ Nhánh chính tuần tự: `1 → 2 → 4 → 5 → 6 → 7 → 11 → 13`. Task
   - [x] 3.4 Hiện thực i18n/alias + gộp + ẩn + `color_key` (hash canonical ổn định), cho phép chồng quy tắc theo thứ tự xác định
     - _Requirements: 3.3, 3.4, 3.5_
 
-- [x] 4. Bất biến canonical ⊥ display (analytics không thấy display-name)
+- [ ] 4. Bất biến canonical ⊥ display (analytics không thấy display-name)
   - [x] 4.1 Viết test bất biến: đổi DisplayPolicy (alias/i18n/gộp/ẩn) KHÔNG đổi `Detection.label` mà stabilizer/crossing/DB dùng
     - _Requirements: 2.1, 2.2_
   - [x] 4.2 Xác nhận (test + đọc code) display-name CHỈ áp ở mép projection/overlay, KHÔNG ở tầng analytics
     - _Requirements: 2.3_
 
-- [ ] 5. Render: phơi `displayName`/`colorKey` ra `/overlay` + client vẽ
-  - [ ] 5.1 Viết test projection: payload `/overlay` chứa `displayName` + `colorKey`; detection `visible=false` KHÔNG có trong payload
+- [x] 5. Render: phơi `displayName`/`colorKey` ra `/overlay` + client vẽ
+  - [x] 5.1 Viết test projection: payload `/overlay` chứa `displayName` + `colorKey`; detection `visible=false` KHÔNG có trong payload
     - _Requirements: 5.1, 5.3_
-  - [ ] 5.2 Áp DisplayPolicy tại `overlay_projection` (mép ra): thêm `displayName`/`colorKey`, lọc `visible=false`
+  - [x] 5.2 Áp DisplayPolicy tại `overlay_projection` (mép ra): thêm `displayName`/`colorKey`, lọc `visible=false`
     - _Requirements: 5.1, 5.3_
-  - [ ] 5.3 Viết test Ẩn ⊥ Đếm: lớp `visible=false` không vẽ NHƯNG vẫn được đếm/analytics theo canonical
+  - [x] 5.3 Viết test Ẩn ⊥ Đếm: lớp `visible=false` không vẽ NHƯNG vẫn được đếm/analytics theo canonical
     - _Requirements: 4.1, 4.2, 4.3_
-  - [ ] 5.4 Cập nhật client `_PAGE`: vẽ `displayName` + confidence (format `0.87`) theo `colorKey`; cắt tên dài; ẩn khi `visible=false`
+  - [x] 5.4 Cập nhật client `_PAGE`: vẽ `displayName` + confidence (format `0.87`) theo `colorKey`; cắt tên dài; ẩn khi `visible=false`
     - _Requirements: 5.2, 5.4_
 
 - [ ] 6. Verify Wave 1 (bằng chứng)

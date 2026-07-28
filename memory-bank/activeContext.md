@@ -1,7 +1,16 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-28)
-**Cập nhật lúc:** 2026-07-28T13:15:00+07:00.
+**Cập nhật lúc:** 2026-07-28T14:00:00+07:00.
+**[✅ #475 — Wave 1 Task 5: Render — áp DisplayPolicy /overlay + client vẽ displayName/màu, +D-166]**
+- Task 5 XONG (5.1-5.4 + parent). LẦN ĐẦU DisplayPolicy được dùng thật.
+- **`overlay_projection.project_overlay(..., policy=None)`:** áp policy lên display box → thêm `displayName`+`colorKey`, LỌC `visible=false` khỏi payload; `label` canonical giữ; rawResult KHÔNG áp (raw cho đếm — Ẩn⊥Đếm). Default None = passthrough (no-regression).
+- **`vision_web_app`:** global `_display_policy=DisplayPolicy()` (rỗng) truyền vào `/overlay` + SSE `/events`. Client `_PAGE`: `colorFor(colorKey)`→hue (màu ổn định P-B3 thay xanh cố định), vẽ `displayName||label`, `truncName` cắt >24.
+- **VERIFY:** `vp verify` **959 passed/2 skipped** (955→959, +4) · import-linter **7 kept/0 broken** (Property 10 KEPT: `overlay_projection`→`domain.display_policy` runtime→domain hợp lệ) · drift+secret PASS.
+- **Ghi sổ:** LOG #475 · +D-166 · INDEX logref #474→#475 · Σ354→**355** · Verify-Symbol `overlay_projection.py::project_overlay` (C8 55→56).
+- **CHƯA kiểm (🟡):** render BROWSER thật (displayName/màu/cắt-tên) — client JS-string không unit-test được → **Task 6** verify Playwright (webcam, URL sạch K-124). Đường config nạp DisplayPolicy khác rỗng (alias/hide) = follow-up (framework đã sẵn).
+- **Bước kế:** Task 6 (cổng verify Wave 1: `vp verify` [đã xanh] + browser overlay). Wave 1 gần đóng — còn browser verify.
+---
 **[✅ #474 — Wave 1 Task 4: bất biến canonical⊥display (cưỡng chế Property 10 + test), +D-165]**
 - Task 4 XONG (4.1 + 4.2). Bất biến P-B1: đổi DisplayPolicy KHÔNG đụng `Detection.label` (canonical) mà analytics/DB dùng.
 - **4.2 cưỡng chế BẰNG MÁY:** thêm `vision_platform.domain.display_policy` vào `source_modules` contract import-linter **Property 10** → chặn display import `iou_tracker`/`tracking_protocol`/`crossing_event`. Quan trọng: `layers` cho phép domain→kernel nên tracking_protocol/crossing_event (kernel) VẪN import được nếu không có Property 10 → contract này bịt đúng lỗ. KEPT ngay = display_policy sạch analytics.

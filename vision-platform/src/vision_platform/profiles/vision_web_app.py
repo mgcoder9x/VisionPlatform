@@ -50,6 +50,7 @@ from vision_platform.adapters.metrics_exposition import render_prometheus
 from vision_platform.adapters.production_log_handle import ProductionLogHandle
 from vision_platform.runtime.overlay_expiry_scheduler import OverlayExpiryScheduler
 from vision_platform.runtime.overlay_projection import project_overlay
+from vision_platform.domain.display_policy import DisplayPolicy
 from vision_platform.runtime.overlay_health import derive_health
 
 app = Flask(__name__)
@@ -88,6 +89,9 @@ def _log(msg: str) -> None:
         print(msg)
 _cfg = OverlayConfig()
 _cadence_cfg = DetectionCadenceConfig()   # mặc định = hành vi hiện tại; main() build lại từ CLI + assert P5
+# DisplayPolicy (hiển thị tên/màu/ẩn ở MÉP): mặc định RỖNG = passthrough (displayName=label, colorKey=label,
+# không ẩn) → không đổi hành vi. main() có thể dựng lại từ config per-deployment (i18n/alias/gộp/ẩn).
+_display_policy = DisplayPolicy()
 
 _PAGE = """<!doctype html><html><head><meta charset="utf-8"><title>Vision Platform — Live</title>
 <style>body{background:#111;color:#eee;font-family:sans-serif;text-align:center;margin:0;padding:10px}
@@ -174,18 +178,26 @@ async function poll(){
     applyOverlay(o, performance.now()-t0);
   }finally{ setTimeout(poll, pollFails===0?80:Math.min(80*Math.pow(2,pollFails),2000)); }   // reschedule DÙ lỗi; BACKOFF khi lỗi liên tiếp (80ms→cap 2s) → giảm flood console lúc outage; ≤1 in-flight (#415/#436)
 }
+// màu ổn định theo colorKey (hash chuỗi → hue): cùng lớp/nhóm luôn cùng màu, không nhấp nháy (P-B3).
+function colorFor(k){ k=k||''; let h=0; for(let i=0;i<k.length;i++){h=(h*31+k.charCodeAt(i))>>>0;} return 'hsl('+(h%360)+',100%,60%)'; }
+function truncName(s){ s=(s==null?'':''+s); return s.length>24 ? s.slice(0,23)+'\\u2026' : s; }   // cắt tên dài
 // ---- RENDER: vẽ mỗi animation-frame; ngoại suy pos+vel*dt nếu có vx/vy (Wave A); hết hạn → xóa ----
+// Tên hiển thị = displayName (DisplayPolicy, fallback label canonical); màu theo colorKey (ổn định). Server đã
+// LỌC lớp visible=false khỏi payload nên client chỉ nhận lớp cần vẽ (Ẩn⊥Đếm: đếm ở server theo canonical).
 function render(){
   const now=performance.now();
   resize(); ctx.clearRect(0,0,cv.width,cv.height);
-  ctx.strokeStyle='#00ff66';ctx.lineWidth=2;ctx.font='14px sans-serif';ctx.fillStyle='#00ff66';
+  ctx.lineWidth=2; ctx.font='14px sans-serif';
   for(const [id,e] of [...boxes]){
     if(e.deadline<=now){boxes.delete(id);continue;}
     const b=e.b, hasV=(typeof b.vx==='number'&&typeof b.vy==='number');
     const dt=hasV?(now-e.updatedAt)/1000:0;
     const bx=hasV?clamp01(b.x+b.vx*dt):b.x, by=hasV?clamp01(b.y+b.vy*dt):b.y;
     const x=bx*cv.width, y=by*cv.height, w=b.width*cv.width, h=b.height*cv.height;
-    ctx.strokeRect(x,y,w,h); ctx.fillText(b.label+' '+b.confidence.toFixed(2),x,Math.max(12,y-4));
+    const col=colorFor(b.colorKey||b.label);
+    ctx.strokeStyle=col; ctx.fillStyle=col;
+    ctx.strokeRect(x,y,w,h);
+    ctx.fillText(truncName(b.displayName||b.label)+' '+b.confidence.toFixed(2),x,Math.max(12,y-4));
   }
   requestAnimationFrame(render);
 }
@@ -436,7 +448,7 @@ def overlay():
     snap = _store.snapshot() if _store is not None else None
     if snap is None:
         return jsonify({"schemaVersion": 1, "rawResult": None, "display": {"boxes": []}})
-    resp = jsonify(project_overlay(snap, time.monotonic_ns(), _cfg.ghostSlaMs))
+    resp = jsonify(project_overlay(snap, time.monotonic_ns(), _cfg.ghostSlaMs, policy=_display_policy))
     resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
     return resp
 
@@ -459,7 +471,7 @@ def _sse_overlay_stream():
         emitted = False
         snap = _store.snapshot() if _store is not None else None
         if snap is not None:
-            payload = project_overlay(snap, time.monotonic_ns(), _cfg.ghostSlaMs)
+            payload = project_overlay(snap, time.monotonic_ns(), _cfg.ghostSlaMs, policy=_display_policy)
             rev = payload.get("eventRevision")
             if rev != last_rev:
                 last_rev = rev

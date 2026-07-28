@@ -1923,3 +1923,16 @@ Quyết định + lý do (bản chất):
 - **Cưỡng chế BẰNG MÁY, không chỉ test:** thêm `domain.display_policy` vào `source_modules` của Property 10 (forbidden import `iou_tracker`/`tracking_protocol`/`crossing_event`). Lý do CHÍNH XÁC: `layers` cho phép domain→kernel, mà `tracking_protocol`/`crossing_event` Ở KERNEL → display_policy (domain) VẪN có thể import chúng nếu không có Property 10. Contract này bịt đúng lỗ đó → "display chạy ngược vào analytics" bị chặn xuyên phiên (mạnh hơn test-runtime, chống regression tương lai).
 - **Test bám tracker THẬT:** `DisplayStabilizer` (analytics-hiển-thị) match/track theo canonical → `DisplayTrack.label`=canonical; đổi DisplayPolicy KHÔNG đụng label track → không vỡ/nhân-đôi track, DB nhất quán (P-B1). DisplayPolicy nhận `str` (không nhận Detection) → bất biến theo CẤU TRÚC; test khẳng định thêm.
 - **Cái giá / khi nào KHÔNG:** ràng buộc display_policy KHÔNG được dùng DTO analytics kernel — nếu tương lai cần đọc tracking-DTO ở tầng hiển thị (khó xảy ra) phải xét lại contract. CHƯA áp DisplayPolicy vào overlay (Task 5).
+
+### D-166 — 2026-07-28 — Render: áp DisplayPolicy tại project_overlay + client vẽ displayName/màu (Wave 1 Task 5)
+Status: ✅ (verify thật — 11 test projection pass · full 959/2 · import-linter 7 kept/0 broken · drift+secret PASS) · 🟡 render browser [chưa kiểm empiric]
+Scope: `runtime/overlay_projection.py` (param `policy`) · `profiles/vision_web_app.py` (`_display_policy` global + 2 call site + client `_PAGE` render) · `tests/test_overlay_projection_display_policy.py` (MỚI)
+Nguồn: LOG Entry #475 · spec R5/R4 · design §B.3 · D-164 (DisplayPolicy) · D-165 (bất biến)
+Verify-Symbol: vision-platform/src/vision_platform/runtime/overlay_projection.py::project_overlay
+Links: D-164, D-165, R5, R4
+Quyết định + lý do (bản chất):
+- **Áp DisplayPolicy ở MÉP `project_overlay`** (runtime, đã ở source_modules Property 10): thêm `displayName`+`colorKey` vào display box, LỌC `visible=false` khỏi payload; `label` canonical GIỮ NGUYÊN (tương thích ngược + analytics dùng). `policy=None` → passthrough (no-regression: displayName=label, colorKey=label, không ẩn).
+- **Lọc `visible=false` ở SERVER, KHÔNG client:** payload nhẹ + client không cần biết luật ẩn; rawResult KHÔNG áp policy → giữ raw truth cho đếm/analytics theo canonical (Ẩn⊥Đếm §D-3/R4.2 — bằng chứng: test lớp ẩn vắng display.boxes nhưng còn rawResult.boxes).
+- **Màu: client hash colorKey→hue (HSL), KHÔNG server trả RGB:** domain/server giữ ĐỊNH DANH màu (colorKey), client quyết pixel → đổi bảng màu không đụng server; ổn định theo colorKey (cùng lớp/nhóm cùng màu, P-B3). Thay màu xanh cố định cũ.
+- **`_display_policy` global mặc định RỖNG (passthrough):** wire sống ở 2 call site (`/overlay`+SSE) nhưng chưa có CLI nạp alias/hide → cấu hình per-deployment = follow-up (YAGNI). Vẫn cải thiện thấy được ngay: màu ổn định theo lớp + trường displayName.
+- **Cái giá / khi nào KHÔNG:** client render là JS-string → không unit-test, cần verify browser (Task 6, 🟡). Chưa có đường config → muốn i18n/ẩn thật phải thêm loader (chưa làm).

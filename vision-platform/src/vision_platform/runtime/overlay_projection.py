@@ -9,12 +9,14 @@ remainingLeaseMs = clamp(deadline - now, [0, ghostSlaMs]) (floor). Toạ độ c
 """
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
+from vision_platform.domain.display_policy import DisplayPolicy
 from vision_platform.kernel.inference_protocol import Detection
 from vision_platform.kernel.overlay_view import OverlayViewSnapshot
 
 _MS = 1_000_000
+_PASSTHROUGH_POLICY = DisplayPolicy()   # rỗng → displayName=label, colorKey=label, không ẩn (no-regression)
 
 
 def _clip01(v: float) -> float:
@@ -30,8 +32,13 @@ def _raw_box(d: Detection) -> Dict[str, Any]:
     }
 
 
-def project_overlay(snap: OverlayViewSnapshot, now_ns: int, ghost_sla_ms: int) -> Dict[str, Any]:
-    """Chiếu snapshot → dict (pure). `now_ns`/`ghost_sla_ms` là 2 input dẫn xuất age/lease."""
+def project_overlay(snap: OverlayViewSnapshot, now_ns: int, ghost_sla_ms: int,
+                    policy: Optional[DisplayPolicy] = None) -> Dict[str, Any]:
+    """Chiếu snapshot → dict (pure). `now_ns`/`ghost_sla_ms` là 2 input dẫn xuất age/lease.
+
+    `policy` (DisplayPolicy @domain, mép-ra): áp lên display box → thêm `displayName`/`colorKey`, lọc `visible=false`.
+    Mặc định None → passthrough (displayName=label, colorKey=label, không ẩn) = no-regression. CANONICAL `label`
+    GIỮ NGUYÊN (tương thích ngược + analytics dùng). rawResult KHÔNG áp policy (raw truth cho đếm — Ẩn⊥Đếm §D-3)."""
     out: Dict[str, Any] = {
         "schemaVersion": snap.schemaVersion,
         "processEpoch": snap.processEpoch,
@@ -54,10 +61,14 @@ def project_overlay(snap: OverlayViewSnapshot, now_ns: int, ghost_sla_ms: int) -
             "boxes": [_raw_box(d) for d in r.boxes],
         }
 
+    pol = policy if policy is not None else _PASSTHROUGH_POLICY
     disp_boxes = []
     for t in snap.display.tracks:
         if t.box.w <= 0.0 or t.box.h <= 0.0:
             continue   # zero-area → loại (Property: reject non-finite/zero-area)
+        decision = pol.decide(t.label)          # DisplayPolicy áp ở MÉP (canonical `label` giữ nguyên bên dưới)
+        if not decision.visible:
+            continue                             # lớp ẩn → BỎ khỏi render (R5.3); rawResult vẫn giữ (Ẩn⊥Đếm)
         rem = (t.leaseDeadlineNs - now_ns) // _MS
         rem = 0 if rem < 0 else (ghost_sla_ms if rem > ghost_sla_ms else rem)
         disp_boxes.append({
@@ -65,6 +76,8 @@ def project_overlay(snap: OverlayViewSnapshot, now_ns: int, ghost_sla_ms: int) -
             "trackRevision": t.trackRevision,
             "remainingLeaseMs": int(rem),
             "label": t.label,
+            "displayName": decision.display_name,
+            "colorKey": decision.color_key,
             "confidence": round(float(t.confidence), 4),
             "x": _clip01(t.box.x), "y": _clip01(t.box.y),
             "width": _clip01(t.box.w), "height": _clip01(t.box.h),

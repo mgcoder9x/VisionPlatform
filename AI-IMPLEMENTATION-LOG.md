@@ -9010,3 +9010,25 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - Contract Property 10 giờ phủ 5 source_modules (thêm domain.display_policy) → KEPT ngay = bằng chứng display_policy sạch analytics.
 
 **Đã verify:** `pytest tests/test_canonical_display_invariant.py` = **3 passed**; `vp verify` = **955 passed/2 skipped** (952→955, +3) · **import-linter 7 kept/0 broken** (Property 10 mở rộng KEPT) · **drift PASS · secret PASS**. · **Chưa verify:** áp DisplayPolicy vào /overlay + client render (Task 5).
+
+### Entry #475 — 2026-07-28 — Wave 1 Task 5: Render — áp DisplayPolicy ở /overlay + client vẽ displayName/màu — Kiro-Opus
+
+**Bối cảnh:** Wave 1 Task 5 (D-161/R5/R4). Lần ĐẦU DisplayPolicy thực sự được dùng (mép projection + client). +D-166.
+
+**1. Quyết định AI tự ra (spec không nói):** (chi tiết D-166)
+- `project_overlay(..., policy=None)`: áp DisplayPolicy lên `display.boxes` → thêm `displayName`+`colorKey`, LỌC `visible=false` khỏi payload. `label` canonical GIỮ NGUYÊN. rawResult KHÔNG áp policy (raw truth cho đếm — Ẩn⊥Đếm). Default None → passthrough (no-regression).
+- Web app: global `_display_policy=DisplayPolicy()` (mặc định rỗng) truyền vào CẢ 2 call site (`/overlay` + SSE `/events`).
+- Client `_PAGE`: `colorFor(colorKey)` hash chuỗi→hue (màu ổn định P-B3, thay xanh cố định), vẽ `displayName||label`, `truncName` cắt >24 ký tự.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không (đúng R5). Lọc `visible=false` làm ở SERVER (projection) thay vì client → client chỉ nhận lớp cần vẽ (nhẹ payload + đúng Ẩn⊥Đếm: đếm ở server theo canonical).
+
+**3. Trade-off đã cân nhắc:**
+- Lọc visible ở server vs client → SERVER (payload nhẹ, client không cần biết luật ẩn; server vẫn có raw để đếm).
+- Màu: server trả RGB vs client hash colorKey→hue → CLIENT hash (domain/server không giữ RGB; đổi bảng màu = đổi client, không đụng server; ổn định theo colorKey).
+- `_display_policy` mặc định rỗng (chưa có CLI config i18n/hide) → passthrough. Cấu hình per-deployment để follow-up (YAGNI: đã có displayName/colorKey + màu-ổn-định-theo-lớp là cải thiện thấy được ngay).
+
+**4. Điều bạn nên biết:**
+- Client render là JS trong chuỗi `_PAGE` → KHÔNG unit-test được bằng pytest; payload (server) đã test (5.1/5.3). Render thật cần verify BROWSER (Task 6) — `[chưa kiểm empiric]` tới khi chạy Playwright.
+- `_display_policy` hiện rỗng passthrough → chưa có đường CLI/config nạp alias/hide (đường nạp = follow-up hoặc Task riêng). Framework đã sẵn (chỉ cần dựng DisplayPolicy khác lúc main()).
+
+**Đã verify:** `pytest tests/test_overlay_projection_display_policy.py tests/test_overlay_projection.py` = **11 passed** (4 mới + 7 cũ no-regression); `vp verify` = **959 passed/2 skipped** (955→959, +4) · **import-linter 7 kept/0 broken** (Property 10 KEPT: `overlay_projection`→`domain.display_policy` = runtime→domain hợp lệ) · **drift PASS · secret PASS**; get_diagnostics 3 file = 0. · **Chưa verify:** render BROWSER thật (displayName/màu/cắt-tên) — Task 6 Playwright; đường config nạp DisplayPolicy khác rỗng.
