@@ -37,7 +37,7 @@ def test_decode_xywh_to_topleft():
     assert d.box.space == CoordinateSpace.MODEL_INPUT
     assert (d.box.x, d.box.y, d.box.w, d.box.h) == pytest.approx((40.0, 40.0, 20.0, 40.0))
     assert d.confidence == pytest.approx(0.9)
-    assert d.label == "0"                 # không truyền labels → dùng chỉ số class
+    assert d.label == "class_0"           # không labels → LabelMap fail-safe `class_<id>` (R1.5, đổi từ số trần)
 
 
 def test_decode_nc_last_layout():

@@ -77,15 +77,19 @@ def _build_detector(args):
         from vision_platform.adapters.onnx_detector import OnnxDetector, chw_float_normalize, onnx_providers_for
         from vision_platform.adapters.capability_probe import probe_capabilities
         from vision_platform.adapters.yolo_postprocess import yolov5_decode, yolov8_decode
+        from vision_platform.adapters.label_map_loader import load_label_map
         labels = args.labels.split(",") if args.labels else None
         ver = getattr(args, "yolo", "v5")
+        # LabelMap 1-nguồn (R1/D-162): `.names`/metadata cạnh weights → config `labels` → rỗng; fail-safe
+        # idx-lạ → `class_<id>`. Đây là choke-point CHUNG cho cả web app sản phẩm (gọi `_build_detector`).
+        label_map = load_label_map(args.onnx, labels)
 
         if ver == "v8":
             def _post(raw):
-                return yolov8_decode(raw, conf_threshold=args.conf, labels=labels, layout=args.layout)
+                return yolov8_decode(raw, conf_threshold=args.conf, label_map=label_map, layout=args.layout)
         else:   # v5 (mặc định — weight user là YOLOv5): output có objectness
             def _post(raw):
-                return yolov5_decode(raw, conf_threshold=args.conf, labels=labels)
+                return yolov5_decode(raw, conf_threshold=args.conf, label_map=label_map)
 
         # Capability-aware ONNX (F3.2/D-139): trước đây nhánh onnx BỎ QUA --device → luôn CPU (không GPU
         # được kể cả trên máy GPU). Nay đi qua resolve_device (đối xứng .pt + _det_onnx): hỗ trợ 'auto',

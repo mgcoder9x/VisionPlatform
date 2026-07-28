@@ -78,6 +78,7 @@ def _det_onnx(params: Mapping):
     from vision_platform.adapters.onnx_detector import OnnxDetector, chw_float_normalize, onnx_providers_for
     from vision_platform.adapters.yolo_postprocess import yolov5_decode, yolov8_decode
     from vision_platform.adapters.detector_pipeline import DetectorPipeline
+    from vision_platform.adapters.label_map_loader import load_label_map
     _need(params, "weights", "detector onnx")
 
     raw_labels = params.get("labels")
@@ -88,6 +89,10 @@ def _det_onnx(params: Mapping):
     else:
         labels = [str(x) for x in raw_labels]
 
+    # LabelMap 1-nguồn (R1/D-162): ưu tiên `.names`/metadata cạnh weights → config `labels` → rỗng.
+    # Fail-safe idx-lạ → `class_<id>` (không số trần, không gán nhầm). Nạp 1 lần lúc build (không mỗi-frame).
+    label_map = load_label_map(params["weights"], labels)
+
     ver = params.get("yolo", "v8")
     conf = float(params.get("conf", 0.25))
     if ver == "v8":
@@ -96,10 +101,10 @@ def _det_onnx(params: Mapping):
             raise ConfigError(f"detector onnx 'layout' phải 'nc_first'|'nc_last', got {layout!r}")
 
         def _post(raw):
-            return yolov8_decode(raw, conf_threshold=conf, labels=labels, layout=layout)
+            return yolov8_decode(raw, conf_threshold=conf, label_map=label_map, layout=layout)
     elif ver == "v5":
         def _post(raw):
-            return yolov5_decode(raw, conf_threshold=conf, labels=labels)
+            return yolov5_decode(raw, conf_threshold=conf, label_map=label_map)
     else:
         raise ConfigError(f"detector onnx 'yolo' phải 'v5'|'v8', got {ver!r}")
 

@@ -1,7 +1,15 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-28)
-**Cập nhật lúc:** 2026-07-28T11:00:00+07:00.
+**Cập nhật lúc:** 2026-07-28T11:45:00+07:00.
+**[✅ #472 — Wave 1 Task 2: wire LabelMap vào decoder (thay `str(cid)`), +D-163]**
+- Task 2 XONG (2.1-2.3 + parent auto-complete). Hướng "1 cơ chế duy nhất" (user duyệt).
+- **`yolo_postprocess.py`:** thêm helper `_resolve_label_map` + param `label_map` cho `yolov5_decode`/`yolov8_decode`; thay `labels[cid] if..else str(cid)` → `lm.canonical(cid)`. Giữ `labels` (compat). **Đổi hành vi có chủ đích:** không-labels/idx-lạ số-trần `"0"`→`"class_0"` (R1.2/R1.5). Sửa 1 assert `test_yolo_postprocess.py`. grep xác nhận 0 downstream phụ thuộc nhãn-số.
+- **Wire 2 caller:** `pipeline_factory._det_onnx` (config path) + `vision_demo_app._build_detector` (choke-point mà `vision_web_app` gọi → phủ web SẢN PHẨM) → cả hai `load_label_map(weights, labels)` (auto-load `.names`/metadata §D-5), nạp 1 lần lúc build.
+- **VERIFY:** `vp verify` **943 passed/2 skipped** (936→943, +7 `test_decoder_label_map.py`) · import-linter **7 kept/0 broken** · drift+secret PASS; get_diagnostics 4 file = 0.
+- **Ghi sổ:** LOG #472 · +D-163 · INDEX logref #471→#472 · Σ351→**352** · Verify-Symbol `_resolve_label_map` (C8 52→53).
+- **Bước kế:** Task 3 (DisplayPolicy domain thuần: i18n/alias/gộp/ẩn/màu-ổn-định) — task-tool ready = 3.1. Nhãn hiện vẫn = canonical (chưa có display-name).
+---
 **[✅ #471 — THI CÔNG Wave 1 Task 1: LabelMap (kernel) + loader (adapter), TDD 13 test, +D-162]**
 - Bắt đầu thi công spec `image-preprocess-and-labeling` (theo khuyến nghị chạy từng task TDD). **Task 1 XONG** (1.1-1.4 + parent auto-complete trong task-tool).
 - **`kernel/label_map.py::LabelMap`** (MỚI): value-object POSITIONAL (tuple names, frozen+hashable) · `canonical(cid)` fail-safe → `class_<id>` khi ngoài phạm vi/ÂM (KHÔNG raise, KHÔNG gán nhầm — R1.2/P-B2) · `from_names`/`empty`/`__len__`. THUẦN kernel (chỉ dataclasses/typing).

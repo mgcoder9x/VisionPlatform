@@ -17,6 +17,22 @@ import numpy as np
 
 from vision_platform.domain.bbox import BBox, CoordinateSpace
 from vision_platform.kernel.inference_protocol import Detection
+from vision_platform.kernel.label_map import LabelMap
+
+
+def _resolve_label_map(
+    label_map: Optional[LabelMap], labels: Optional[Sequence[str]]
+) -> LabelMap:
+    """1 nguồn resolve nhãn (R1.5): ưu tiên `label_map` → `labels` (compat) → rỗng.
+
+    Thay biểu thức cũ `labels[cid] if ... else str(cid)` bằng LabelMap fail-safe: id ngoài phạm vi → `class_<id>`
+    (KHÔNG số trần mơ hồ, KHÔNG gán nhầm tên lớp khác âm thầm). Giữ tương thích: caller truyền `labels` list vẫn chạy.
+    """
+    if label_map is not None:
+        return label_map
+    if labels is not None:
+        return LabelMap.from_names(labels)
+    return LabelMap.empty()
 
 
 def yolov5_decode(
@@ -24,6 +40,7 @@ def yolov5_decode(
     *,
     conf_threshold: float = 0.25,
     labels: Optional[Sequence[str]] = None,
+    label_map: Optional[LabelMap] = None,
 ) -> list[Detection]:
     """Decode output YOLOv5 raw → list[Detection] (box MODEL_INPUT, chưa NMS/chưa inverse-transform).
 
@@ -45,11 +62,12 @@ def yolov5_decode(
     conf = obj * class_scores[np.arange(class_scores.shape[0]), cls_ids]   # v5: obj × class
 
     keep = conf >= conf_threshold
+    lm = _resolve_label_map(label_map, labels)
     dets: list[Detection] = []
     for i in np.nonzero(keep)[0]:
         cx, cy, bw, bh = (float(v) for v in boxes[i])
         cid = int(cls_ids[i])
-        label = labels[cid] if labels is not None and cid < len(labels) else str(cid)
+        label = lm.canonical(cid)
         dets.append(
             Detection(
                 label=label,
@@ -65,6 +83,7 @@ def yolov8_decode(
     *,
     conf_threshold: float = 0.25,
     labels: Optional[Sequence[str]] = None,
+    label_map: Optional[LabelMap] = None,
     layout: str = "nc_first",
 ) -> list[Detection]:
     """Decode output YOLOv8 raw → list[Detection] (box MODEL_INPUT, chưa NMS/chưa inverse-transform).
@@ -90,11 +109,12 @@ def yolov8_decode(
     confs = class_scores[np.arange(class_scores.shape[0]), cls_ids]
 
     keep = confs >= conf_threshold
+    lm = _resolve_label_map(label_map, labels)
     dets: list[Detection] = []
     for i in np.nonzero(keep)[0]:
         cx, cy, bw, bh = (float(v) for v in boxes[i])
         cid = int(cls_ids[i])
-        label = labels[cid] if labels is not None and cid < len(labels) else str(cid)
+        label = lm.canonical(cid)
         dets.append(
             Detection(
                 label=label,

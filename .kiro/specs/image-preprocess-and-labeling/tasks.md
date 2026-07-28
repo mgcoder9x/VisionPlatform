@@ -56,12 +56,12 @@ Nhánh chính tuần tự: `1 → 2 → 4 → 5 → 6 → 7 → 11 → 13`. Task
   - [x] 1.4 Thêm loader ở adapter (đọc I/O) dựng LabelMap theo thứ tự ưu tiên nguồn
     - _Requirements: 1.3, 1.4, 1.6_
 
-- [ ] 2. Wire LabelMap vào decoder (thay `str(cid)`), giữ hành vi cho id hợp lệ
-  - [ ] 2.1 Viết test: `yolov8_decode`/`yolov5_decode` với LabelMap → id hợp lệ ra canonical (bằng kết quả cũ khi labels đúng+đủ); id ngoài phạm vi → `class_<id>` (KHÔNG số trần)
+- [x] 2. Wire LabelMap vào decoder (thay `str(cid)`), giữ hành vi cho id hợp lệ
+  - [x] 2.1 Viết test: `yolov8_decode`/`yolov5_decode` với LabelMap → id hợp lệ ra canonical (bằng kết quả cũ khi labels đúng+đủ); id ngoài phạm vi → `class_<id>` (KHÔNG số trần)
     - _Requirements: 1.5_
-  - [ ] 2.2 Sửa `yolo_postprocess.py` (`yolov5_decode`, `yolov8_decode`) route qua LabelMap fail-safe thay biểu thức `labels[cid] if ... else str(cid)`
+  - [x] 2.2 Sửa `yolo_postprocess.py` (`yolov5_decode`, `yolov8_decode`) route qua LabelMap fail-safe thay biểu thức `labels[cid] if ... else str(cid)`
     - _Requirements: 1.5_
-  - [ ] 2.3 Cập nhật caller (`pipeline_factory`) dựng/truyền LabelMap; giữ tương thích config `labels` hiện có
+  - [x] 2.3 Cập nhật caller (`pipeline_factory`) dựng/truyền LabelMap; giữ tương thích config `labels` hiện có
     - _Requirements: 1.3, 1.5_
 
 - [ ] 3. DisplayPolicy: thuần @domain, i18n/alias/gộp/ẩn/màu-ổn-định, chồng được

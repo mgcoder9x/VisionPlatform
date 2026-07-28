@@ -8946,3 +8946,26 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - secret-scan WARN 1 dòng `tasks.md:150` (chuỗi `http://user:pass@host/` trong ghi chú K-124) = WARN placeholder, exit 0, không phải BLOCK.
 
 **Đã verify:** `pytest tests/test_label_map.py tests/test_label_map_loader.py` = **13 passed**; `vp verify` = **936 passed/2 skipped** (923→936, +13) · **import-linter 7 kept/0 broken** (LabelMap@kernel thuần + loader@adapter tôn trọng tầng) · **drift PASS · secret-scan PASS**; get_diagnostics 2 file mới = 0. · **Chưa verify:** hành vi khi decoder THẬT dùng LabelMap (Task 2); metadata ONNX trên weight Ultralytics thật (mới test bằng stub).
+
+### Entry #472 — 2026-07-28 — Wave 1 Task 2: wire LabelMap vào decoder + caller (thay `str(cid)`) — Kiro-Opus
+
+**Bối cảnh:** Wave 1 Task 2 (D-161/R1.5). User duyệt hướng "1 cơ chế duy nhất" (không giữ dual-path số-trần). +D-163.
+
+**1. Quyết định AI tự ra (spec không nói):** (chi tiết D-163)
+- Decoder thêm param `label_map: Optional[LabelMap]=None` + helper `_resolve_label_map` (ưu tiên label_map → labels → rỗng), thay biểu thức `labels[cid] if ... else str(cid)` bằng `lm.canonical(cid)`. Giữ param `labels` (tương thích ngược).
+- Wire cả `pipeline_factory._det_onnx` (task) LẪN `vision_demo_app._build_detector` (choke-point CHUNG mà `vision_web_app` gọi) → đường sản phẩm web cũng hưởng auto-load `.names`/metadata (§D-5).
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:**
+- **Đổi HÀNH VI output** ca không-labels/idx-lạ: số trần `"0"`/`"7"` → `"class_0"`/`"class_7"` (đúng R1.2/R1.5, diệt footgun). Cập nhật test cũ `test_decode_xywh_to_topleft` (`"0"`→`"class_0"`). Grep xác nhận KHÔNG downstream nào (analytics/crossing/count) phụ thuộc nhãn-số.
+- Mở rộng nhẹ phạm vi task 2.3: wire thêm `_build_detector` (ngoài `pipeline_factory`) vì đó là choke-point web app — nếu chỉ wire pipeline_factory thì đường sản phẩm thật sẽ lệch (không auto-load).
+
+**3. Trade-off đã cân nhắc:**
+- 1-cơ-chế (đổi mặc định) vs dual-path (thêm param, giữ số-trần) → chọn 1-cơ-chế (fix bản chất, tránh nợ dual-path kiểu D-023); giá = đổi output ca degenerate + sửa 1 test.
+- `label_map` param riêng vs ép `labels` thành LabelMap ngầm → giữ CẢ HAI (label_map ưu tiên, labels fallback) để caller cũ/test không gãy + caller mới truyền LabelMap-auto-load.
+
+**4. Điều bạn nên biết:**
+- LabelMap nạp 1 LẦN lúc build detector (không mỗi-frame) → không thêm chi phí runtime.
+- `load_label_map(weights, labels)`: sidecar/metadata cạnh weights THẮNG config `labels` → nếu weight có `.names`/metadata khác config, kết quả theo file (đúng §D-5 "ưu tiên file"). Nếu user muốn config thắng thì chưa hỗ trợ (YAGNI — chưa có nhu cầu).
+- CHƯA có DisplayPolicy (Task 3) → nhãn hiển thị vẫn = canonical.
+
+**Đã verify:** `pytest tests/test_decoder_label_map.py tests/test_yolo_postprocess.py tests/test_pipeline_factory.py tests/test_vision_demo_app.py` = **28 passed**; `vp verify` = **943 passed/2 skipped** (936→943, +7) · **import-linter 7 kept/0 broken** · **drift PASS · secret PASS**; get_diagnostics 4 file = 0. · **Chưa verify:** hành vi trên weight Ultralytics thật có `.names`/metadata (mới test stub); render hiển thị (Task 3-5).

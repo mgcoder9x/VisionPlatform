@@ -1885,3 +1885,16 @@ Quyết định + lý do (bản chất):
 - **Nguồn ưu tiên (§D-5):** sidecar `.names` (override tường minh, 1 tên/dòng, không cần onnx) → metadata ONNX `names` (best-effort, `ast.literal_eval` dict/list, thứ tự khoá tăng) → config `labels` → rỗng. "Model nào cũng chạy được".
 - **Metadata ONNX = best-effort NUỐT lỗi:** thiếu onnxruntime / model hỏng / không có key → trả None (rơi nguồn kế), KHÔNG raise. Lý do: loader KHÔNG được làm sập pipeline chỉ vì nhãn — fail-safe cuối là `class_<id>`.
 - **Cái giá / khi nào KHÔNG:** positional không hợp model id-thưa (chưa có nhu cầu); sidecar-first nghĩa là file cạnh model THẮNG cả metadata nhúng (chủ ý: cho phép override tại chỗ). CHƯA wire vào decoder (Task 2) — mới là nền + loader độc lập.
+
+### D-163 — 2026-07-28 — Wire LabelMap vào decoder (Wave 1 Task 2): 1-cơ-chế, đổi số-trần→`class_<id>`, wire choke-point `_build_detector`
+Status: ✅ (verify thật — 28 test liên quan pass · full 943/2 · import-linter 7 kept/0 broken · drift+secret PASS)
+Scope: `adapters/yolo_postprocess.py` (`_resolve_label_map` + param `label_map` cho v5/v8) · `profiles/pipeline_factory.py::_det_onnx` · `profiles/vision_demo_app.py::_build_detector` · `tests/test_decoder_label_map.py` (MỚI) · `tests/test_yolo_postprocess.py` (sửa 1 assert)
+Nguồn: LOG Entry #472 · spec image-preprocess-and-labeling R1.5 · D-162 (LabelMap) · grep downstream (không nơi nào phụ thuộc nhãn-số)
+Verify-Symbol: vision-platform/src/vision_platform/adapters/yolo_postprocess.py::_resolve_label_map
+Links: D-162, R1.5
+Quyết định + lý do (bản chất):
+- **1 CƠ CHẾ duy nhất (user duyệt), KHÔNG dual-path:** thay `labels[cid] if ... else str(cid)` bằng `LabelMap.canonical(cid)` qua `_resolve_label_map` (ưu tiên `label_map` → `labels` compat → rỗng). Tránh nợ dual-path (tinh thần D-023).
+- **ĐỔI HÀNH VI có chủ đích:** ca không-labels/idx-lạ đổi số trần `"7"` → `"class_7"`. Đây LÀ mục tiêu R1.2 (diệt nhãn-số mơ hồ + chống gán-nhầm-âm-thầm), không phải regression. Grep xác nhận 0 downstream phụ thuộc nhãn-số → chỉ sửa 1 test cũ (`test_decode_xywh_to_topleft`).
+- **Wire choke-point `_build_detector` (ngoài task 2.3):** `vision_web_app` (đường sản phẩm THẬT) gọi `vision_demo_app._build_detector` → wire tại đây phủ CẢ web lẫn demo, tránh lệch (config-path auto-load nhưng web-path không). `pipeline_factory._det_onnx` wire riêng (đường config-declarative).
+- **Giữ param `labels` (tương thích ngược):** caller/test cũ truyền list vẫn chạy (nội bộ → LabelMap.from_names). `label_map` ưu tiên khi truyền.
+- **Cái giá / khi nào KHÔNG:** `load_label_map` cho file/metadata THẮNG config `labels` → nếu ai muốn config override file thì chưa hỗ trợ (YAGNI). Nạp LabelMap 1 lần lúc build (không mỗi-frame → 0 chi phí runtime).
