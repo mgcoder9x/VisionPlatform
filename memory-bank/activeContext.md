@@ -1,7 +1,14 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-28)
-**Cập nhật lúc:** 2026-07-28T14:00:00+07:00.
+**Cập nhật lúc:** 2026-07-28T14:45:00+07:00.
+**[✅ #476 — ĐÓNG WAVE 1 (Label display): verify browser render → 🟡 D-166 khép]**
+- **WAVE 1 HOÀN THÀNH** (task 1-6): LabelMap fail-safe (#471/D-162) → wire decoder thay `str(cid)` (#472/D-163) → DisplayPolicy domain thuần (#473/D-164) → bất biến canonical⊥display + cưỡng chế Property 10 (#474/D-165) → Render áp policy /overlay + client (#475/D-166) → **verify browser (#476)**.
+- **Bằng chứng browser (server thật :8055 synthetic, Playwright MCP URL sạch K-124):** `/overlay`+SSE payload display box có `displayName`+`colorKey` (passthrough rỗng = label "bright"); rawResult giữ raw (Ẩn⊥Đếm); `colorFor('bright')`="hsl(250,100%,60%)" màu ổn định; `truncName` cắt 23+`…`; **canvas VẼ THẬT 1047 px / 9 màu** khi `boxes.size>0`; SSE `degraded=false`; **0 console error** runtime (17 error khi ĐÓNG server = K-119 post-shutdown, dự kiến).
+- **Ghi sổ:** LOG #476 · KHÔNG ID mới (verify) → Σ giữ **355** · INDEX logref #475→#476 · D-166 🟡→✅.
+- **CÒN của Label (follow-up, chưa nhu cầu gấp):** đường CLI/config nạp `_display_policy` khác rỗng (i18n/alias/hide per-deployment) — framework sẵn, chỉ thiếu loader; verify browser với policy alias/hide thật (mới unit-test projection).
+- **BƯỚC KẾ — WAVE 2 (Preprocess T3, task 7-13):** `MediaPacket.with_media` → registry op numpy-thuần (domain) → op cv2 (adapter) → nghịch-biến-toạ-độ ≤1px → `PreprocessStage`+config+wire → đo tác động → verify. Task-tool ready = **7.1**.
+---
 **[✅ #475 — Wave 1 Task 5: Render — áp DisplayPolicy /overlay + client vẽ displayName/màu, +D-166]**
 - Task 5 XONG (5.1-5.4 + parent). LẦN ĐẦU DisplayPolicy được dùng thật.
 - **`overlay_projection.project_overlay(..., policy=None)`:** áp policy lên display box → thêm `displayName`+`colorKey`, LỌC `visible=false` khỏi payload; `label` canonical giữ; rawResult KHÔNG áp (raw cho đếm — Ẩn⊥Đếm). Default None = passthrough (no-regression).

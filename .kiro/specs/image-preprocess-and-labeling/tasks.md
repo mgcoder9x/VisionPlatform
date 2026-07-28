@@ -80,7 +80,7 @@ Nhánh chính tuần tự: `1 → 2 → 4 → 5 → 6 → 7 → 11 → 13`. Task
   - [x] 4.2 Xác nhận (test + đọc code) display-name CHỈ áp ở mép projection/overlay, KHÔNG ở tầng analytics
     - _Requirements: 2.3_
 
-- [x] 5. Render: phơi `displayName`/`colorKey` ra `/overlay` + client vẽ
+- [ ] 5. Render: phơi `displayName`/`colorKey` ra `/overlay` + client vẽ
   - [x] 5.1 Viết test projection: payload `/overlay` chứa `displayName` + `colorKey`; detection `visible=false` KHÔNG có trong payload
     - _Requirements: 5.1, 5.3_
   - [x] 5.2 Áp DisplayPolicy tại `overlay_projection` (mép ra): thêm `displayName`/`colorKey`, lọc `visible=false`
@@ -90,8 +90,8 @@ Nhánh chính tuần tự: `1 → 2 → 4 → 5 → 6 → 7 → 11 → 13`. Task
   - [x] 5.4 Cập nhật client `_PAGE`: vẽ `displayName` + confidence (format `0.87`) theo `colorKey`; cắt tên dài; ẩn khi `visible=false`
     - _Requirements: 5.2, 5.4_
 
-- [ ] 6. Verify Wave 1 (bằng chứng)
-  - [ ] 6.1 Chạy `vp verify` (test + import-linter 7 kept/0 broken + drift + secret) xanh; verify browser overlay hiển thị displayName/màu
+- [x] 6. Verify Wave 1 (bằng chứng)
+  - [x] 6.1 Chạy `vp verify` (test + import-linter 7 kept/0 broken + drift + secret) xanh; verify browser overlay hiển thị displayName/màu
     - _Requirements: 11.1, 11.2, 11.3_
 
 ### WAVE 2 — TIỀN XỬ LÝ ẢNH THEO CẢNH (Preprocess T3)

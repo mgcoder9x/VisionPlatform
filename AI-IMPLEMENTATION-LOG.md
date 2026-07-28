@@ -9032,3 +9032,20 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - `_display_policy` hiện rỗng passthrough → chưa có đường CLI/config nạp alias/hide (đường nạp = follow-up hoặc Task riêng). Framework đã sẵn (chỉ cần dựng DisplayPolicy khác lúc main()).
 
 **Đã verify:** `pytest tests/test_overlay_projection_display_policy.py tests/test_overlay_projection.py` = **11 passed** (4 mới + 7 cũ no-regression); `vp verify` = **959 passed/2 skipped** (955→959, +4) · **import-linter 7 kept/0 broken** (Property 10 KEPT: `overlay_projection`→`domain.display_policy` = runtime→domain hợp lệ) · **drift PASS · secret PASS**; get_diagnostics 3 file = 0. · **Chưa verify:** render BROWSER thật (displayName/màu/cắt-tên) — Task 6 Playwright; đường config nạp DisplayPolicy khác rỗng.
+
+### Entry #476 — 2026-07-28 — Wave 1 Task 6: VERIFY browser overlay displayName/màu → ĐÓNG Wave 1 (Label) — Kiro-Opus
+
+**Bối cảnh:** Cổng verify Wave 1 (D-161/R11). `vp verify` đã xanh (#475); còn verify BROWSER render (đóng 🟡 của D-166). Chạy web app synthetic loopback :8055 + Playwright MCP (URL sạch, K-124).
+
+**1. Quyết định AI tự ra (spec không nói):** Verify render bằng cách ĐỌC STATE client (`boxes`/`colorFor`/`truncName` — binding top-level classic-script truy cập được trong `page.evaluate`) + chụp canvas ĐỒNG BỘ đúng lúc `boxes.size>0` (synthetic track churn mạnh → canvas trống phần lớn thời gian; sampling mù cho 0 pixel = dương-tính-giả). Không đổi code.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không (chỉ verify).
+
+**3. Trade-off đã cân nhắc:** Đọc pixel canvas mù (flaky vì churn) vs đọc-state-client + chụp-khi-có-box → chọn cái sau (khử nhiễu churn synthetic, bằng chứng xác định).
+
+**4. Điều bạn nên biết:**
+- Bằng chứng BROWSER (server thật :8055): `/overlay`+SSE `/events` payload display box có `displayName`+`colorKey` (passthrough `_display_policy` rỗng → ="bright" label); rawResult giữ raw (Ẩn⊥Đếm); `colorFor('bright')`="hsl(250,100%,60%)" (màu ổn định), `truncName('a'×40)`=23 ký tự+`…`; **canvas VẼ THẬT 1047 px non-black / 9 màu** khi `boxes.size>0`; `degraded=false` (SSE sống); **0 console error** lúc chạy. (17 error khi tôi ĐÓNG server = ERR_CONNECTION_REFUSED post-shutdown, K-119 nhiễu-browser-log dự kiến, KHÔNG phải defect.)
+- ⇒ **D-166 render 🟡→✅** (browser confirmed). Wave 1 (Label display) ĐÓNG: LabelMap fail-safe → decoder → DisplayPolicy → bất biến canonical⊥display → render displayName/màu, đủ bằng chứng.
+- CHƯA: `_display_policy` vẫn rỗng passthrough (chưa có CLI/config nạp alias/i18n/hide — follow-up); verify với DisplayPolicy KHÁC rỗng (i18n/gộp/ẩn) trên browser mới ở mức unit-test projection, chưa browser.
+
+**Đã verify:** `vp verify` 959/2 (#475) + browser MCP: payload displayName/colorKey (server thật), canvas 1047px/9 màu, colorFor/truncName đúng, 0 console error runtime. · **Chưa verify:** browser với policy alias/hide thật (mới unit-test); config-loader cho DisplayPolicy.
