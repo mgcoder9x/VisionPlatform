@@ -1,60 +1,59 @@
-# end.md — HANDOFF sang máy GPU (gọn). Nguồn sự thật = `vp check` + LOG + journal + activeContext.
+# HANDOFF — đọc file này TRƯỚC khi làm (máy mới / phiên mới)
 
-## 0. ĐẦU PHIÊN — chạy 3 lệnh này
-```
-git status
-scripts\vp.cmd check           :: xem C10-HOOKS · C9-GIT · DRIFT-CHECK
-scripts\vp.cmd install-hooks   :: CHỈ khi C10-HOOKS báo WARN (config local, mỗi clone 1 lần)
-```
-- FAIL drift → sửa trước khi làm. `behind>0` → `git pull --ff-only` rồi đối chiếu lại.
-- ⚠️ **K-098:** frontier có thể NHẢY giữa phiên (đa máy) → **KHÔNG append lên base cũ** (đã gây trùng số #433/#453).
-- 🔒 **K-126:** bị tường lửa/kiểm soát mạng công ty chặn → **DỪNG + BÁO user**, TUYỆT ĐỐI không vượt.
-- ⚠️ **K-129:** shell là PowerShell 7, `&` = **background job** → lệnh `&`-chained **chạy ngầm, âm thầm, né cả hook**.
-  **1 lệnh / 1 tool-call.** Nghi ngờ → `Get-Job`.
+> ⚠️ Đây là HANDOFF ngắn (không phải trạng thái chân lý). **Trạng thái THẬT xác định bằng `scripts\vp.cmd check`** +
+> `memory-bank/activeContext.md` (block trên cùng) + `AI-IMPLEMENTATION-LOG.md` (entry cuối). Frontier có thể NHẢY
+> giữa phiên (đa máy + workspace auto-sync, K-098) → LUÔN `vp check` lại, KHÔNG append lên base cũ.
 
-## 1. FRONTIER (lúc viết)
-**LOG #465 · Σ346 (D158·C24·T35·K129) · RULES_VERSION 18 (7 file) · nhánh `chore/dev-env-launcher-portable-hooks`**
-Baseline: `vp verify` **919 passed / 2 skipped · lint 7 kept/0 broken · drift PASS · secret-scan PASS · C8=48**.
-`vp verify` = test + lint + drift + secrets · `vp check` = drift nhanh · `vp secrets` = quét secret.
-Máy vừa làm: `k.nguyen.manh.toan` — **CPU only**, webcam, Docker **chưa bật**.
+## 0. ĐẦU PHIÊN (bắt buộc, theo thứ tự)
+1. `git status` + `git log -n 3` — xem có gì chưa commit / frontier ở đâu.
+2. `scripts\vp.cmd check` — drift-check (phải PASS). Nếu FAIL = bản ghi lệch thực tế → SỬA trước khi làm.
+3. **`git config --local --get core.hooksPath`** → nếu KHÔNG phải `.githooks` thì chạy **`scripts\vp.cmd install-hooks`**
+   (cổng pre-commit drift+secret kích hoạt per-clone, C10-HOOKS sẽ WARN nếu quên — K-129/#465).
+4. Đọc `memory-bank/activeContext.md` (block #476 trên cùng) + 5 entry cuối LOG + `ai-decision-journal/00-INDEX.md` (bảng D).
+5. Đọc spec đang làm: `.kiro/specs/image-preprocess-and-labeling/{requirements,design,tasks}.md`.
 
-## 2. VIỆC TRÊN MÁY GPU (ưu tiên A → C)
+## 1. FRONTIER THẬT (lúc viết handoff)
+- **LOG #476 · Σ355 (D166·C24·T35·K130) · HEAD=`5d5ac60` · nhánh `chore/dev-env-launcher-portable-hooks`** (đã push, `0 0` với origin).
+- Baseline: `vp verify` = **959 passed / 2 skipped · import-linter 7 kept/0 broken · drift PASS · secret-scan PASS · C8=56 Verify-Symbol**.
+- **Workflow git CHƯA quyết** (cần user chốt): hiện `main` == nhánh `chore` (FF #468). Nếu tiếp tục commit trên `chore` mà không FF định kỳ → `main` lại cũ. Chốt main-trunk hay feature-branch+PR?
 
-**(A) Đo lại SSE + bulkhead trên GPU/RTSP thật** — mọi số hiện có đều từ CPU; GPU detect ~2× nhanh (#452: 36 vs 17 infer/s) ⇒ SSE phát event dày hơn, phải đo lại.
-```
-:: chạy app (đổi <RTSP_URL>, <PORT>; --threads >= 2N+2 cho N viewer)
-vision-platform\.venv\Scripts\python.exe -m vision_platform.profiles.vision_web_app ^
-  --rtsp "<RTSP_URL>" --onnx models/yolov8n.onnx --yolo v8 --model-size 640 --coco-labels ^
-  --device auto --overlay-motion --overlay-display-lease-ms 350 --overlay-create-conf 0.45 ^
-  --overlay-sustain-conf 0.30 --server waitress --threads 8 --host 127.0.0.1 --port <PORT>
-:: KỲ VỌNG log: [device] onnx yêu cầu='auto' → dùng='cuda...'   (ra 'cpu' → DỪNG, điều tra GPU)
+## 2. LỆNH CỐ ĐỊNH (chạy qua launcher, KHÔNG one-liner ad-hoc — §3.1)
+- `scripts\vp.cmd check` = drift nhanh (memory + RULES_VERSION + self-test).
+- `scripts\vp.cmd verify` = test + import-linter + drift + **secret-scan** (gate "xong").
+- `scripts\vp.cmd secrets` = quét secret · `scripts\vp.cmd install-hooks` = bật core.hooksPath.
+- Python trực tiếp: `vision-platform\.venv\Scripts\python.exe -m pytest tests/<file> -q` (cwd = `vision-platform`).
 
-:: trần thread (kỳ vọng: trần 6 · kết nối #7+ = 503 · /stats luôn OK 0-16ms)
-vision-platform\.venv\Scripts\python.exe -m tools.web_sse_capacity_probe --port <PORT> --max-long 12 --threads-hint 8
-:: rò rỉ slot (kỳ vọng: mọi chu kỳ active → 0/N · verdict KHÔNG RÒ RỈ)
-vision-platform\.venv\Scripts\python.exe -m tools.web_sse_capacity_probe --port <PORT> --churn 10 --churn-conns 12
-```
-Browser (Playwright MCP), **URL SẠCH**: kỳ vọng `sseFails=0` · `degraded=false` · box vẽ · 0 console error; đo lại gap giữa event SSE (CPU: median 50.8ms).
-> ⚠️ **K-124:** KHÔNG verify bằng `http://user:pass@host/` — làm chết mọi `fetch` trong trang. Dùng `page.route` tiêm header `Authorization` với URL sạch.
+## 3. ĐANG LÀM: spec `image-preprocess-and-labeling` (chuẩn hoá 2 mép pipeline thị giác)
+Nguyên tắc: **MODEL-định=cố-định (T1 normalize+T2 letterbox @adapter) ⊥ TRIỂN-KHAI-định=cắm-được (T3 preprocess + display-name)**.
+Bộ spec HOÀN CHỈNH (design+requirements+tasks). Thi công theo `tasks.md` (13 task/2 Wave, TDD, task-tool dùng `taskList`/`taskUpdate` trên tasks.md).
 
-**(B) Đo fps ĐẦU-CUỐI trên GPU** (nợ tự nêu #452): #452 chỉ đo detector đơn lẻ. Ghép với #453 (`drop% ≈ 1 − consumer/producer`) → SLA đầu-cuối = con số khách hàng hỏi ("chạy được mấy cam").
+### ✅ WAVE 1 — HIỂN THỊ TÊN VẬT THỂ (Label) — XONG (task 1-6, #471-#476)
+- `kernel/label_map.py::LabelMap` — value-object positional, `canonical(cid)` fail-safe idx-lạ→`class_<id>` (D-162).
+- `adapters/label_map_loader.py::load_label_map` — nguồn ưu tiên sidecar`.names`→metadata-ONNX(best-effort)→config→rỗng.
+- `adapters/yolo_postprocess.py` — decoder thay `str(cid)` bằng `LabelMap.canonical` qua `_resolve_label_map` (param `label_map`, giữ `labels` compat) (D-163). Wire `pipeline_factory._det_onnx` + choke-point `vision_demo_app._build_detector` (phủ web app).
+- `domain/display_policy.py::DisplayPolicy` — thuần: alias/i18n/gộp/ẩn/màu-ổn-định; `decide(canonical)→DisplayDecision{visible,display_name,group,color_key}`; alias>group>canonical; color_key=group-else-canonical (D-164).
+- **Bất biến canonical⊥display** (D-165): `Detection.label`=canonical xuyên analytics; contract import-linter **Property 10** phủ thêm `domain.display_policy` (cưỡng chế máy).
+- **Render** (D-166): `overlay_projection.project_overlay(..., policy=)` thêm `displayName`/`colorKey` + lọc `visible=false` (rawResult giữ raw → Ẩn⊥Đếm); web app `_display_policy` global (mặc định passthrough) → `/overlay`+SSE; client `_PAGE` `colorFor(colorKey)`→hue + `truncName`. Verify browser thật: canvas vẽ 1047px/9 màu, 0 console error.
+- **Nợ nhỏ Label (follow-up):** chưa có CLI/config nạp `_display_policy` khác rỗng (i18n/alias/hide per-deployment) — framework sẵn, thiếu loader.
 
-**(C) Nếu bật được Docker → đóng 🔴 reverse-proxy:** `vision-platform/deploy/README-tls-reverse-proxy.md` có bảng TRẠNG THÁI KIỂM CHỨNG, phần "toàn chuỗi qua proxy thật" vẫn 🔴. Dựng nginx → đo SSE/MJPEG live qua proxy · trần bulkhead khi proxy giữ kết nối · `proxy_ignore_client_abort` giữ mặc định `off` có trả slot đúng → rồi **cập nhật bảng đó + ghi LOG mới**.
+### ⬜ WAVE 2 — TIỀN XỬ LÝ ẢNH T3 (Preprocess) — CHƯA làm (task 7-13). BƯỚC KẾ = task 7.1.
+- **7** `MediaPacket.with_media()` (CoW) — thay frame giữ metadata.
+- **8** registry op-agnostic + `domain/preprocess_ops.py` op numpy-thuần (gamma/brightness/gray/resize-scale/ROI-crop/white-balance/sharpen).
+- **9** op cần cv2 (denoise/CLAHE) → `adapters/` (GIỮ domain KHÔNG cv2 — R11.1); de-warp = điểm-cắm CHƯA hiện thực (Non-Goal v1).
+- **10** ⚠️ **PHẦN KHÓ NHẤT** — op đổi hình học (crop/resize) trả kèm transform NGHỊCH; map ngược điểm ≤1px (P-A1); nối chuỗi nghịch ngược thứ tự áp → ORIGINAL_FRAME.
+- **11** `runtime/preprocess_stage.py::PreprocessStage` (MediaPacket→MediaPacket, chỉ phụ thuộc kernel) + config `[preprocess]` TOML (danh sách op có thứ tự) + wire `_detect_loop` TRƯỚC detect; **no-regression: không op → bytes-identical** (P-A2).
+- **12** harness `benchmarks/` đo recall/precision+CPU/op; op T3 KHÔNG tự bật mặc định.
+- **13** verify + Non-Goal guards.
 
-## 3. 🔴 CÒN MỞ
-| Mục | Vì sao |
-|---|---|
-| K-001 ARM/Jetson | cần hardware |
-| K-031 rotate secret | user thao tác. **Thêm lý do:** #457 lệnh sai cú pháp làm `cmd set` in TOÀN BỘ biến môi trường vào log phiên, gồm 3 biến chứa API key (`OPENAI_API_KEY`, `openAI_key`, `HUNGNGUYEN_API_KEY`) → **nên rotate** |
-| Toàn chuỗi qua proxy thật | chờ Docker/nginx (chặn tiền đề, KHÔNG phải mạng) |
-| K-128 web app chỉ có stdout | chưa có `--log-file`/`/metrics` cho web app (YAGNI, chờ user) |
-| `print()` block khi stdout không ai đọc | chưa dựng thí nghiệm pipe-không-đọc |
+## 4. RÀNG BUỘC BẤT BIẾN (đọc kỹ — vi phạm = hỏng)
+- **Sau MỖI task/slice:** append LOG `### Entry #N` (3 dấu #) + journal (D/C/T/K nếu có quyết định) + INDEX (bump `Log canonical tới **Entry #N**` + total `Σ` + dòng bảng + mega-stamp line 5 + Verify-Symbol nếu +D) + `activeContext.md` (block trên cùng + mốc "Cập nhật lúc") + `vp check` PASS + commit + push. **1 commit / 1 slice, message có #N.**
+- **Import 6 layer:** domain thuần (numpy, KHÔNG cv2/torch) · kernel = DTO+ports · runtime chỉ kernel · adapters leaf chỉ kernel · profiles = composition root. import-linter 7 contracts phải KEPT.
+- **🔒 Tường lửa/mạng công ty:** bị chặn → **DỪNG + BÁO user, TUYỆT ĐỐI KHÔNG vượt** (không đổi VPN/proxy/DNS/hosts, không `--insecure`, không mirror lách). Chặn = kết quả đo hợp lệ → `[bị chặn — chưa kiểm]`. Docker daemon chưa bật ≠ tường lửa (nêu lỗi nguyên văn). (K-126/§8)
+- **⚠️ Shell = PowerShell 7:** `&` = background job chạy ngầm NÉ hook → **1 lệnh / 1 tool-call**; nghi ngờ → `Get-Job`/`Remove-Job -Force`. (K-129)
+- **Verify CHẶT:** code = CHẠY lệnh + đọc output thật mới "xong"; thứ cụ thể (file/hàm/API) kiểm tồn tại; chưa kiểm → nhãn `[suy đoán]`/`[chưa kiểm]`. Kết mỗi output: "Đã verify / Chưa verify".
+- **Verify browser** = Playwright MCP trên webcam/synthetic; URL SẠCH + tiêm `Authorization` qua `page.route`, KHÔNG `http://user:pass@host/` (làm chết mọi fetch — K-124). ERR_CONNECTION_REFUSED khi server down/tắt = nhiễu browser-log dự kiến, KHÔNG phải defect (K-119). DỪNG server nền TRƯỚC `vp verify`.
+- **git:** không `add -A` (chọn file cụ thể) · không force/reset (trừ user duyệt) · không commit secret · push nhánh hiện tại. Trả lời tiếng Việt, dòng đầu `→ Chế độ: X`.
+- **Máy hiện tại (cũ):** `k.nguyen.manh.toan` — CPU only, webcam + Docker (daemon chưa bật), KHÔNG GPU. Máy GPU = `toann`.
 
-## 4. RÀNG BUỘC VẬN HÀNH
-- Python qua `vision-platform\.venv\Scripts\python.exe` hoặc `scripts\vp.cmd` (§3.1: lệnh routine qua launcher cố định).
-- LOG entry heading = **`### Entry #N`** (3 dấu `#`) — drift C1 mới nhận.
-- `set VAR=v && ...` (cmd) nhồi khoảng trắng vào giá trị (gây 401 giả #457) → viết `set VAR=v&&...` không space.
-- **DỪNG server nền TRƯỚC `vp verify`** (đốt CPU → flaky giả). Port TIME_WAIT → đổi port.
-- git: không `add -A` (chọn file cụ thể), không force/reset, push nhánh hiện tại.
-- Đo trạng thái đến SAU sự-kiện-có-độ-trễ-phụ-thuộc-tải → **không sleep cố định**, dùng poll-tới-điều-kiện + deadline (K-127).
-- Tài liệu **không** viết chuỗi hình-dạng-key nguyên văn (secret-scan sẽ chặn commit) → viết dạng ngắt.
+## 5. 🔴 Nợ mở khác (ngoài spec đang làm)
+- K-031 rotate secret (3 API key lộ ở #457 do in env — cần rotate ở nhà cung cấp) · K-001 ARM (cần HW) · proxy thật nginx/Caddy (cần Docker bật) · soak 24/7 · ANPR .pt.

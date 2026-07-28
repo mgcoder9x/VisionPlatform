@@ -1,7 +1,12 @@
 # activeContext.md — ĐANG làm gì NGAY BÂY GIỜ (cập nhật mỗi phiên = chân lý hiện tại)
 
 ## Trạng thái hiện tại (2026-07-28)
-**Cập nhật lúc:** 2026-07-28T14:45:00+07:00.
+**Cập nhật lúc:** 2026-07-28T15:15:00+07:00.
+**[✅ #477 — Viết HANDOFF `end.md` cho máy mới (chuyển máy) + commit/push hết]**
+- User chuyển máy → viết lại `end.md` (đang rỗng) = handoff 6 mục để phiên/máy sau tiếp tục chính xác. Nội dung: §0 đầu-phiên bắt buộc · §1 frontier thật (#476/Σ355/HEAD `5d5ac60`) · §2 lệnh cố định · §3 spec `image-preprocess-and-labeling` (Wave 1 Label ĐÓNG chi tiết + Wave 2 Preprocess CHƯA làm, **bước kế = task 7.1**) · §4 ràng buộc bất biến · §5 nợ mở.
+- doc-only → baseline **959/2** giữ. Ghi sổ: LOG #477 · KHÔNG ID mới → Σ giữ **355** · INDEX logref #476→#477.
+- **BƯỚC KẾ (máy mới):** đọc `end.md` → `vp check` → bắt đầu **Wave 2 task 7** (`MediaPacket.with_media`), TDD, chú ý task 10 nghịch-biến-toạ-độ là phần khó nhất.
+---
 **[✅ #476 — ĐÓNG WAVE 1 (Label display): verify browser render → 🟡 D-166 khép]**
 - **WAVE 1 HOÀN THÀNH** (task 1-6): LabelMap fail-safe (#471/D-162) → wire decoder thay `str(cid)` (#472/D-163) → DisplayPolicy domain thuần (#473/D-164) → bất biến canonical⊥display + cưỡng chế Property 10 (#474/D-165) → Render áp policy /overlay + client (#475/D-166) → **verify browser (#476)**.
 - **Bằng chứng browser (server thật :8055 synthetic, Playwright MCP URL sạch K-124):** `/overlay`+SSE payload display box có `displayName`+`colorKey` (passthrough rỗng = label "bright"); rawResult giữ raw (Ẩn⊥Đếm); `colorFor('bright')`="hsl(250,100%,60%)" màu ổn định; `truncName` cắt 23+`…`; **canvas VẼ THẬT 1047 px / 9 màu** khi `boxes.size>0`; SSE `degraded=false`; **0 console error** runtime (17 error khi ĐÓNG server = K-119 post-shutdown, dự kiến).

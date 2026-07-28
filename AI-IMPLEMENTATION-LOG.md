@@ -9049,3 +9049,17 @@ Verify-Symbol: vision-platform/benchmarks/measure_cadence_cpu.py::measure_one
 - CHƯA: `_display_policy` vẫn rỗng passthrough (chưa có CLI/config nạp alias/i18n/hide — follow-up); verify với DisplayPolicy KHÁC rỗng (i18n/gộp/ẩn) trên browser mới ở mức unit-test projection, chưa browser.
 
 **Đã verify:** `vp verify` 959/2 (#475) + browser MCP: payload displayName/colorKey (server thật), canvas 1047px/9 màu, colorFor/truncName đúng, 0 console error runtime. · **Chưa verify:** browser với policy alias/hide thật (mới unit-test); config-loader cho DisplayPolicy.
+
+### Entry #477 — 2026-07-28 — Viết HANDOFF `end.md` cho máy mới (chuyển máy) — Kiro-Opus
+
+**Bối cảnh:** User chuyển máy → cần `end.md` ngắn gọn để phiên/máy sau tiếp tục chính xác + commit/push hết.
+
+**1. Quyết định AI tự ra (spec không nói):** Viết lại `end.md` (đang rỗng) = handoff 6 mục: §0 đầu-phiên bắt buộc (git status→vp check→install-hooks→đọc memory→đọc spec) · §1 frontier thật (#476/Σ355/HEAD 5d5ac60) · §2 lệnh cố định · §3 spec đang làm (Wave 1 Label ĐÓNG chi tiết + Wave 2 Preprocess CHƯA làm, bước kế 7.1) · §4 ràng buộc bất biến (ghi-sổ/6-layer/tường-lửa/PowerShell-&/verify-chặt/browser-K124/git) · §5 nợ mở khác.
+
+**2. Chỗ phải đổi so với yêu cầu ban đầu:** Không (doc handoff).
+
+**3. Trade-off đã cân nhắc:** end.md ngắn (dễ đọc) vs đầy đủ → nhấn "handoff KHÔNG phải chân lý, luôn `vp check` lại" (K-098) + trỏ về activeContext/LOG làm nguồn thật; liệt kê đủ Wave 2 task 7-13 + đánh dấu task 10 (nghịch-biến-toạ-độ) là phần khó nhất để phiên sau không mò.
+
+**4. Điều bạn nên biết:** doc-only, KHÔNG đụng code → baseline 959/2 giữ. `end.md` git-tracked (secret-scan quét). Sau commit này frontier = #477.
+
+**Đã verify:** `end.md` viết xong (6 mục); `vp check` chạy trước commit (sẽ PASS); doc-only. · **Chưa verify:** không có (handoff văn bản).
